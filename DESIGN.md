@@ -131,6 +131,8 @@ Panels, controls, selected navigation, badges, avatars, status markers, and dial
 
 ## Components
 
+Optional Google sign-in appears as a compact outline control in the header. It uses the same square geometry and paper/ink tokens as other controls; session and error states must not block the public dashboard. The sign-in page preserves serif headings and always offers guest access.
+
 Primary buttons use terracotta with paper text and a darker hover. Outline buttons use a rule border; ghost buttons gain a soft fill; destructive buttons use danger red. Standard and icon controls are 40px high; compact buttons are 32px. Disabled controls reduce opacity and block pointer interaction. Keyboard focus remains explicit with an accent outline and offset.
 
 Fields use paper fill, rule borders, square corners, and 10px by 12px padding. Labels sit 7px above controls. Read-only fields use the soft fill. Checkboxes use ink. Selected mock filters and Manual/Paste toggles expose `aria-pressed`.

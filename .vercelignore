@@ -1,0 +1,11 @@
+.git
+.local
+.env*
+!.env.example
+.next
+node_modules
+.impeccable/review
+*.tsbuildinfo
+*.log
+src/generated/prisma
+.neon

@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["ssc_insight"]
+}
+
+enum MockType {
+  full
+  subject
+  sectional
+
+  @@schema("ssc_insight")
+}
+
+enum SubjectId {
+  quant
+  reasoning
+  english
+  ga
+  computer
+
+  @@schema("ssc_insight")
+}
+
+enum ImportSource {
+  manual
+  paste
+  backup
+
+  @@schema("ssc_insight")
+}
+
+model MockAttempt {
+  id                 String          @id @default(uuid())
+  name               String          @db.VarChar(150)
+  platform           String          @db.VarChar(80)
+  completedAt        DateTime        @db.Timestamptz(3)
+  type               MockType
+  scoreOverride      Float?
+  overallTimeSeconds Int?
+  rank               Int?
+  participants       Int?
+  percentile         Float?
+  notes              String          @default("") @db.VarChar(5000)
+  source             ImportSource    @default(manual)
+  schemaVersion      Int             @default(1)
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
+  subjects           SubjectResult[]
+
+  @@index([completedAt])
+  @@index([platform, completedAt])
+  @@index([type, completedAt])
+  @@schema("ssc_insight")
+}
+
+model SubjectResult {
+  attemptId     String
+  subjectId     SubjectId
+  position      Int
+  questions     Int
+  correct       Int
+  incorrect     Int
+  scoreOverride Float?
+  timeSeconds   Int?
+  attempt       MockAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@id([attemptId, subjectId])
+  @@unique([attemptId, position])
+  @@index([subjectId, attemptId])
+  @@schema("ssc_insight")
+}
+
+model TrackerSettings {
+  id          String @id @default("default")
+  targetScore Float?
+
+  @@schema("ssc_insight")
+}

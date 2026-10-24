@@ -1,6 +1,7 @@
 "use client";
 import { Panel, EmptyChart } from "./dashboard-panels";
 import { PerformanceOverview } from "./performance-overview";
+import { AuthControl } from "./auth-control";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, MotionConfig } from "motion/react";
@@ -59,7 +60,7 @@ const typeName = (type: string) =>
     : type === "sectional"
       ? "Sectional"
       : "Subject";
-export function Dashboard() {
+export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
   const [view, setView] = useState<View>("dashboard");
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
@@ -291,7 +292,7 @@ export function Dashboard() {
             </span>
             <div>
               <p className="text-xs font-medium">My workspace</p>
-              <p className="text-[11px] muted">Shared · no sign-in</p>
+              <p className="text-[11px] muted">Shared · sign-in optional</p>
             </div>
             <Ellipsis size={17} className="ml-auto muted" />
           </div>
@@ -330,9 +331,7 @@ export function Dashboard() {
               >
                 <CircleHelp size={19} />
               </button>
-              <span className="size-8 bg-accent-soft text-accent rounded-none flex items-center justify-center text-[11px] font-semibold">
-                MY
-              </span>
+              <AuthControl enabled={authEnabled} />
             </div>
           </header>
           <nav
@@ -563,16 +562,12 @@ export function Dashboard() {
                           from the subject question counts.
                         </p>
                         <p>
-                          This workspace has no authentication. Anyone who can
-                          access it can view, edit, or delete shared records.
+                          Google sign-in is optional. Everyone, including
+                          guests, can view, edit, or delete shared records.
                         </p>
                         <p>
-                          Server connection: Firebase project{" "}
-                          <code className="text-xs">
-                            ssc-insight-ankit-20261020
-                          </code>
-                          , database <code>insight</code>. See README for
-                          credential setup.
+                          Your results are saved in Neon Postgres. See README
+                          for server connection and optional sign-in setup.
                         </p>
                       </div>
                     </Panel>

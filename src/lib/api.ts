@@ -21,17 +21,39 @@ export function apiError(error: unknown) {
       { error: { code: "REQUEST_ERROR", message: error.message } },
       { status: error.status },
     );
-  console.error(
-    "Database request failed:",
-    error instanceof Error ? error.message : "Unknown error",
-  );
+  const prismaCode =
+    error && typeof error === "object" && "code" in error ? error.code : null;
+  if (prismaCode === "P2025" || prismaCode === "P2016")
+    return NextResponse.json(
+      { error: { code: "NOT_FOUND", message: "Mock not found" } },
+      { status: 404 },
+    );
+  if (prismaCode === "P2002" || prismaCode === "P2003")
+    return NextResponse.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message:
+            "This change conflicts with an existing record. Refresh and retry.",
+        },
+      },
+      { status: 409 },
+    );
+  // Driver messages can contain connection details; log only safe identifiers.
+  console.error("Database request failed", {
+    name: error instanceof Error ? error.name : "UnknownError",
+    code:
+      typeof prismaCode === "string" && /^P\d{4}$/.test(prismaCode)
+        ? prismaCode
+        : "DATABASE_UNAVAILABLE",
+  });
   return NextResponse.json(
     {
       error: {
         code: "DATABASE_UNAVAILABLE",
         message:
           error instanceof Error && error.message === "DATABASE_NOT_CONFIGURED"
-            ? "Connect your Firebase database to start saving mocks. See README for server credential setup."
+            ? "Connect your Neon database to start saving mocks. See README for server configuration."
             : "Cannot reach the database. Check the server credentials and connection, then retry.",
       },
     },

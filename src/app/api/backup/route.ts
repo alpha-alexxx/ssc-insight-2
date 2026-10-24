@@ -1,9 +1,7 @@
 import { z } from "zod";
-import { randomUUID } from "crypto";
-import { attemptSchema, duplicateKey } from "@/lib/domain";
-import { listAttempts } from "@/lib/repository";
-import { database, type StoredAttempt } from "@/lib/db";
-import { apiError, ok, readBody, RequestError } from "@/lib/api";
+import { attemptSchema } from "@/lib/domain";
+import { importAttempts, listAttempts } from "@/lib/repository";
+import { apiError, ok, readBody } from "@/lib/api";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
@@ -90,45 +88,7 @@ export async function POST(request: Request) {
         preview: z.boolean().default(true),
       })
       .parse(await readBody(request, 2 * 1024 * 1024));
-    const existing = await listAttempts();
-    const keys = new Set(existing.map(duplicateKey));
-    const unique = [];
-    let duplicates = 0;
-    for (const a of body.attempts) {
-      const key = duplicateKey(a);
-      if (keys.has(key)) duplicates++;
-      else {
-        keys.add(key);
-        unique.push(a);
-      }
-    }
-    if (body.preview)
-      return ok({
-        total: body.attempts.length,
-        newRecords: unique.length,
-        duplicates,
-      });
-    if (!unique.length) throw new RequestError("No new records to import");
-    const now = new Date().toISOString();
-    await (
-      await database()
-    )
-      .collection<StoredAttempt>("sscMockAttempts")
-      .insertMany(
-        unique.map((a) => {
-          const id = randomUUID();
-          return {
-            ...a,
-            source: "backup" as const,
-            id,
-            _id: id,
-            schemaVersion: 1 as const,
-            createdAt: now,
-            updatedAt: now,
-          };
-        }),
-      );
-    return ok({ imported: unique.length, skipped: duplicates });
+    return ok(await importAttempts(body.attempts, body.preview));
   } catch (e) {
     return apiError(e);
   }

@@ -1,55 +1,32 @@
-import { database, type StoredAttempt } from "@/lib/db";
+import { z } from "zod";
 import { attemptSchema } from "@/lib/domain";
-import { apiError, ok, readBody, RequestError } from "@/lib/api";
+import { apiError, ok, readBody } from "@/lib/api";
+import { deleteAttempt, getAttempt, updateAttempt } from "@/lib/repository";
 type Context = { params: Promise<{ id: string }> };
+const idSchema = z.uuid();
 export const runtime = "nodejs";
 export async function GET(_request: Request, context: Context) {
   try {
-    const { id } = await context.params;
-    const row = await (
-      await database()
-    )
-      .collection<StoredAttempt>("sscMockAttempts")
-      .findOne({ _id: id });
-    if (!row) throw new RequestError("Mock not found", 404);
-    const { _id, ...attempt } = row;
-    return ok({ ...attempt, id: _id });
-  } catch (e) {
-    return apiError(e);
+    return ok(await getAttempt(idSchema.parse((await context.params).id)));
+  } catch (error) {
+    return apiError(error);
   }
 }
 export async function PUT(request: Request, context: Context) {
   try {
+    const id = idSchema.parse((await context.params).id);
     const input = attemptSchema.parse(await readBody(request));
-    const { id } = await context.params;
-    const row = await (
-      await database()
-    )
-      .collection<StoredAttempt>("sscMockAttempts")
-      .findOneAndUpdate(
-        { _id: id },
-        { $set: { ...input, updatedAt: new Date().toISOString() } },
-        { returnDocument: "after" },
-      );
-    if (!row) throw new RequestError("Mock not found", 404);
-    const { _id, ...a } = row;
-    return ok({ ...a, id: _id });
-  } catch (e) {
-    return apiError(e);
+    return ok(await updateAttempt(id, input));
+  } catch (error) {
+    return apiError(error);
   }
 }
 export async function DELETE(request: Request, context: Context) {
   try {
+    const id = idSchema.parse((await context.params).id);
     await readBody(request);
-    const { id } = await context.params;
-    const result = await (
-      await database()
-    )
-      .collection<StoredAttempt>("sscMockAttempts")
-      .deleteOne({ _id: id });
-    if (!result.deletedCount) throw new RequestError("Mock not found", 404);
-    return ok({ id });
-  } catch (e) {
-    return apiError(e);
+    return ok(await deleteAttempt(id));
+  } catch (error) {
+    return apiError(error);
   }
 }

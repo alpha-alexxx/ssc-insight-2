@@ -4,7 +4,7 @@ SSC Insight is a personal SSC CGL Tier 2 mock tracker. It helps an aspirant reco
 
 ## Audience and access
 
-One aspirant is the primary user. The current public, shared workspace without sign-in is an explicit product choice: anyone with access can read and change its records. Do not imply that the workspace is private or add an authentication flow without changing that decision.
+One aspirant is the primary user. The public, shared workspace is an explicit product choice: anyone with access can read and change its records. Optional Google sign-in through Neon Auth provides a session but does not create private data or restrict anonymous access. Do not imply that signing in protects records.
 
 ## Core workflows
 
@@ -23,7 +23,7 @@ Keep logging quick and analysis readable. Use calm, direct language and a warm p
 
 ## Implementation context
 
-Next.js 16 App Router with React, TypeScript, Tailwind CSS, shadcn-style Radix button and dialog primitives, Motion, and Recharts. Persistence uses the existing Firebase Firestore Enterprise database `insight` with MongoDB compatibility in project `ssc-insight-ankit-20261020`. Database setup and credentials belong to deployment configuration, not client code or design documentation.
+Next.js 16 App Router with React, TypeScript, Tailwind CSS, shadcn-style Radix button and dialog primitives, Motion, and Recharts. Persistence uses Prisma 7 with Neon PostgreSQL, dedicated schema `ssc_insight`, in project `lingering-mode-47457333`, production branch. Neon Auth manages Google sessions separately. The migration starts empty and leaves Firebase data untouched. Database setup and credentials belong to deployment configuration, not client code or design documentation.
 
 ## Scope boundaries
 

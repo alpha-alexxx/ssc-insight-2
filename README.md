@@ -1,95 +1,129 @@
 # SSC Insight
 
-A personal SSC CGL Tier 2 mock tracker. Opens directly to the dashboard, with no sign-in. Built with Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn-style Radix components, Recharts, and Motion.
+A warm-paper SSC CGL Tier 2 mock tracker built with Next.js 16, React 19, TypeScript, Tailwind CSS, Radix components, Recharts, and Motion. Opens directly to the dashboard.
+
+**Access is public and shared.** Google sign-in is optional and does not restrict records or create private workspaces. Guests can read, add, edit, export, and delete the same records as signed-in users.
 
 ## Design
 
-Warm cream paper, charcoal typography, Source Serif 4 headings, DM Sans controls, square panels, and terracotta actions. See [the design system](DESIGN.md) for tokens, components, and accessibility conventions, and [the product specification](PRODUCT.md) for behavior and analytics definitions.
+Cream paper, charcoal ink, Source Serif 4 headings, DM Sans controls, square panels, and terracotta actions. See [DESIGN.md](DESIGN.md) and [PRODUCT.md](PRODUCT.md).
 
-The following preview uses illustrative test data; no sample records are included in the database or seeded by the app.
+![Dashboard with illustrative test data](docs/images/dashboard-desktop.jpg)
 
-![SSC Insight desktop dashboard with illustrative subject performance data](docs/images/dashboard-desktop.jpg)
+[Mobile preview](docs/images/dashboard-mobile.jpg). These previews use illustrative data; the app does not seed mock attempts.
 
-[View the mobile dashboard preview](docs/images/dashboard-mobile.jpg).
+## Database and Auth
+
+The database is **PostgreSQL on Neon**, accessed only through Prisma 7.10.1 and the Neon serverless adapter in Next.js Node route handlers. Application data lives in the `ssc_insight` schema: `MockAttempt`, ordered `SubjectResult` rows, and singleton `TrackerSettings`. Neon manages Auth in its own schema, which our migrations never manage.
+
+- Organization: `org-old-hill-05909567`
+- Project: `lingering-mode-47457333` (`ssc-insight`)
+- Branch: `production`
+- Existing site: https://sscinsight-lovat.vercel.app/
+
+This migration starts with empty application tables. Firebase records and configuration remain untouched; no Firebase records are copied automatically. Existing version-1 JSON backups can still be reviewed and imported manually.
 
 ## Run locally
 
-Use Node.js 22 or newer.
+Use Node.js 22.20+ or Node.js 24. Prisma Client generates on installation. Next's webpack build is used for reliable Windows operation.
 
 ```powershell
 npm ci
-node scripts/setup-local-db.mjs
+neon login
+neon link --org-id org-old-hill-05909567 --project-id lingering-mode-47457333 --branch production -y
+neon deploy
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). The dev/build scripts use webpack because Turbopack's CSS subprocess crashes in this Windows environment.
+Open http://localhost:3000. `neon deploy` reconciles the services in `neon.ts` and pulls their variables into `.env.local` (or `.env` if present). It does not deploy the Next.js application to Vercel. Linking is not required for a machine already configured with the environment variables.
 
-The local database connection has been configured and verified against Firebase project `ssc-insight-ankit-20261020`, Enterprise database `insight`, Mumbai (`asia-south1`). No existing database configuration or unrelated collections were changed.
+### Environment variables
 
-### Server credentials
+Copy `.env.example` for the names, or use Neon's environment pull. Never commit real values.
 
-The existing database has **MongoDB compatibility enabled and native Firestore access disabled**. The server uses the official MongoDB driver, TLS, load balancing, disabled retryable writes, and a pooled connection. A Firebase browser API key cannot authenticate this connection.
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Pooled PostgreSQL runtime connection |
+| `DATABASE_URL_UNPOOLED` | Direct connection used only by Prisma migration commands |
+| `NEON_AUTH_BASE_URL` | Managed Auth URL ending in `/auth` |
+| `NEON_AUTH_COOKIE_SECRET` | Cryptographically random secret of at least 32 characters |
+| `GOOGLE_AUTH_ENABLED` | Set to `true` after configuring a production Google OAuth client; otherwise the dashboard shows guest access |
 
-The local setup helper reuses your existing Firebase CLI sign-in. It creates an ignored `.local/google-credentials.json` and `.env.local`; it does not create an application user or change IAM permissions. These files contain credentials and must remain local. Run `firebase login --reauth` if the CLI session expires, remove the local credential file, then rerun the helper.
+Keep every variable server-side; none needs a `NEXT_PUBLIC_` prefix. The client talks to the same-origin `/api/auth` proxy. Missing Auth configuration does not prevent anonymous mock tracking. Build and client generation do not connect to the database or require live secrets.
 
-For another machine, copy `.env.example` to `.env.local` and supply Google Application Default Credentials with database access, or set a MongoDB SCRAM connection URI created through the Firebase console. On hosted infrastructure, use a service account/workload identity with the minimum database access needed. Do not deploy personal CLI credentials. The OIDC allowlist intentionally permits only the selected Firebase database host; update it if changing databases.
-
-Reference: [Firebase connection documentation](https://firebase.google.com/docs/firestore/enterprise/connect).
+### Migrations
 
 ```powershell
-node scripts/check-db.mjs
+npm run db:generate
+npm run db:migrate
 ```
 
-## Using the tracker
+`prisma.config.ts` loads Next.js environment files and uses the unpooled connection. Do not run `prisma migrate reset`, target Neon's managed Auth schema, or apply schema changes automatically in arbitrary Vercel builds. Test new SQL migrations on an expiring branch first. Apply reviewed migrations explicitly before deploying the matching app revision.
 
-- **Add mock:** choose full, subject, or sectional. Full mocks use Quant (30), Reasoning (30), English (45), and GA (25), for 390 marks. Optionally include Computer Knowledge (20 questions), scored separately; Computer can also be logged as a subject mock. Subject and sectional practice support custom question counts. Select Testbook, RBE, Oliveboard, Pundits, Test Ranking, or Others with a custom platform name.
-- **Paste report:** paste result-page text with subject headings and score/question summaries. Review all extracted values, provide the missing name/platform/date, and save. Unknown layouts require manual correction; screenshots and AI extraction are not supported.
-- **Scoring and time:** +3 correct, −1 incorrect, updated live from the question counts. Subject scores and overall time are read-only. Each subject has separate hour/minute/second blocks; unfilled blocks become `00`. Overall time sums all included subjects, including Computer. New and edited form entries recalculate scores/time; legacy override fields remain supported for older records and backups.
-- **Dates:** enter only the completion date. The server-compatible timestamp represents midnight IST; dashboard dates and date filters also use IST. Existing records need no migration.
-- **History:** open any result for the subject table, notes, editing, comparison, or confirmed deletion.
-- **Compare:** select two to four mocks. Score percentages permit comparison across different question counts; raw score deltas appear only when maximum marks match.
-- **Settings:** set an optional full-mock target; download JSON backups or per-subject CSV. JSON restore previews duplicates, adds new records, and preserves existing ones. Duplicate detection uses normalized mock name/platform, completion timestamp, and mock type.
+## Optional Google sign-in
 
-No sample attempts are seeded. Test-only attempts created for verification are removed afterward.
+Use Neon Auth's Google provider with your own Google OAuth **Web application** credentials in production. Shared Neon keys are for development. Register the managed Auth URL plus `/callback/google` as Google's authorized redirect URI. Allow `https://sscinsight-lovat.vercel.app` in Neon Auth's trusted domains; allow localhost while testing locally.
 
-### Analytics definitions
+Use the Neon Console to enter the client secret directly, or run the local masked-input helper:
 
-The default summary/history view shows full mocks across all dates. Subject performance, subject averages and subject accuracy/time charts combine each subject’s rows from **all mock types**, regardless of the summary’s mock-type/subject filters. Date, platform and search filters still apply. Choose a subject in the performance chart; missing subjects do not add zero-score points. Subject scores use percentages to compare different question counts, and their rolling average uses the last five subject results. Section I combines Quant + Reasoning (180 standard marks); Section II combines English + General Awareness (210 standard marks).
+```powershell
+.\scripts\configure-google-oauth.ps1
+```
 
-Full-mock averages and personal bests only include full mocks; Computer never contributes to those metrics. The overall accuracy is weighted: total correct / total attempted, not an average of percentages. Subject score percentages are averaged per included subject result. Unknown metrics show a dash; unknown time is not treated as zero. Recent improvement requires ten attempts sharing subject IDs and question counts, and compares the latest five with the preceding five.
+The helper targets the selected production project/branch, sends the credentials over stdin, and does not save or print the secret. Confirm `neon neon-auth oauth-provider list` reports `google standard` with your client ID. Then set `GOOGLE_AUTH_ENABLED=true` and rebuild/redeploy.
 
-## API and storage
+The app uses the pinned `@neondatabase/auth` Next.js SDK for Google redirects, signed session cookies, and sign-out. Only `/auth/complete` uses session middleware to finish OAuth; the dashboard and mock APIs remain public. The sign-in page always offers guest access. Authentication does not grant ownership protection.
 
-All database access stays on the server. The dedicated collections are `sscMockAttempts` and `sscTrackerSettings`. Each mock includes embedded subject rows, optional reported score/time, rank/percentile, notes, import source, schema version, and creation/update timestamps. ID values are UUID strings.
+## Vercel
 
-| Endpoint                 | Methods          | Purpose                                  |
-| ------------------------ | ---------------- | ---------------------------------------- |
-| `/api/mock-attempts`     | GET, POST        | Filter records; add a validated attempt  |
-| `/api/mock-attempts/:id` | GET, PUT, DELETE | Read, replace editable fields, or delete |
-| `/api/analytics`         | GET              | Statistics for matching records          |
-| `/api/settings`          | GET, PUT         | Optional `targetScore` (0–390 or null)   |
-| `/api/backup`            | GET, POST        | JSON/CSV export; preview/restore JSON    |
+Use the existing `sscinsight` project in `alphaalexxxs-projects`. Configure runtime database and Auth variables in its Production environment, marking the database URL and cookie secret as sensitive. Migrations use the direct URL locally or in controlled release jobs; the production runtime only needs the pooled URL.
 
-List and analytics queries accept `type`, `subject`, `platform`, `from`, `to`, and `search`. JSON responses use `{data}` or `{error: {code, message}}`. Backup GET returns a downloadable `{schemaVersion: 1, exportedAt, attempts}` document; `?format=csv` exports CSV. Restore POST accepts `{schemaVersion: 1, attempts, preview: true|false}`; preview defaults to true. DELETE requires an empty JSON object body. Request bodies are limited to 64 KiB, or 2 MiB for backup import (maximum 2,000 attempts).
+Redeploy after environment changes. Do not upload personal Firebase CLI credentials or local Google service-account files. `.gitignore` and `.vercelignore` exclude local credentials, environment files, generated output, and temporary review data. Preserve previous deployment/configuration for rollback.
 
-Database aggregation handles filtering/sorting; domain calculations run on the server. The application loads all matching records for complete personal analytics; it is intended for a personal tracker, not a multi-user high-volume reporting system.
+## Tracker behavior
 
-This is intentionally a **shared, unauthenticated** workspace: anyone who can reach the application can read, edit, export, or delete its records. Same-origin checks and input validation are not ownership controls. Public deployment was not part of this build.
+- Full mocks: Quant 30, Reasoning 30, English 45, GA 25; 390 marks. Optional Computer is separate from the 390-mark statistics.
+- Section I: Quant + Reasoning, 180 marks. Section II: English + GA, 210 marks. Subject and sectional practice support shorter custom counts.
+- Correct/incorrect counts calculate scores live at +3/-1. Three time blocks sum to the overall time; omitted blocks become zero. Legacy score/time overrides remain compatible with existing backups.
+- Completion dates and filters use IST. Platform presets include Testbook, RBE, Oliveboard, Pundits, Test Ranking, and Others with a custom input.
+- Paste Report extracts supported fields locally and always opens an editable review form.
+- Subject score/accuracy/time series combine full, sectional, and subject mocks; date/platform/search filters apply. Mock-type/subject summary filters do not restrict those series. Percentages allow comparison across different maxima.
+- Accuracy is total correct divided by total attempted. Full averages exclude Computer. Recent improvement requires ten comparable mocks. Unknown metrics display a dash.
+- Compare two to four mocks. JSON backups use schema version 1; restore previews duplicates and adds records atomically with new IDs. CSV exports per-subject results.
+
+## API
+
+Routes retain `{data}` / `{error: {code, message}}` response envelopes, validation, same-origin writes, and request-size limits. JSON backups and CSV use downloadable responses.
+
+| Endpoint | Methods | Purpose |
+| --- | --- | --- |
+| `/api/mock-attempts` | GET, POST | Filter/list; add |
+| `/api/mock-attempts/:id` | GET, PUT, DELETE | Inspect; edit; confirmed deletion |
+| `/api/analytics` | GET | Filtered summaries and cross-type subject series |
+| `/api/settings` | GET, PUT | Shared target score |
+| `/api/backup` | GET, POST | Export, preview, atomic restore |
+| `/api/auth/*` | SDK methods | Same-origin Neon Auth proxy |
+
+List/analytics filters: `type`, `subject`, `platform`, `from`, `to`, `search`. Literal substring search escapes PostgreSQL wildcard characters. Date ranges are inclusive IST dates. Domain calculations run on the server; filters run through Prisma.
 
 ## Verification
 
 ```powershell
+npx next typegen
 npm run typecheck
 npm run lint
 npm test
 npm run build
+npm run start
+npm run verify:neon
 ```
 
-With the development server running, the integration script checks actual Firebase writes, edits, analytics, exports, restore, validation, and origin enforcement. It temporarily retains two clearly labeled QA attempts for browser inspection. Always clean them up when finished:
+`verify:neon` runs against localhost unless `APP_URL` is supplied. It creates explicitly disposable mock records, verifies persisted CRUD/subject replacement, the 245/390 report, Computer exclusion, cross-type analytics, literal filters, backups/import duplicates, shared settings, validation, and the anonymous Auth session endpoint. Its `finally` block removes its records and restores the prior target setting. Run against a QA branch first.
 
-```powershell
-node scripts/integration-check.mjs
-node scripts/integration-check.mjs --cleanup
-```
+A passing session endpoint is not proof of Google login. Browser verification must additionally complete Google consent, reload to confirm the session, and sign out. Report Google login as pending if user participation or provider configuration prevents that check.
 
-Focused tests cover the supplied 245/390 report, 90 correct / 25 incorrect / 15 skipped, 78.26% accuracy, 1:31:17 time, zero attempts, negative scores, overrides, custom counts, Computer exclusion, weighted accuracy, IST boundaries, duplicate matching, malformed reports, request limits, and recoverable database errors.
+## Agent tooling
+
+The user-installed `neon-postgres` Codex plugin bundles the Neon skills and OAuth MCP endpoint `https://mcp.neon.tech/mcp`. Do not duplicate it with separate skills/MCP entries. The CLI is preferred for this project's operations. The linked `.neon` file is local and ignored; `neon.ts` declares only the requested services.
+
+References: [Neon skill](https://neon.com/.well-known/agent-skills/neon/SKILL.md), [Prisma on Neon](https://neon.com/docs/guides/prisma), [Neon Auth](https://neon.com/docs/auth/overview).
