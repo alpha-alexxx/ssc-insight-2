@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
 const base = process.env.APP_URL ?? "http://localhost:3000";
+const cookie = process.env.TEST_SESSION_COOKIE;
+if (!cookie)
+  throw new Error(
+    "TEST_SESSION_COOKIE is required; use a disposable QA account session.",
+  );
 const platform = `QA disposable ${randomUUID()}`;
 const ids = new Set();
 let originalSettings;
@@ -9,7 +14,11 @@ let originalSettings;
 async function raw(path, method = "GET", body, origin = base) {
   return fetch(base + path, {
     method,
-    headers: { "Content-Type": "application/json", Origin: origin },
+    headers: {
+      "Content-Type": "application/json",
+      Origin: origin,
+      Cookie: cookie,
+    },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 }
@@ -122,9 +131,9 @@ try {
   assert.equal(stats.subjects.find((s) => s.id === "quant").count, 3);
   assert.equal(stats.averageFullScore, 245);
 
-  const csv = await (await fetch(base + "/api/backup?format=csv")).text();
+  const csv = await (await raw("/api/backup?format=csv")).text();
   assert.ok(csv.includes(full.name));
-  const backup = await (await fetch(base + "/api/backup")).json();
+  const backup = await (await raw("/api/backup")).json();
   const saved = backup.attempts.filter((a) => a.platform === platform);
   assert.equal(saved.length, 3);
   const preview = await api("/api/backup", "POST", {
@@ -177,9 +186,9 @@ try {
   assert.equal(session.status, 200);
   assert.equal(await session.json(), null);
   const unauthorizedPage = await fetch(base + "/");
-  assert.equal(unauthorizedPage.status, 200);
+  assert.equal(unauthorizedPage.url, base + "/sign-in");
   console.log(
-    "PASS: Neon persistence, ordered subject replacement, 245/390 sample, Computer exclusion, cross-type analytics, literal filters, CSV/JSON backup round trip, duplicate imports, settings, 404/400/403 responses, anonymous dashboard, Neon Auth session endpoint.",
+    "PASS: Neon persistence, ordered subject replacement, 245/390 sample, Computer exclusion, cross-type analytics, literal filters, CSV/JSON backup round trip, duplicate imports, settings, 404/400/403 responses, anonymous redirect, Neon Auth session endpoint.",
   );
 } finally {
   const remaining = await api(`/api/mock-attempts?${query}`).catch(() => []);

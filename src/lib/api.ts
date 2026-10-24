@@ -1,11 +1,28 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { SessionError } from "./auth/session-policy";
+export const privateHeaders = { "Cache-Control": "private, no-store" };
+
+function privateJson(
+  body: unknown,
+  init: { status: number; headers?: HeadersInit },
+) {
+  const headers = new Headers(init.headers);
+  headers.set("Cache-Control", "private, no-store");
+  return NextResponse.json(body, { ...init, headers });
+}
+
 export function ok(data: unknown, status = 200) {
-  return NextResponse.json({ data }, { status });
+  return privateJson({ data }, { status, headers: privateHeaders });
 }
 export function apiError(error: unknown) {
+  if (error instanceof SessionError)
+    return privateJson(
+      { error: { code: error.code, message: error.message } },
+      { status: error.status, headers: privateHeaders },
+    );
   if (error instanceof ZodError)
-    return NextResponse.json(
+    return privateJson(
       {
         error: {
           code: "VALIDATION_ERROR",
@@ -17,19 +34,19 @@ export function apiError(error: unknown) {
       { status: 400 },
     );
   if (error instanceof RequestError)
-    return NextResponse.json(
+    return privateJson(
       { error: { code: "REQUEST_ERROR", message: error.message } },
       { status: error.status },
     );
   const prismaCode =
     error && typeof error === "object" && "code" in error ? error.code : null;
   if (prismaCode === "P2025" || prismaCode === "P2016")
-    return NextResponse.json(
+    return privateJson(
       { error: { code: "NOT_FOUND", message: "Mock not found" } },
       { status: 404 },
     );
   if (prismaCode === "P2002" || prismaCode === "P2003")
-    return NextResponse.json(
+    return privateJson(
       {
         error: {
           code: "CONFLICT",
@@ -47,7 +64,7 @@ export function apiError(error: unknown) {
         ? prismaCode
         : "DATABASE_UNAVAILABLE",
   });
-  return NextResponse.json(
+  return privateJson(
     {
       error: {
         code: "DATABASE_UNAVAILABLE",

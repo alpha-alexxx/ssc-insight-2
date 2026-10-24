@@ -20,11 +20,10 @@ async function handle(request: Request, context: Context) {
       {
         error: {
           code: "AUTH_UNAVAILABLE",
-          message:
-            "Sign-in is temporarily unavailable. You can continue using the shared dashboard.",
+          message: "Sign-in is temporarily unavailable. Please retry shortly.",
         },
       },
-      { status: 503 },
+      { status: 503, headers: { "Cache-Control": "private, no-store" } },
     );
   }
 }

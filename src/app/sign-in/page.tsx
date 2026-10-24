@@ -1,18 +1,33 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AuthControl } from "@/components/auth-control";
+import { requireUser } from "@/lib/auth/require-user";
+import { SessionError } from "@/lib/auth/session-policy";
 
-export default function SignInPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SignInPage() {
+  let signedIn = false;
+  let unavailable = false;
+  try {
+    await requireUser();
+    signedIn = true;
+  } catch (error) {
+    unavailable = !(error instanceof SessionError && error.status === 401);
+  }
+  if (signedIn) redirect("/");
   return (
     <main className="mx-auto max-w-lg px-5 py-20">
-      <h1 className="text-4xl mb-4">Sign in, if you like.</h1>
+      <h1 className="font-serif text-4xl mb-4">Your preparation. Your space.</h1>
       <p className="muted mb-8">
-        Google sign-in is optional. Everyone shares the same mocks and settings,
-        including guests.
+        Sign in with Google to access your private mocks, progress, and
+        settings.
       </p>
+      {unavailable && (
+        <p role="alert" className="mb-6 text-sm text-danger">
+          Sign-in is temporarily unavailable. Please retry shortly.
+        </p>
+      )}
       <AuthControl enabled={process.env.GOOGLE_AUTH_ENABLED === "true"} />
-      <Link href="/" className="mt-8 inline-block underline underline-offset-4">
-        Continue to the dashboard as a guest
-      </Link>
     </main>
   );
 }

@@ -1,11 +1,13 @@
+import { requireUser } from "@/lib/auth/require-user";
 import { z } from "zod";
 import { attemptSchema } from "@/lib/domain";
 import { importAttempts, listAttempts } from "@/lib/repository";
-import { apiError, ok, readBody } from "@/lib/api";
+import { apiError, ok, readBody, privateHeaders } from "@/lib/api";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
-    const attempts = await listAttempts();
+    const { id: userId } = await requireUser();
+    const attempts = await listAttempts(userId);
     if (new URL(request.url).searchParams.get("format") === "csv") {
       const quote = (s: unknown) => {
         const text = String(s ?? "");
@@ -55,6 +57,7 @@ export async function GET(request: Request) {
         rows.map((r) => r.map(quote).join(",")).join("\r\n"),
         {
           headers: {
+            ...privateHeaders,
             "Content-Type": "text/csv",
             "Content-Disposition": 'attachment; filename="ssc-insight.csv"',
           },
@@ -69,6 +72,7 @@ export async function GET(request: Request) {
       ),
       {
         headers: {
+          ...privateHeaders,
           "Content-Type": "application/json",
           "Content-Disposition":
             'attachment; filename="ssc-insight-backup.json"',
@@ -81,6 +85,7 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
+    const { id: userId } = await requireUser();
     const body = z
       .object({
         schemaVersion: z.literal(1),
@@ -88,7 +93,7 @@ export async function POST(request: Request) {
         preview: z.boolean().default(true),
       })
       .parse(await readBody(request, 2 * 1024 * 1024));
-    return ok(await importAttempts(body.attempts, body.preview));
+    return ok(await importAttempts(userId, body.attempts, body.preview));
   } catch (e) {
     return apiError(e);
   }

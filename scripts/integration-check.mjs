@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
 import { writeFile, readFile, unlink } from "node:fs/promises";
-const base = "http://localhost:3000";
+const base = process.env.APP_URL ?? "http://localhost:3000";
+const cookie = process.env.TEST_SESSION_COOKIE;
+if (!cookie)
+  throw new Error(
+    "TEST_SESSION_COOKIE is required; use a disposable QA session.",
+  );
 async function request(path, method = "GET", body) {
   const response = await fetch(base + path, {
     method,
-    headers: { "Content-Type": "application/json", Origin: base },
+    headers: {
+      "Content-Type": "application/json",
+      Origin: base,
+      Cookie: cookie,
+    },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const json = await response.json();

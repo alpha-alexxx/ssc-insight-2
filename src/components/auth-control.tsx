@@ -5,7 +5,8 @@ import { authClient } from "@/lib/auth/client";
 import { Button } from "./ui/button";
 
 export function AuthControl({ enabled }: { enabled: boolean }) {
-  if (!enabled) return <span className="text-xs muted">Guest access</span>;
+  if (!enabled)
+    return <span className="text-xs muted">Sign-in unavailable</span>;
   return <ConnectedAuthControl />;
 }
 
@@ -29,18 +30,20 @@ function ConnectedAuthControl() {
       if (result.error)
         throw new Error("Sign-in could not start. Please retry.");
     } catch {
-      setError("Google sign-in is unavailable. Guest access still works.");
+      setError("Google sign-in is unavailable. Please retry shortly.");
     } finally {
       setBusy(false);
     }
   }
 
   async function signOut() {
+    window.dispatchEvent(new Event("ssc:auth-unavailable"));
     setBusy(true);
     setError("");
     try {
       const result = await authClient.signOut();
       if (result.error) throw new Error("Sign-out failed");
+      window.dispatchEvent(new Event("ssc:session-ended"));
     } catch {
       setError("Could not sign out. Please retry.");
     } finally {
@@ -81,7 +84,7 @@ function ConnectedAuthControl() {
           role="status"
           className="absolute right-0 top-full z-30 mt-2 w-64 max-w-[80vw] border border-rule bg-paper p-3 text-xs text-ink"
         >
-          {error || "Sign-in is unavailable. You can continue as a guest."}
+          {error || "Sign-in is unavailable. Please retry shortly."}
         </span>
       )}
     </div>

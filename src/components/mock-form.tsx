@@ -36,6 +36,10 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   const result = await response.json();
+  if (response.status === 401)
+    window.dispatchEvent(new Event("ssc:session-ended"));
+  if (result.error?.code === "AUTH_UNAVAILABLE")
+    window.dispatchEvent(new Event("ssc:auth-unavailable"));
   if (!response.ok)
     throw new Error(result.error?.message ?? "Request failed. Please retry.");
   return result.data;

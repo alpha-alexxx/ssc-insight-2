@@ -10,38 +10,42 @@ import {
 } from "./attempt-persistence";
 import { RequestError } from "./api";
 
-export async function listAttempts(filters: Filters = {}) {
+export async function listAttempts(userId: string, filters: Filters = {}) {
   const rows = await database().mockAttempt.findMany({
-    where: attemptWhere(filters),
+    where: { ...attemptWhere(filters), userId },
     include: attemptInclude,
     orderBy: [{ completedAt: "desc" }, { id: "asc" }],
   });
   return rows.map(toAttempt);
 }
 
-export async function getAttempt(id: string) {
+export async function getAttempt(userId: string, id: string) {
   const row = await database().mockAttempt.findUnique({
-    where: { id },
+    where: { id, userId },
     include: attemptInclude,
   });
   if (!row) throw new RequestError("Mock not found", 404);
   return toAttempt(row);
 }
 
-export async function createAttempt(input: AttemptInput) {
+export async function createAttempt(userId: string, input: AttemptInput) {
   return toAttempt(
     await database().mockAttempt.create({
-      data: { id: randomUUID(), ...attemptData(input) },
+      data: { id: randomUUID(), ...attemptData(input), userId },
       include: attemptInclude,
     }),
   );
 }
 
-export async function updateAttempt(id: string, input: AttemptInput) {
+export async function updateAttempt(
+  userId: string,
+  id: string,
+  input: AttemptInput,
+) {
   const data = attemptData(input);
   return toAttempt(
     await database().mockAttempt.update({
-      where: { id },
+      where: { id, userId },
       data: {
         ...data,
         subjects: { deleteMany: {}, create: data.subjects.create },
@@ -51,28 +55,29 @@ export async function updateAttempt(id: string, input: AttemptInput) {
   );
 }
 
-export async function deleteAttempt(id: string) {
-  await database().mockAttempt.delete({ where: { id } });
+export async function deleteAttempt(userId: string, id: string) {
+  await database().mockAttempt.delete({ where: { id, userId } });
   return { id };
 }
 
-export async function getSettings() {
+export async function getSettings(userId: string) {
   const row = await database().trackerSettings.findUnique({
-    where: { id: "default" },
+    where: { userId },
   });
   return { targetScore: row?.targetScore ?? null };
 }
 
-export async function saveSettings(targetScore: number | null) {
+export async function saveSettings(userId: string, targetScore: number | null) {
   const row = await database().trackerSettings.upsert({
-    where: { id: "default" },
-    create: { id: "default", targetScore },
+    where: { userId },
+    create: { userId, targetScore },
     update: { targetScore },
   });
   return { targetScore: row.targetScore };
 }
 
 export async function importAttempts(
+  userId: string,
   attempts: AttemptInput[],
   preview: boolean,
 ) {
@@ -80,6 +85,7 @@ export async function importAttempts(
   return database().$transaction(
     async (tx) => {
       const existing = await tx.mockAttempt.findMany({
+        where: { userId },
         include: attemptInclude,
       });
       const keys = new Set(existing.map((row) => duplicateKey(toAttempt(row))));
@@ -108,7 +114,7 @@ export async function importAttempts(
         return { id: randomUUID(), data, subjects: subjects.create };
       });
       await tx.mockAttempt.createMany({
-        data: rows.map(({ id, data }) => ({ id, ...data })),
+        data: rows.map(({ id, data }) => ({ id, ...data, userId })),
       });
       await tx.subjectResult.createMany({
         data: rows.flatMap(({ id, subjects }) =>

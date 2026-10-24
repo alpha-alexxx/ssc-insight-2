@@ -131,7 +131,7 @@ Panels, controls, selected navigation, badges, avatars, status markers, and dial
 
 ## Components
 
-Optional Google sign-in appears as a compact outline control in the header. It uses the same square geometry and paper/ink tokens as other controls; session and error states must not block the public dashboard. The sign-in page preserves serif headings and always offers guest access.
+Google sign-in is required through a serif-led paper sign-in page. The signed-in header shows the account and a compact outline sign-out control. Session errors hide and unmount the private workspace until verification succeeds; account changes remount it. Preserve square geometry and paper/ink tokens throughout.
 
 Primary buttons use terracotta with paper text and a darker hover. Outline buttons use a rule border; ghost buttons gain a soft fill; destructive buttons use danger red. Standard and icon controls are 40px high; compact buttons are 32px. Disabled controls reduce opacity and block pointer interaction. Keyboard focus remains explicit with an accent outline and offset.
 

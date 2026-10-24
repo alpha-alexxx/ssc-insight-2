@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth/server";
 
-// Only OAuth completion uses session middleware. The dashboard and all mock
-// APIs intentionally remain public and shared.
+// The page guard improves navigation; each API independently checks its session.
 export async function proxy(request: NextRequest) {
   try {
     return await auth().middleware({ loginUrl: "/sign-in" })(request);
@@ -13,4 +12,4 @@ export async function proxy(request: NextRequest) {
   }
 }
 
-export const config = { matcher: ["/auth/complete"] };
+export const config = { matcher: ["/", "/auth/complete"] };

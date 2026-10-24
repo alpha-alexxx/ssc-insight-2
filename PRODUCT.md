@@ -4,7 +4,7 @@ SSC Insight is a personal SSC CGL Tier 2 mock tracker. It helps an aspirant reco
 
 ## Audience and access
 
-One aspirant is the primary user. The public, shared workspace is an explicit product choice: anyone with access can read and change its records. Optional Google sign-in through Neon Auth provides a session but does not create private data or restrict anonymous access. Do not imply that signing in protects records.
+SSC aspirants sign in with Google and work in isolated private accounts. Each user can access and change only their own mocks and settings. Anonymous visitors must sign in before entering the dashboard.
 
 ## Core workflows
 
@@ -28,3 +28,7 @@ Next.js 16 App Router with React, TypeScript, Tailwind CSS, shadcn-style Radix b
 ## Scope boundaries
 
 This is a result tracker, not an exam-taking platform, coaching marketplace, marketing landing page, or account-management product. Backup restoration adds reviewed records and handles duplicates; it is not a reason to silently replace the workspace.
+
+## Private accounts
+
+Google sign-in is required. Each user owns their mocks, analytics, comparisons, backups, and target setting. All data APIs verify the session and scope database queries by its user ID. There are no guest records, shared settings, or administrator views. Session failure hides private content, and account changes remount the workspace.

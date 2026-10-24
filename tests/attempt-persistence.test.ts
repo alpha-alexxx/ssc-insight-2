@@ -36,6 +36,7 @@ test("Prisma mapping round-trips dates, nullable metrics, legacy overrides and s
   assert.equal(data.subjects.create[0].position, 0);
   const row = {
     ...data,
+    userId: "test-user",
     id: "0e3ff340-17b2-42b2-b537-d858eb6fa947",
     schemaVersion: 1,
     createdAt: new Date("2026-10-24T00:00:00.123Z"),

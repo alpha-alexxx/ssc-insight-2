@@ -138,7 +138,7 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
   async function remove(a: Attempt) {
     if (
       !confirm(
-        `Delete “${a.name}”? This permanently removes this result from the shared tracker.`,
+        `Delete “${a.name}”? This permanently removes this result from your tracker.`,
       )
     )
       return;
@@ -160,6 +160,10 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
       const response = await fetch(`/api/backup?format=${format}`);
       if (!response.ok) {
         const body = await response.json();
+        if (response.status === 401)
+          window.dispatchEvent(new Event("ssc:session-ended"));
+        if (body.error?.code === "AUTH_UNAVAILABLE")
+          window.dispatchEvent(new Event("ssc:auth-unavailable"));
         throw new Error(body.error.message);
       }
       const url = URL.createObjectURL(await response.blob());
@@ -292,7 +296,7 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
             </span>
             <div>
               <p className="text-xs font-medium">My workspace</p>
-              <p className="text-[11px] muted">Shared · sign-in optional</p>
+              <p className="text-[11px] muted">Private · your account</p>
             </div>
             <Ellipsis size={17} className="ml-auto muted" />
           </div>
@@ -548,7 +552,7 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                     </Panel>
                     <Panel
                       title="About this tracker"
-                      description="A shared space for your SSC CGL Tier 2 results."
+                      description="Your private SSC CGL Tier 2 results."
                     >
                       <div className="p-6 pt-2 text-sm muted space-y-3">
                         <p>
@@ -562,12 +566,12 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                           from the subject question counts.
                         </p>
                         <p>
-                          Google sign-in is optional. Everyone, including
-                          guests, can view, edit, or delete shared records.
+                          Your mocks, comparisons, backups, and settings are
+                          private to your Google account.
                         </p>
                         <p>
                           Your results are saved in Neon Postgres. See README
-                          for server connection and optional sign-in setup.
+                          for server connection and Google sign-in setup.
                         </p>
                       </div>
                     </Panel>

@@ -59,7 +59,7 @@ export function attemptData(input: AttemptInput) {
         position,
       })),
     },
-  } satisfies Prisma.MockAttemptCreateInput;
+  } satisfies Omit<Prisma.MockAttemptCreateInput, "userId">;
 }
 
 export function attemptWhere(filters: Filters): Prisma.MockAttemptWhereInput {

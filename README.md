@@ -2,7 +2,7 @@
 
 A warm-paper SSC CGL Tier 2 mock tracker built with Next.js 16, React 19, TypeScript, Tailwind CSS, Radix components, Recharts, and Motion. Opens directly to the dashboard.
 
-**Access is public and shared.** Google sign-in is optional and does not restrict records or create private workspaces. Guests can read, add, edit, export, and delete the same records as signed-in users.
+**Google sign-in is required.** Each account has private mocks, analytics, comparisons, settings, and exports. New users start empty. There is no sharing or administrator access.
 
 ## Design
 
@@ -14,14 +14,14 @@ Cream paper, charcoal ink, Source Serif 4 headings, DM Sans controls, square pan
 
 ## Database and Auth
 
-The database is **PostgreSQL on Neon**, accessed only through Prisma 7.10.1 and the Neon serverless adapter in Next.js Node route handlers. Application data lives in the `ssc_insight` schema: `MockAttempt`, ordered `SubjectResult` rows, and singleton `TrackerSettings`. Neon manages Auth in its own schema, which our migrations never manage.
+The database is **PostgreSQL on Neon**, accessed only through Prisma 7.10.1 and the Neon serverless adapter in Next.js Node route handlers. Application data lives in the `ssc_insight` schema: `MockAttempt`, ordered `SubjectResult` rows, and per-user `TrackerSettings`. Neon manages Auth in its own schema, which our migrations never manage.
 
 - Organization: `org-old-hill-05909567`
 - Project: `lingering-mode-47457333` (`ssc-insight`)
 - Branch: `production`
 - Existing site: https://sscinsight-lovat.vercel.app/
 
-This migration starts with empty application tables. Firebase records and configuration remain untouched; no Firebase records are copied automatically. Existing version-1 JSON backups can still be reviewed and imported manually.
+The original Neon migration started with empty application tables. The private-account migration assigns the two existing shared mocks to the verified `ankitinter9@gmail.com` Auth identity; see [release notes](docs/private-accounts.md). Firebase records and configuration remain untouched; no Firebase records are copied automatically. Existing version-1 JSON backups can still be reviewed and imported manually.
 
 ## Run locally
 
@@ -47,9 +47,9 @@ Copy `.env.example` for the names, or use Neon's environment pull. Never commit 
 | `DATABASE_URL_UNPOOLED` | Direct connection used only by Prisma migration commands |
 | `NEON_AUTH_BASE_URL` | Managed Auth URL ending in `/auth` |
 | `NEON_AUTH_COOKIE_SECRET` | Cryptographically random secret of at least 32 characters |
-| `GOOGLE_AUTH_ENABLED` | Set to `true` after configuring a production Google OAuth client; otherwise the dashboard shows guest access |
+| `GOOGLE_AUTH_ENABLED` | Set to `true` after configuring a production Google OAuth client; otherwise sign-in is unavailable |
 
-Keep every variable server-side; none needs a `NEXT_PUBLIC_` prefix. The client talks to the same-origin `/api/auth` proxy. Missing Auth configuration does not prevent anonymous mock tracking. Build and client generation do not connect to the database or require live secrets.
+Keep every variable server-side; none needs a `NEXT_PUBLIC_` prefix. The client talks to the same-origin `/api/auth` proxy. Missing or unavailable Auth configuration fails closed; private records are never returned anonymously. Build and client generation do not connect to the database or require live secrets.
 
 ### Migrations
 
@@ -60,7 +60,7 @@ npm run db:migrate
 
 `prisma.config.ts` loads Next.js environment files and uses the unpooled connection. Do not run `prisma migrate reset`, target Neon's managed Auth schema, or apply schema changes automatically in arbitrary Vercel builds. Test new SQL migrations on an expiring branch first. Apply reviewed migrations explicitly before deploying the matching app revision.
 
-## Optional Google sign-in
+## Google sign-in
 
 Use Neon Auth's Google provider with your own Google OAuth **Web application** credentials in production. Shared Neon keys are for development. Register the managed Auth URL plus `/callback/google` as Google's authorized redirect URI. Allow `https://sscinsight-lovat.vercel.app` in Neon Auth's trusted domains; allow localhost while testing locally.
 
@@ -72,7 +72,7 @@ Use the Neon Console to enter the client secret directly, or run the local maske
 
 The helper targets the selected production project/branch, sends the credentials over stdin, and does not save or print the secret. Confirm `neon neon-auth oauth-provider list` reports `google standard` with your client ID. Then set `GOOGLE_AUTH_ENABLED=true` and rebuild/redeploy.
 
-The app uses the pinned `@neondatabase/auth` Next.js SDK for Google redirects, signed session cookies, and sign-out. Only `/auth/complete` uses session middleware to finish OAuth; the dashboard and mock APIs remain public. The sign-in page always offers guest access. Authentication does not grant ownership protection.
+The app uses the pinned `@neondatabase/auth` Next.js SDK for Google redirects, signed session cookies, and sign-out. The dashboard and OAuth completion route use session middleware, with an independent server session guard on the page and every data API. Missing sessions receive `401 UNAUTHENTICATED`; verification outages receive `503 AUTH_UNAVAILABLE`. The server obtains ownership exclusively from the verified session. Foreign record IDs return the same 404 as nonexistent IDs. Personalized responses and downloads use `Cache-Control: private, no-store`. Sign-out, session failures, and account changes unmount private dashboard state.
 
 ## Vercel
 
@@ -100,7 +100,7 @@ Routes retain `{data}` / `{error: {code, message}}` response envelopes, validati
 | `/api/mock-attempts` | GET, POST | Filter/list; add |
 | `/api/mock-attempts/:id` | GET, PUT, DELETE | Inspect; edit; confirmed deletion |
 | `/api/analytics` | GET | Filtered summaries and cross-type subject series |
-| `/api/settings` | GET, PUT | Shared target score |
+| `/api/settings` | GET, PUT | Private target score |
 | `/api/backup` | GET, POST | Export, preview, atomic restore |
 | `/api/auth/*` | SDK methods | Same-origin Neon Auth proxy |
 
@@ -118,7 +118,7 @@ npm run start
 npm run verify:neon
 ```
 
-`verify:neon` runs against localhost unless `APP_URL` is supplied. It creates explicitly disposable mock records, verifies persisted CRUD/subject replacement, the 245/390 report, Computer exclusion, cross-type analytics, literal filters, backups/import duplicates, shared settings, validation, and the anonymous Auth session endpoint. Its `finally` block removes its records and restores the prior target setting. Run against a QA branch first.
+`verify:neon` runs against localhost unless `APP_URL` is supplied. It creates explicitly disposable mock records, verifies persisted CRUD/subject replacement, the 245/390 report, Computer exclusion, cross-type analytics, literal filters, backups/import duplicates, private settings, validation, and anonymous redirects. Its `finally` block removes its records and restores the prior target setting. Set `TEST_SESSION_COOKIE` from a real disposable QA session and run against a QA branch first. Never paste session cookies into chat or commit them. `node scripts/verify-ownership.mjs` additionally requires `TEST_OTHER_SESSION_COOKIE` for a second real account and tests isolation, forged ownership, duplicate imports, exports, and revoked sessions.
 
 A passing session endpoint is not proof of Google login. Browser verification must additionally complete Google consent, reload to confirm the session, and sign out. Report Google login as pending if user participation or provider configuration prevents that check.
 
