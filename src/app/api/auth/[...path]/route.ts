@@ -13,7 +13,9 @@ async function handle(request: Request, context: Context) {
     }
     const method = request.method as
       "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-    return await auth().handler()[method](request, context);
+    const response = await auth().handler()[method](request, context);
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
   } catch (error) {
     if (error instanceof RequestError) return apiError(error);
     return Response.json(

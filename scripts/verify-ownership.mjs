@@ -55,11 +55,14 @@ try {
   const a = await api(0, "/api/mock-attempts", "POST", input);
   created[0].add(a.id);
   assert.ok(!("userId" in a));
-  const sessionB = await (
-    await fetch(base + "/api/auth/get-session", {
-      headers: { Cookie: cookies[1] },
-    })
-  ).json();
+  const sessionResponse = await fetch(base + "/api/auth/get-session", {
+    headers: { Cookie: cookies[1] },
+  });
+  assert.equal(
+    sessionResponse.headers.get("cache-control"),
+    "private, no-store",
+  );
+  const sessionB = await sessionResponse.json();
   assert.ok(sessionB?.user?.id);
   for (const method of ["GET", "PUT", "DELETE"]) {
     const body =

@@ -1,6 +1,6 @@
 # Private accounts release
 
-The application now requires Google sign-in. Every data route independently verifies Neon Auth, bypassing the SDK's five-minute cookie cache so revoked sessions cannot authorize requests. Missing/expired sessions return `401 UNAUTHENTICATED`; verification failures return sanitized `503 AUTH_UNAVAILABLE`. Personalized responses and downloads are `private, no-store`.
+The application now requires Google sign-in. Every data route independently verifies Neon Auth, bypassing the SDK's five-minute cookie cache so revoked sessions cannot authorize requests. Missing/expired sessions return `401 UNAUTHENTICATED`; verification failures return sanitized `503 AUTH_UNAVAILABLE`. Personalized responses and downloads, including Neon Auth proxy/session responses, are `private, no-store`.
 
 ## Ownership
 

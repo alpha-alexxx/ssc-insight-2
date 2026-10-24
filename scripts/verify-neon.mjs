@@ -184,6 +184,7 @@ try {
 
   const session = await fetch(base + "/api/auth/get-session");
   assert.equal(session.status, 200);
+  assert.equal(session.headers.get("cache-control"), "private, no-store");
   assert.equal(await session.json(), null);
   const unauthorizedPage = await fetch(base + "/");
   assert.equal(unauthorizedPage.url, base + "/sign-in");
