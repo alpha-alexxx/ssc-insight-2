@@ -1,0 +1,211 @@
+import { z } from "zod";
+export const SUBJECTS = {
+  quant: {
+    name: "Quantitative Aptitude",
+    short: "Quant",
+    questions: 30,
+    color: "#2563eb",
+  },
+  reasoning: {
+    name: "General Intelligence and Reasoning",
+    short: "Reasoning",
+    questions: 30,
+    color: "#8b5cf6",
+  },
+  english: {
+    name: "English Comprehension",
+    short: "English",
+    questions: 45,
+    color: "#0891b2",
+  },
+  ga: {
+    name: "General Awareness",
+    short: "General Awareness",
+    questions: 25,
+    color: "#e59a24",
+  },
+  computer: {
+    name: "Computer Knowledge",
+    short: "Computer",
+    questions: 20,
+    color: "#64748b",
+  },
+} as const;
+export type SubjectId = keyof typeof SUBJECTS;
+export const subjectIds = Object.keys(SUBJECTS) as SubjectId[];
+const optionalNumber = z.number().finite().nullable().optional();
+export const subjectSchema = z
+  .object({
+    subjectId: z.enum(["quant", "reasoning", "english", "ga", "computer"]),
+    questions: z.number().int().min(1).max(500),
+    correct: z.number().int().min(0),
+    incorrect: z.number().int().min(0),
+    scoreOverride: optionalNumber,
+    timeSeconds: z.number().int().min(0).max(86400).nullable().optional(),
+  })
+  .refine(
+    (s) => s.correct + s.incorrect <= s.questions,
+    "Attempted questions cannot exceed total questions",
+  )
+  .refine(
+    (s) =>
+      s.scoreOverride == null ||
+      (s.scoreOverride >= -s.questions && s.scoreOverride <= s.questions * 3),
+    "Score must fit the question count",
+  );
+export const attemptSchema = z
+  .object({
+    name: z.string().trim().min(1).max(150),
+    platform: z.string().trim().min(1).max(80),
+    completedAt: z.iso.datetime(),
+    type: z.enum(["full", "subject", "sectional"]),
+    subjects: z.array(subjectSchema).min(1).max(5),
+    scoreOverride: optionalNumber,
+    overallTimeSeconds: z
+      .number()
+      .int()
+      .min(0)
+      .max(86400)
+      .nullable()
+      .optional(),
+    rank: z.number().int().min(1).nullable().optional(),
+    participants: z.number().int().min(1).nullable().optional(),
+    percentile: z.number().min(0).max(100).nullable().optional(),
+    notes: z.string().max(5000).default(""),
+    source: z.enum(["manual", "paste", "backup"]).default("manual"),
+  })
+  .superRefine((a, ctx) => {
+    const ids = a.subjects.map((s) => s.subjectId);
+    const mainIds = ids.filter((id) => id !== "computer");
+    const fail = (message: string) =>
+      ctx.addIssue({ code: "custom", message, path: ["subjects"] });
+    if (new Set(ids).size !== ids.length)
+      fail("Each subject can appear only once");
+    if (
+      a.type === "full" &&
+      (mainIds.length !== 4 ||
+        ["quant", "reasoning", "english", "ga"].some(
+          (id) => !ids.includes(id as SubjectId),
+        ) ||
+        a.subjects.some((s) => s.questions !== SUBJECTS[s.subjectId].questions))
+    )
+      fail(
+        "Full mocks require the four main subjects and standard question counts",
+      );
+    if (a.type === "subject" && ids.length !== 1)
+      fail("Subject mocks require one subject");
+    if (
+      a.type === "sectional" &&
+      !(
+        ids.length === 2 &&
+        (["quant", "reasoning"].every((id) => ids.includes(id as SubjectId)) ||
+          ["english", "ga"].every((id) => ids.includes(id as SubjectId)))
+      )
+    )
+      fail("Select Quant + Reasoning or English + General Awareness");
+    if (a.rank && a.participants && a.rank > a.participants)
+      ctx.addIssue({
+        code: "custom",
+        message: "Rank cannot exceed participant count",
+        path: ["rank"],
+      });
+    const q = a.subjects
+      .filter((s) => a.type !== "full" || s.subjectId !== "computer")
+      .reduce((sum, s) => sum + s.questions, 0);
+    if (
+      a.scoreOverride != null &&
+      (a.scoreOverride < -q || a.scoreOverride > q * 3)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Overall score is outside the possible range",
+        path: ["scoreOverride"],
+      });
+  });
+export type SubjectResult = z.infer<typeof subjectSchema>;
+export type AttemptInput = z.infer<typeof attemptSchema>;
+export type Attempt = AttemptInput & {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  schemaVersion: 1;
+};
+export type Filters = {
+  type?: string;
+  subject?: string;
+  platform?: string;
+  from?: string;
+  to?: string;
+  search?: string;
+};
+export function subjectStats(s: SubjectResult) {
+  const attempted = s.correct + s.incorrect;
+  const score = s.scoreOverride ?? s.correct * 3 - s.incorrect;
+  return {
+    ...s,
+    attempted,
+    unattempted: s.questions - attempted,
+    score,
+    maxScore: s.questions * 3,
+    percentage: (score / (s.questions * 3)) * 100,
+    accuracy: attempted ? (s.correct / attempted) * 100 : null,
+  };
+}
+export function totals(a: AttemptInput) {
+  const scoringSubjects =
+    a.type === "full"
+      ? a.subjects.filter((s) => s.subjectId !== "computer")
+      : a.subjects;
+  const sums = scoringSubjects.reduce(
+    (acc, s) => {
+      const t = subjectStats(s);
+      return {
+        correct: acc.correct + s.correct,
+        incorrect: acc.incorrect + s.incorrect,
+        questions: acc.questions + s.questions,
+        score: acc.score + t.score,
+        timeSeconds: acc.timeSeconds + (s.timeSeconds ?? 0),
+      };
+    },
+    { correct: 0, incorrect: 0, questions: 0, score: 0, timeSeconds: 0 },
+  );
+  const attempted = sums.correct + sums.incorrect;
+  const score = a.scoreOverride ?? sums.score;
+  return {
+    ...sums,
+    score,
+    maxScore: sums.questions * 3,
+    attempted,
+    unattempted: sums.questions - attempted,
+    accuracy: attempted ? (sums.correct / attempted) * 100 : null,
+    percentage: (score / (sums.questions * 3)) * 100,
+    timeSeconds:
+      a.overallTimeSeconds ??
+      (a.subjects.every((s) => s.timeSeconds != null)
+        ? a.subjects.reduce((sum, s) => sum + (s.timeSeconds ?? 0), 0)
+        : null),
+  };
+}
+export function formatNumber(n: number | null | undefined, digits = 1) {
+  return n == null
+    ? "—"
+    : n.toLocaleString("en-IN", { maximumFractionDigits: digits });
+}
+export function formatTime(seconds: number | null | undefined) {
+  if (seconds == null) return "—";
+  return `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+export function parseTime(value: string) {
+  if (!value.trim()) return null;
+  const parts = value.split(":").map(Number);
+  if (
+    parts.some((n) => !Number.isInteger(n) || n < 0) ||
+    parts.length > 3 ||
+    parts.slice(1).some((n) => n > 59)
+  )
+    throw new Error("Time must use hh:mm:ss or mm:ss");
+  return parts.reduce((a, n) => a * 60 + n, 0);
+}
+export function duplicateKey(a: AttemptInput) {
+  return `${a.name.trim().toLowerCase()}|${a.platform.trim().toLowerCase()}|${a.completedAt}|${a.type}`;
+}

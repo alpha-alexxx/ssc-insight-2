@@ -1,0 +1,302 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T09:49:14.8460767Z",
+  "title": "Design System: SSC Insight",
+  "extensions": {
+    "sourceFiles": [
+      "src/app/globals.css",
+      "src/components/ui/button.tsx",
+      "src/components/dashboard.tsx",
+      "src/components/dashboard-panels.tsx",
+      "src/components/performance-overview.tsx",
+      "src/lib/domain.ts",
+      "src/lib/chart-theme.ts"
+    ],
+    "colorMeta": {
+      "muted": {
+        "canonical": "#6b665e",
+        "role": "semantic",
+        "displayName": "muted"
+      },
+      "rule-soft": {
+        "canonical": "#d5cec1",
+        "role": "semantic",
+        "displayName": "rule soft"
+      },
+      "warning": {
+        "canonical": "#73551c",
+        "role": "semantic",
+        "displayName": "warning"
+      },
+      "chart-time": {
+        "canonical": "#567276",
+        "role": "semantic",
+        "displayName": "chart time"
+      },
+      "chart-quant": {
+        "canonical": "#b65335",
+        "role": "semantic",
+        "displayName": "chart quant"
+      },
+      "chart-english": {
+        "canonical": "#567276",
+        "role": "semantic",
+        "displayName": "chart english"
+      },
+      "chart-skipped": {
+        "canonical": "#d5cec1",
+        "role": "semantic",
+        "displayName": "chart skipped"
+      },
+      "soft": {
+        "canonical": "#eae5da",
+        "role": "semantic",
+        "displayName": "soft"
+      },
+      "positive": {
+        "canonical": "#535d37",
+        "role": "semantic",
+        "displayName": "positive"
+      },
+      "positive-soft": {
+        "canonical": "#e6e9db",
+        "role": "semantic",
+        "displayName": "positive soft"
+      },
+      "rule": {
+        "canonical": "#82796b",
+        "role": "semantic",
+        "displayName": "rule"
+      },
+      "chart-score": {
+        "canonical": "#b65335",
+        "role": "semantic",
+        "displayName": "chart score"
+      },
+      "danger": {
+        "canonical": "#962f28",
+        "role": "semantic",
+        "displayName": "danger"
+      },
+      "chart-ga": {
+        "canonical": "#a77b32",
+        "role": "semantic",
+        "displayName": "chart ga"
+      },
+      "chart-computer": {
+        "canonical": "#767168",
+        "role": "semantic",
+        "displayName": "chart computer"
+      },
+      "accent-soft": {
+        "canonical": "#efe0d5",
+        "role": "semantic",
+        "displayName": "accent soft"
+      },
+      "paper": {
+        "canonical": "#faf8f2",
+        "role": "semantic",
+        "displayName": "paper"
+      },
+      "chart-incorrect": {
+        "canonical": "#b65335",
+        "role": "semantic",
+        "displayName": "chart incorrect"
+      },
+      "danger-hover": {
+        "canonical": "#75231e",
+        "role": "semantic",
+        "displayName": "danger hover"
+      },
+      "accent-hover": {
+        "canonical": "#934029",
+        "role": "semantic",
+        "displayName": "accent hover"
+      },
+      "chart-reasoning": {
+        "canonical": "#656d4a",
+        "role": "semantic",
+        "displayName": "chart reasoning"
+      },
+      "warning-soft": {
+        "canonical": "#eee4cc",
+        "role": "semantic",
+        "displayName": "warning soft"
+      },
+      "ink": {
+        "canonical": "#25231f",
+        "role": "semantic",
+        "displayName": "ink"
+      },
+      "chart-average": {
+        "canonical": "#656d4a",
+        "role": "semantic",
+        "displayName": "chart average"
+      },
+      "canvas": {
+        "canonical": "#f4f1e8",
+        "role": "semantic",
+        "displayName": "canvas"
+      },
+      "accent": {
+        "canonical": "#b65335",
+        "role": "semantic",
+        "displayName": "accent"
+      },
+      "danger-soft": {
+        "canonical": "#f1dfd8",
+        "role": "semantic",
+        "displayName": "danger soft"
+      },
+      "chart-correct": {
+        "canonical": "#656d4a",
+        "role": "semantic",
+        "displayName": "chart correct"
+      }
+    },
+    "typographyMeta": {
+      "metric": {
+        "purpose": "42px desktop, 35px below 768px; tabular figures with muted units.",
+        "displayName": "Serif Metric"
+      },
+      "headline": {
+        "purpose": "Source Serif 4 Variable, self-hosted through Fontsource.",
+        "displayName": "Editorial Page Heading"
+      },
+      "body": {
+        "purpose": "DM Sans Variable, self-hosted through Fontsource.",
+        "displayName": "Operational Body"
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "notification-enter",
+        "value": "translateY(12px) to translateY(0); opacity 0 to 1",
+        "purpose": "Motion entrance with reducedMotion=user."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation-duration:0.01ms;transition-duration:0.01ms;scroll-behavior:auto",
+        "purpose": "Global prefers-reduced-motion fallback; chart animation is disabled."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main save or log action.",
+      "html": "<button class=\"ds-primary\">Log a mock</button>",
+      "css": ".ds-primary{height:40px;padding:0 16px;border:0;border-radius:0;background:var(--accent);color:var(--paper);font:500 14px 'DM Sans Variable','Segoe UI',sans-serif;cursor:pointer;transition:background-color .15s}.ds-primary:hover{background:var(--accent-hover)}.ds-primary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.ds-primary:disabled{opacity:.5;pointer-events:none}@media(prefers-reduced-motion:reduce){.ds-primary{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "description": "Secondary export or cancel action.",
+      "html": "<button class=\"ds-outline\">Export CSV</button>",
+      "css": ".ds-outline{height:40px;padding:0 16px;border:1px solid var(--rule);border-radius:0;background:var(--paper);color:var(--ink);font:500 14px 'DM Sans Variable','Segoe UI',sans-serif;cursor:pointer}.ds-outline:hover{background:var(--canvas)}.ds-outline:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.ds-outline:disabled{opacity:.5;pointer-events:none}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "description": "Low emphasis local action.",
+      "html": "<button class=\"ds-ghost\">Cancel</button>",
+      "css": ".ds-ghost{height:40px;padding:0 16px;border:0;border-radius:0;background:transparent;color:var(--muted);font:500 14px 'DM Sans Variable','Segoe UI',sans-serif;cursor:pointer}.ds-ghost:hover{background:var(--soft)}.ds-ghost:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.ds-ghost:disabled{opacity:.5;pointer-events:none}"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "description": "Delete action inside result details.",
+      "html": "<button class=\"ds-danger\">Delete mock</button>",
+      "css": ".ds-danger{height:32px;padding:0 12px;border:0;border-radius:0;background:var(--danger);color:var(--paper);font:500 12px 'DM Sans Variable','Segoe UI',sans-serif;cursor:pointer}.ds-danger:hover{background:var(--danger-hover)}.ds-danger:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.ds-danger:disabled{opacity:.5;pointer-events:none}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Shared form field appearance.",
+      "html": "<label class=\"ds-label\">Mock name<input class=\"ds-input\" placeholder=\"Enter a mock name\"></label>",
+      "css": ".ds-label{display:grid;gap:7px;color:var(--muted);font:500 12px 'DM Sans Variable','Segoe UI',sans-serif}.ds-input{min-width:0;padding:10px 12px;border:1px solid var(--rule);border-radius:0;background:var(--paper);color:var(--ink);caret-color:var(--accent);font:400 14px 'DM Sans Variable','Segoe UI',sans-serif}.ds-input::placeholder{color:var(--muted)}.ds-input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}"
+    },
+    {
+      "name": "Active Navigation",
+      "kind": "nav",
+      "refersTo": "nav-active",
+      "description": "Current desktop workspace destination.",
+      "html": "<button class=\"ds-nav\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg>Dashboard</button>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:11px;width:100%;padding:12px 14px;border:0;border-radius:0;background:var(--ink);color:var(--paper);text-align:left;font:500 14px 'DM Sans Variable','Segoe UI',sans-serif;cursor:pointer}.ds-nav:hover{background:var(--ink)}.ds-nav:focus-visible{outline:2px solid var(--accent);outline-offset:3px}"
+    },
+    {
+      "name": "Accuracy Badge",
+      "kind": "chip",
+      "description": "Compact accuracy value inside a history row.",
+      "html": "<span class=\"ds-badge\">84.6%</span>",
+      "css": ".ds-badge{display:inline-block;border-radius:0;padding:4px 8px;background:var(--positive-soft);color:var(--positive);font:400 12px 'DM Sans Variable','Segoe UI',sans-serif;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Data Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Square paper container with thin rules and a serif heading.",
+      "html": "<section class=\"ds-panel\"><div class=\"ds-panel-head\"><h2>The bigger picture</h2><p>Score percentage over time.</p></div></section>",
+      "css": ".ds-panel{min-width:0;border:1px solid var(--rule-soft);border-radius:0;background:var(--paper);color:var(--ink);font-family:'DM Sans Variable','Segoe UI',sans-serif}.ds-panel-head{padding:20px 24px 12px}.ds-panel h2{margin:0;font-family:var(--font-heading,'Source Serif 4 Variable',Georgia,serif);font-size:22px;line-height:1.2;font-weight:500;letter-spacing:-.025em}.ds-panel p{margin:6px 0 0;font-size:12px;color:var(--muted)}"
+    },
+    {
+      "name": "Divided Stat Strip",
+      "description": "One ruled summary strip rather than separate metric cards.",
+      "css": ".ds-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-block:1px solid var(--ink);color:var(--ink);font-family:var(--font-body,'DM Sans Variable',sans-serif)}.ds-stats>div{padding:23px 24px}.ds-stats>div+div{border-left:1px solid var(--rule-soft)}.ds-stats span{display:block;font-size:12px;color:var(--muted)}.ds-stats strong{display:block;margin-top:12px;font-family:var(--font-heading,'Source Serif 4 Variable',Georgia,serif);font-size:42px;font-weight:450;line-height:1.2;letter-spacing:-.035em;font-variant-numeric:tabular-nums}.ds-stats small{margin-left:6px;font:400 14px var(--font-body,'DM Sans Variable',sans-serif);color:var(--muted)}",
+      "html": "<div class=\"ds-stats\"><div><span>Mocks completed</span><strong>12</strong></div><div><span>Overall accuracy</span><strong>84.6<small>%</small></strong></div></div>",
+      "kind": "custom"
+    }
+  ],
+  "narrative": {
+    "dos": [
+      "Do keep labels, legends, and units visible beside metrics.",
+      "Do preserve the divided stat strip and horizontal table scrolling.",
+      "Do use semantic paper, ink, accent, and chart variables."
+    ],
+    "overview": "The approved visual direction is warm editorial paper: cream canvas, paper surfaces, serif headings, quiet sans-serif controls, and terracotta actions. Thin rules organize the working dashboard with the clarity of a printed progress ledger. Anthropic was a visual reference, not a brand identity to reproduce.",
+    "rules": [
+      {
+        "name": "The Meaning Rule",
+        "section": "colors",
+        "body": "Keep legends, units, and text labels alongside color; color alone must not carry a result's meaning."
+      },
+      {
+        "name": "The Readable Table Rule",
+        "section": "layout",
+        "body": "Keep wide tables inside their horizontal scroll container. Preserve comparable columns and nowrap values instead of squeezing them into unreadable cells."
+      }
+    ],
+    "donts": [
+      "Don't add rounded dashboard cards or colorful icon tiles.",
+      "Don't introduce paper textures or heavy shadows.",
+      "Don't animate charts or ignore reduced-motion preferences."
+    ],
+    "keyCharacteristics": [
+      "Warm flat surfaces with square corners and thin rules.",
+      "Expressive serif headings paired with compact sans-serif controls.",
+      "A divided metric strip and coordinated earthy charts."
+    ]
+  }
+}

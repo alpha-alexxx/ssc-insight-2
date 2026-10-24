@@ -1,0 +1,304 @@
+@import "tailwindcss";
+:root {
+  color-scheme: light;
+  --font-body: "DM Sans Variable", "Segoe UI", sans-serif;
+  --font-heading: "Source Serif 4 Variable", Georgia, serif;
+  --canvas: #f4f1e8;
+  --paper: #faf8f2;
+  --ink: #25231f;
+  --muted: #6b665e;
+  --rule: #82796b;
+  --rule-soft: #d5cec1;
+  --soft: #eae5da;
+  --accent: #b65335;
+  --accent-hover: #934029;
+  --accent-soft: #efe0d5;
+  --positive: #535d37;
+  --positive-soft: #e6e9db;
+  --warning: #73551c;
+  --warning-soft: #eee4cc;
+  --danger: #962f28;
+  --danger-hover: #75231e;
+  --danger-soft: #f1dfd8;
+  --chart-score: #b65335;
+  --chart-average: #656d4a;
+  --chart-time: #567276;
+  --chart-quant: #b65335;
+  --chart-reasoning: #656d4a;
+  --chart-english: #567276;
+  --chart-ga: #a77b32;
+  --chart-computer: #767168;
+  --chart-correct: #656d4a;
+  --chart-incorrect: #b65335;
+  --chart-skipped: #d5cec1;
+}
+@theme inline {
+  --font-sans: var(--font-body);
+  --font-serif: var(--font-heading);
+  --color-canvas: var(--canvas);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+  --color-soft: var(--soft);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-chart-correct: var(--chart-correct);
+  --color-chart-incorrect: var(--chart-incorrect);
+  --color-chart-skipped: var(--chart-skipped);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+button:not(:disabled),
+select,
+summary {
+  cursor: pointer;
+}
+::selection {
+  background: var(--ink);
+  color: var(--paper);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+input,
+textarea {
+  caret-color: var(--accent);
+}
+input:not([type="checkbox"]),
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  padding: 10px 12px;
+  background: var(--paper);
+  color: var(--ink);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+input[readonly] {
+  background: var(--soft);
+}
+input[type="checkbox"] {
+  accent-color: var(--ink);
+  width: 16px;
+  height: 16px;
+}
+label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: var(--canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--rule);
+}
+.panel {
+  min-width: 0;
+  border: 1px solid var(--rule-soft);
+  border-radius: 0;
+  background: var(--paper);
+}
+.panel-title {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.page-title {
+  font-family: var(--font-heading);
+  font-size: clamp(32px, 3.2vw, 44px);
+  line-height: 1.12;
+  font-weight: 450;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.muted {
+  color: var(--muted);
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+.section-label {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+}
+.chart-empty {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid var(--ink);
+  margin-block: 28px;
+}
+.stat-cell {
+  min-width: 0;
+  padding: 23px 24px;
+}
+.stat-cell + .stat-cell {
+  border-left: 1px solid var(--rule-soft);
+}
+.stat-value {
+  font-family: var(--font-heading);
+  font-size: 42px;
+  font-weight: 450;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+.wordmark {
+  font-family: var(--font-heading);
+  font-size: 31px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.wordmark-mobile {
+  font-family: var(--font-heading);
+  font-size: 23px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
+}
+th {
+  position: relative;
+  font-weight: 500;
+  text-align: left;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+td,
+th {
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+thead th {
+  border-bottom: 1px solid var(--rule);
+  background: var(--canvas);
+}
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+tbody tr:hover {
+  background: var(--soft);
+}
+.nav-button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 0;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: left;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+.nav-button:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.nav-button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+.recharts-default-tooltip {
+  background: var(--paper) !important;
+  border: 1px solid var(--rule) !important;
+  border-radius: 0 !important;
+  color: var(--ink);
+  font-size: 12px;
+}
+.recharts-tooltip-cursor {
+  stroke: var(--rule-soft);
+}
+@media (max-width: 767px) {
+  .stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stat-cell {
+    padding: 20px 14px;
+  }
+  .stat-cell:nth-child(3) {
+    border-left: 0;
+  }
+  .stat-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .stat-value {
+    font-size: 35px;
+  }
+  .panel-title {
+    font-size: 21px;
+  }
+  td,
+  th {
+    padding: 13px 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

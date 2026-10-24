@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.env*
+!.env.example
+*.tsbuildinfo
+firebase-debug.log
+firestore-debug.log
+.local/
+output/
+.playwright-cli/
+.impeccable/review/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+next-env.d.ts
