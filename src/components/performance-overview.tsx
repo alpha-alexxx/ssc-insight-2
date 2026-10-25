@@ -4,15 +4,16 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
   Radar,
   RadarChart,
-  RadialBar,
-  RadialBarChart,
   ReferenceLine,
   XAxis,
   YAxis,
@@ -476,6 +477,44 @@ function centerLabel(stack: AnswerStack) {
     return stack.percentileCount > 1 ? "avg percentile" : "percentile";
   return "score";
 }
+function OutcomeTooltip({
+  active,
+  stack,
+}: {
+  active?: boolean;
+  stack: AnswerStack;
+}) {
+  if (!active) return null;
+  const values = {
+    correct: stack.correct,
+    incorrect: stack.incorrect,
+    unattempted: stack.unattempted,
+  };
+  const percentages = {
+    correct: stack.correctPercentage,
+    incorrect: stack.incorrectPercentage,
+    unattempted: stack.unattemptedPercentage,
+  };
+  return (
+    <div className="grid min-w-[9rem] gap-1.5 border border-rule bg-paper px-3 py-2 text-xs">
+      {outcomeKeys.map((key) => (
+        <div key={key} className="flex justify-between gap-5 whitespace-nowrap">
+          <span className="flex items-center gap-1.5 text-muted">
+            <i
+              className="size-2"
+              style={{ background: outcomeConfig[key].color as string }}
+              aria-hidden="true"
+            />
+            {outcomeConfig[key].label}
+          </span>
+          <span className="tabular font-medium text-ink">
+            {n(percentages[key])}% · {values[key]} Q
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 function AttemptRing({
   stack,
   large,
@@ -485,19 +524,16 @@ function AttemptRing({
   large?: boolean;
   showCaption?: boolean;
 }) {
-  const data = [
-    {
-      name: stack.label,
-      correct: stack.correctPercentage,
-      incorrect: stack.incorrectPercentage,
-      unattempted: stack.unattemptedPercentage,
-    },
-  ];
-  const raw: Record<string, number> = {
+  const raw = {
     correct: stack.correct,
     incorrect: stack.incorrect,
     unattempted: stack.unattempted,
   };
+  const data = outcomeKeys.map((key) => ({
+    key,
+    name: outcomeConfig[key].label as string,
+    value: raw[key],
+  }));
   const value = centerValue(stack);
   const label = centerLabel(stack);
   return (
@@ -510,58 +546,33 @@ function AttemptRing({
           config={outcomeConfig}
           className={large ? "!aspect-square h-[180px] w-full" : "!aspect-square h-[112px] w-full"}
         >
-          <RadialBarChart
-            data={data}
-            startAngle={90}
-            endAngle={-270}
-            innerRadius={large ? 58 : 34}
-            outerRadius={large ? 82 : 52}
-            accessibilityLayer
-          >
-            <RadialBar
-              dataKey="correct"
-              stackId="a"
-              fill="var(--color-correct)"
+          {/* Recharts 3's stacked RadialBar drops the third segment here, so
+              use the same ring geometry with explicit Pie cells. */}
+          <PieChart accessibilityLayer>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              startAngle={90}
+              endAngle={-270}
+              innerRadius={large ? 58 : 34}
+              outerRadius={large ? 82 : 52}
               stroke="var(--paper)"
               strokeWidth={2}
               isAnimationActive={false}
-            />
-            <RadialBar
-              dataKey="incorrect"
-              stackId="a"
-              fill="var(--color-incorrect)"
-              stroke="var(--paper)"
-              strokeWidth={2}
-              isAnimationActive={false}
-            />
-            <RadialBar
-              dataKey="unattempted"
-              stackId="a"
-              fill="var(--color-unattempted)"
-              stroke="var(--paper)"
-              strokeWidth={2}
-              isAnimationActive={false}
-            />
+            >
+              {data.map((entry) => (
+                <Cell
+                  key={entry.key}
+                  fill={outcomeConfig[entry.key].color as string}
+                />
+              ))}
+            </Pie>
             <ChartTooltip
               cursor={false}
-              content={
-                <ChartTooltipContent
-                  hideLabel
-                  formatter={(value, _name, item) => (
-                    <div className="flex w-full justify-between gap-5 whitespace-nowrap">
-                      <span className="text-muted">
-                        {outcomeConfig[String(item.dataKey)]?.label}
-                      </span>
-                      <span className="tabular font-medium text-ink">
-                        {n(Number(value))}% ·{" "}
-                        {raw[String(item.dataKey)] ?? 0} Q
-                      </span>
-                    </div>
-                  )}
-                />
-              }
+              content={<OutcomeTooltip stack={stack} />}
             />
-          </RadialBarChart>
+          </PieChart>
         </ChartContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <strong className={large ? "text-2xl" : "text-sm"}>
