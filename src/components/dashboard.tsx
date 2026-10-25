@@ -23,11 +23,18 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  Upload,
   X,
 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { Button } from "./ui/button";
 import { api, MockForm } from "./mock-form";
+import {
+  BACKUP_MAX_BYTES,
+  type BackupPreview,
+  type ImportMode,
+  type ImportResult,
+} from "@/lib/backup";
 import {
   type Attempt,
   type DashboardScope,
@@ -61,7 +68,13 @@ const typeName = (type: string) =>
     : type === "sectional"
       ? "Sectional"
       : "Subject";
-export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
+export function Dashboard({
+  authEnabled = false,
+  userEmail = "",
+}: {
+  authEnabled?: boolean;
+  userEmail?: string;
+}) {
   const [view, setView] = useState<View>("dashboard");
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
@@ -77,16 +90,15 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
   const [target, setTarget] = useState<number | null>(null);
   const [targetInput, setTargetInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [backup, setBackup] = useState<{
-    schemaVersion: number;
-    attempts: unknown[];
-  } | null>(null);
-  const [preview, setPreview] = useState<{
-    total: number;
-    newRecords: number;
-    duplicates: number;
-  } | null>(null);
+  const [backupFile, setBackupFile] = useState<unknown | null>(null);
+  const [backupName, setBackupName] = useState("");
+  const [preview, setPreview] = useState<BackupPreview | null>(null);
+  const [importMode, setImportMode] = useState<ImportMode>("merge");
+  const [applyTarget, setApplyTarget] = useState(false);
+  const [safetyDownloaded, setSafetyDownloaded] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const previewId = useRef(0);
   const requestId = useRef(0);
   const refresh = useCallback(async () => {
     const id = ++requestId.current;
@@ -168,65 +180,195 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
       setBusy(false);
     }
   }
-  async function download(format: "json" | "csv") {
+  async function download(format: "json" | "csv"): Promise<boolean> {
     try {
-      const response = await fetch(`/api/backup?format=${format}`);
+      const response = await fetch(`/api/backup?format=${format}`, {
+        cache: "no-store",
+      });
       if (!response.ok) {
-        const body = await response.json();
+        const body = await response.json().catch(() => null);
         if (response.status === 401)
           window.dispatchEvent(new Event("ssc:session-ended"));
-        if (body.error?.code === "AUTH_UNAVAILABLE")
+        if (body?.error?.code === "AUTH_UNAVAILABLE")
           window.dispatchEvent(new Event("ssc:auth-unavailable"));
-        throw new Error(body.error.message);
+        throw new Error(body?.error?.message ?? "Export failed");
       }
-      const url = URL.createObjectURL(await response.blob());
+      let blob: Blob;
+      if (format === "json") {
+        const text = await response.text();
+        try {
+          const parsed = JSON.parse(text) as { warnings?: string[] };
+          if (parsed.warnings?.length) setNotice(parsed.warnings.join(" "));
+        } catch {
+          // The server always returns JSON here; validation happens on import.
+        }
+        if (text.length > BACKUP_MAX_BYTES)
+          setNotice(
+            "Backup downloaded, but it is larger than the 4 MB import limit.",
+          );
+        blob = new Blob([text], { type: "application/json" });
+      } else {
+        blob = await response.blob();
+      }
+      const date = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `ssc-insight-${new Date().toISOString().slice(0, 10)}.${format}`;
+      a.download =
+        format === "json"
+          ? `ssc-insight-backup-${date}.json`
+          : `ssc-insight-export-${date}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+      return true;
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Export failed");
+      return false;
+    }
+  }
+  async function runPreview(
+    file: unknown,
+    mode: ImportMode,
+    apply: boolean,
+  ): Promise<BackupPreview | null> {
+    const id = ++previewId.current;
+    setBusy(true);
+    setSafetyDownloaded(false);
+    setReplaceOpen(false);
+    try {
+      const result = await api<BackupPreview>("/api/backup", {
+        method: "POST",
+        body: JSON.stringify({
+          backup: file,
+          preview: true,
+          mode,
+          applyTarget: apply,
+        }),
+      });
+      if (id !== previewId.current) return null;
+      setPreview(result);
+      return result;
+    } catch (e) {
+      if (id === previewId.current) {
+        setPreview(null);
+        setNotice(e instanceof Error ? e.message : "Could not preview backup");
+      }
+      return null;
+    } finally {
+      if (id === previewId.current) setBusy(false);
     }
   }
   async function readBackup(file?: File) {
     if (!file) return;
-    setBusy(true);
+    if (file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv") {
+      setNotice(
+        "CSV exports are read-only. Choose the JSON backup file to import.",
+      );
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    if (file.size > BACKUP_MAX_BYTES) {
+      setNotice("Backup must be under 4 MB");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     try {
-      if (file.size > 2 * 1024 * 1024)
-        throw new Error("Backup must be under 2 MB");
-      const parsed = JSON.parse(await file.text());
-      const result = await api<{
-        total: number;
-        newRecords: number;
-        duplicates: number;
-      }>("/api/backup", {
-        method: "POST",
-        body: JSON.stringify({ ...parsed, preview: true }),
-      });
-      setBackup(parsed);
-      setPreview(result);
+      const parsed: unknown = JSON.parse(await file.text());
+      setBackupFile(parsed);
+      setBackupName(file.name);
+      setPreview(null);
+      setImportMode("merge");
+      setApplyTarget(false);
+      setSafetyDownloaded(false);
+      const first = await runPreview(parsed, "merge", false);
+      if (first) {
+        const recommended =
+          first.target.incoming != null && first.target.current == null;
+        setApplyTarget(recommended);
+        if (recommended) await runPreview(parsed, "merge", true);
+      }
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Invalid backup");
+      setNotice(
+        e instanceof SyntaxError
+          ? "This is not a valid JSON backup file."
+          : e instanceof Error
+            ? e.message
+            : "Invalid backup",
+      );
     } finally {
-      setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   }
-  async function restore() {
-    if (!backup) return;
+  function changeImportMode(mode: ImportMode) {
+    setImportMode(mode);
+    if (backupFile) void runPreview(backupFile, mode, applyTarget);
+  }
+  function changeApplyTarget(next: boolean) {
+    setApplyTarget(next);
+    if (backupFile) void runPreview(backupFile, importMode, next);
+  }
+  async function downloadSafetyBackup() {
+    const saved = await download("json");
+    if (!saved) return;
+    setSafetyDownloaded(true);
+    setNotice(
+      "Current account backup downloaded. Verify it in your downloads before replacing.",
+    );
+  }
+  function resetImport() {
+    setBackupFile(null);
+    setBackupName("");
+    setPreview(null);
+    setImportMode("merge");
+    setApplyTarget(false);
+    setSafetyDownloaded(false);
+    setReplaceOpen(false);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+  async function commitImport(confirmed: boolean) {
+    if (!backupFile || !preview) return;
+    if (importMode === "replace" && (!confirmed || !safetyDownloaded)) return;
     setBusy(true);
+    setReplaceOpen(false);
     try {
-      const result = await api<{ imported: number }>("/api/backup", {
+      const result = await api<ImportResult>("/api/backup", {
         method: "POST",
-        body: JSON.stringify({ ...backup, preview: false }),
+        body: JSON.stringify({
+          backup: backupFile,
+          preview: false,
+          mode: importMode,
+          applyTarget,
+          previewFingerprint: preview.previewFingerprint,
+          confirmReplace: importMode === "replace" && confirmed,
+        }),
       });
-      setNotice(`${result.imported} mocks imported`);
-      setBackup(null);
-      setPreview(null);
+      const parts: string[] = [];
+      if (importMode === "replace")
+        parts.push(`Replaced account with ${result.imported} mocks`);
+      else if (result.imported) parts.push(`${result.imported} mocks imported`);
+      if (result.skipped) parts.push(`${result.skipped} duplicates skipped`);
+      if (result.conflicts) parts.push(`${result.conflicts} conflicts added`);
+      if (result.deleted) parts.push(`${result.deleted} existing mocks removed`);
+      if (result.target.applied)
+        parts.push(
+          result.target.targetScore == null
+            ? "target cleared"
+            : `target set to ${n(result.target.targetScore)} / 390`,
+        );
+      setNotice(parts.length ? parts.join(" · ") : "Backup imported");
+      resetImport();
       await refresh();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Restore failed");
+      const message =
+        e instanceof Error ? e.message : "Could not import the backup";
+      if (/preview|workspace changed/i.test(message)) {
+        setPreview(null);
+        setSafetyDownloaded(false);
+        setNotice(message);
+        await runPreview(backupFile, importMode, applyTarget);
+        return;
+      }
+      setNotice(message);
     } finally {
       setBusy(false);
     }
@@ -241,6 +383,18 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
     .filter((attempt): attempt is Attempt => !!attempt)
     .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
   const visibleAttempts = view === "dashboard" ? dashboardAttempts : attempts;
+  const targetChange =
+    preview != null &&
+    applyTarget &&
+    preview.target.available &&
+    preview.target.current !== preview.target.incoming;
+  const targetAction = !preview
+    ? ""
+    : applyTarget && preview.target.available
+      ? preview.target.incoming == null
+        ? "clear the current target"
+        : `set target to ${n(preview.target.incoming)} / 390`
+      : "keep the current target";
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen">
@@ -417,11 +571,11 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      aria-label="Export CSV"
-                      onClick={() => void download("csv")}
+                      aria-label="Download backup"
+                      onClick={() => void download("json")}
                     >
-                      <Download size={15} />
-                      <span className="hidden sm:inline">Export</span>
+                      <ArrowDownToLine size={15} />
+                      <span className="hidden sm:inline">Backup</span>
                     </Button>
                     <Button onClick={add}>
                       <Plus size={17} /> Add mock
@@ -509,70 +663,294 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                       </form>
                     </Panel>
                     <Panel
-                      title="Backup & export"
-                      description="Your records, ready to take with you."
+                      title="Backup & transfer"
+                      description="A complete JSON backup you can restore in another account."
                     >
-                      <div className="p-6 pt-2 flex flex-wrap gap-3">
-                        <Button
-                          variant="outline"
-                          onClick={() => void download("json")}
-                        >
-                          <ArrowDownToLine size={15} /> JSON backup
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => void download("csv")}
-                        >
-                          <Download size={15} /> CSV export
-                        </Button>
-                        <Button
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => fileRef.current?.click()}
-                        >
-                          Restore JSON
-                        </Button>
-                        <input
-                          className="hidden"
-                          type="file"
-                          accept=".json,application/json"
-                          ref={fileRef}
-                          aria-label="Choose backup file"
-                          onChange={(e) => void readBackup(e.target.files?.[0])}
-                        />
-                        <p className="text-xs muted w-full mt-2 leading-relaxed">
-                          Restore adds new records and skips duplicates. It does
-                          not replace existing results. Review the preview
-                          before importing.
+                      <div className="p-6 pt-2 space-y-4">
+                        <div className="flex flex-wrap gap-3">
+                          <Button onClick={() => void download("json")}>
+                            <ArrowDownToLine size={15} /> Download backup
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => void download("csv")}
+                          >
+                            <Download size={15} /> Download CSV (read-only)
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => fileRef.current?.click()}
+                          >
+                            <Upload size={15} /> Import backup
+                          </Button>
+                          <input
+                            className="hidden"
+                            type="file"
+                            accept=".json,application/json"
+                            ref={fileRef}
+                            aria-label="Choose backup file"
+                            onChange={(e) =>
+                              void readBackup(e.target.files?.[0])
+                            }
+                          />
+                        </div>
+                        <p className="text-xs muted leading-relaxed">
+                          The JSON backup is the restorable file. It includes
+                          every mock, note, rank, timing, and your target score,
+                          but no email or account ID. CSV is for reading in a
+                          spreadsheet and cannot be imported.
                         </p>
+                        <div className="border border-rule-soft bg-canvas p-4">
+                          <p className="text-xs font-medium">
+                            Moving to another Google account?
+                          </p>
+                          <p className="text-xs muted mt-1.5 leading-relaxed">
+                            Download the JSON backup here → sign out → sign in
+                            with the other account → import the file → review the
+                            counts → Merge or Replace. This moves your data, not
+                            your Google login identity.
+                          </p>
+                        </div>
                         {preview && (
-                          <div className="w-full bg-accent-soft rounded-none p-4">
-                            <p className="font-medium">
-                              {preview.total} records found
-                            </p>
-                            <p className="text-sm mt-1">
-                              {preview.newRecords} new · {preview.duplicates}{" "}
-                              duplicates to skip
-                            </p>
-                            <div className="flex gap-2 mt-3">
-                              <Button
-                                size="sm"
-                                disabled={busy || !preview.newRecords}
-                                onClick={() => void restore()}
-                              >
-                                Import {preview.newRecords} mocks
-                              </Button>
+                          <div
+                            className={`w-full border p-4 ${
+                              importMode === "replace"
+                                ? "border-danger bg-danger-soft"
+                                : "border-rule-soft bg-accent-soft"
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {backupName || "Backup file"}
+                                </p>
+                                <p className="text-[11px] muted mt-1">
+                                  {preview.legacy
+                                    ? "Legacy backup · attempts only"
+                                    : `Format v${preview.formatVersion}`}
+                                  {preview.exportedAt
+                                    ? ` · exported ${longDate(preview.exportedAt)}`
+                                    : ""}
+                                </p>
+                              </div>
+                              <span className="text-[11px] muted tabular">
+                                {preview.total} attempts ·{" "}
+                                {preview.subjectResults} subject results
+                              </span>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                              <div>
+                                <p className="text-[11px] muted">New</p>
+                                <p className="font-semibold tabular">
+                                  {preview.importable}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] muted">
+                                  Duplicates skipped
+                                </p>
+                                <p className="font-semibold tabular">
+                                  {preview.skippedDuplicates}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] muted">Conflicts</p>
+                                <p className="font-semibold tabular">
+                                  {preview.conflicts}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] muted">
+                                  {importMode === "replace"
+                                    ? "Mocks to delete"
+                                    : "Mocks in this account"}
+                                </p>
+                                <p className="font-semibold tabular">
+                                  {importMode === "replace"
+                                    ? preview.willDelete
+                                    : preview.existingTargetCount}
+                                </p>
+                              </div>
+                            </div>
+                            {importMode === "replace" && (
+                              <p className="text-[11px] mt-3 leading-relaxed">
+                                Replace deletes{" "}
+                                <strong>{preview.willDelete}</strong> existing
+                                mocks in this account, then imports{" "}
+                                <strong>{preview.importable}</strong> from the
+                                backup. Download a safety backup before
+                                confirming.
+                              </p>
+                            )}
+                            <div className="mt-4">
+                              <p className="text-[11px] font-medium">
+                                Import mode
+                              </p>
+                              <div className="mt-1.5 flex flex-wrap gap-2">
+                                {(
+                                  [
+                                    ["merge", "Merge into this account"],
+                                    ["replace", "Replace this account"],
+                                  ] as const
+                                ).map(([mode, label]) => (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    aria-pressed={importMode === mode}
+                                    disabled={busy}
+                                    onClick={() => changeImportMode(mode)}
+                                    className={`px-3 py-1.5 border text-xs ${
+                                      importMode === mode
+                                        ? "bg-ink text-paper border-ink"
+                                        : "bg-paper text-muted border-rule"
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              {preview.target.available ? (
+                                <label className="!flex !flex-row items-start gap-2 text-xs text-ink">
+                                  <input
+                                    type="checkbox"
+                                    checked={applyTarget}
+                                    disabled={busy}
+                                    onChange={(e) =>
+                                      changeApplyTarget(e.target.checked)
+                                    }
+                                  />
+                                  <span>
+                                    {preview.target.incoming == null
+                                      ? `Clear the current target${
+                                          preview.target.current != null
+                                            ? ` (${n(preview.target.current)} / 390)`
+                                            : ""
+                                        } — the backup has no target`
+                                      : `Apply target from backup: ${
+                                          preview.target.current == null
+                                            ? "none"
+                                            : `${n(preview.target.current)} / 390`
+                                        } → ${n(preview.target.incoming)} / 390`}
+                                  </span>
+                                </label>
+                              ) : (
+                                <p className="text-[11px] muted">
+                                  Legacy backup: no target setting to apply.
+                                </p>
+                              )}
+                            </div>
+                            {preview.conflicts > 0 && (
+                              <p className="text-[11px] mt-3 leading-relaxed">
+                                {preview.conflicts} record
+                                {preview.conflicts === 1 ? "" : "s"} share a
+                                name, date, and type with existing mocks but
+                                differ in content. Merge adds them instead of
+                                silently dropping them.
+                              </p>
+                            )}
+                            {preview.warnings.length > 0 && (
+                              <ul className="mt-3 space-y-1 text-[11px]">
+                                {preview.warnings.map((warning) => (
+                                  <li key={warning}>{warning}</li>
+                                ))}
+                              </ul>
+                            )}
+                            {(preview.samples.skippedDuplicates.length > 0 ||
+                              preview.samples.conflicts.length > 0) && (
+                              <details className="mt-3 text-[11px]">
+                                <summary className="cursor-pointer text-muted">
+                                  Review skipped and conflicting records
+                                </summary>
+                                <div className="mt-2 space-y-2">
+                                  {preview.samples.skippedDuplicates.length >
+                                    0 && (
+                                    <div>
+                                      <p className="font-medium">
+                                        Duplicates skipped
+                                      </p>
+                                      <ul className="muted">
+                                        {preview.samples.skippedDuplicates.map(
+                                          (sample, index) => (
+                                            <li key={`${sample}-${index}`}>
+                                              {sample}
+                                            </li>
+                                          ),
+                                        )}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {preview.samples.conflicts.length > 0 && (
+                                    <div>
+                                      <p className="font-medium">Conflicts</p>
+                                      <ul className="muted">
+                                        {preview.samples.conflicts.map(
+                                          (sample, index) => (
+                                            <li key={`${sample}-${index}`}>
+                                              {sample}
+                                            </li>
+                                          ),
+                                        )}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </details>
+                            )}
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {importMode === "merge" ? (
+                                <Button
+                                  size="sm"
+                                  disabled={
+                                    busy ||
+                                    (preview.importable === 0 && !targetChange)
+                                  }
+                                  onClick={() => void commitImport(false)}
+                                >
+                                  {preview.importable > 0
+                                    ? `Import ${preview.importable} mocks`
+                                    : targetChange
+                                      ? "Apply target"
+                                      : "Nothing to import"}
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={busy}
+                                    onClick={() => void downloadSafetyBackup()}
+                                  >
+                                    <ArrowDownToLine size={14} /> Download
+                                    current backup
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={busy || !safetyDownloaded}
+                                    onClick={() => setReplaceOpen(true)}
+                                  >
+                                    Replace account data…
+                                  </Button>
+                                </>
+                              )}
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => {
-                                  setPreview(null);
-                                  setBackup(null);
-                                }}
+                                disabled={busy}
+                                onClick={resetImport}
                               >
                                 Cancel
                               </Button>
                             </div>
+                            {importMode === "replace" && safetyDownloaded && (
+                              <p className="text-[11px] text-positive mt-2">
+                                Safety backup downloaded. Verify it before
+                                replacing this account.
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1224,6 +1602,62 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                   </div>
                 </>
               )}
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+        <Dialog.Root
+          open={replaceOpen && preview !== null}
+          onOpenChange={setReplaceOpen}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 bg-ink/40 z-40" />
+            <Dialog.Content className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-paper border border-rule w-[calc(100%-32px)] max-w-xl p-6 md:p-8">
+              <Dialog.Title className="font-serif text-3xl leading-tight pr-8">
+                Replace this account’s data?
+              </Dialog.Title>
+              <Dialog.Description className="muted text-xs mt-2">
+                Signed in as {userEmail || "the current account"}. This action
+                cannot be undone from the app.
+              </Dialog.Description>
+              {preview && (
+                <div className="mt-5 space-y-3 text-sm">
+                  <p>
+                    This permanently deletes{" "}
+                    <strong className="tabular">{preview.willDelete}</strong>{" "}
+                    existing mocks in this account and imports{" "}
+                    <strong className="tabular">{preview.importable}</strong>{" "}
+                    mocks from the backup.
+                  </p>
+                  <p className="text-xs muted">
+                    Target: {targetAction}.{" "}
+                    {safetyDownloaded
+                      ? "A safety backup was downloaded."
+                      : "Download a safety backup first."}
+                  </p>
+                  <div className="p-3 bg-danger-soft border border-danger text-xs">
+                    Keep the downloaded safety backup until you have verified
+                    the imported data. This cannot be undone from the app.
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap justify-end gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setReplaceOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={busy || !safetyDownloaded}
+                  onClick={() => void commitImport(true)}
+                >
+                  Replace account data
+                </Button>
+              </div>
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>

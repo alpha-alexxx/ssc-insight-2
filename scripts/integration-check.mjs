@@ -90,13 +90,17 @@ if (process.argv.includes("--cleanup")) {
     assert.equal(csv.status, 200);
     assert.ok((await csv.text()).includes(input.name));
     const backup = await (await fetch(base + "/api/backup")).json();
-    assert.equal(backup.schemaVersion, 1);
+    assert.equal(backup.format, "ssc-insight-backup");
+    assert.equal(backup.formatVersion, 2);
+    assert.ok("targetScore" in backup.settings);
+    assert.equal(backup.summary.attempts, backup.attempts.length);
     const preview = await request("/api/backup", "POST", {
-      ...backup,
+      backup,
+      mode: "merge",
       preview: true,
     });
-    assert.equal(preview.newRecords, 0);
-    assert.equal(preview.duplicates, original.length + 1);
+    assert.equal(preview.importable, 0);
+    assert.equal(preview.skippedDuplicates, original.length + 1);
     const second = {
       ...input,
       name: input.name + " repeat",
@@ -116,6 +120,7 @@ if (process.argv.includes("--cleanup")) {
     assert.ok(restored);
     ids.push(restored.id);
     assert.equal(restored.scoreOverride, 260);
+    assert.equal(restored.source, second.source);
     const bad = await fetch(base + "/api/mock-attempts", {
       method: "POST",
       headers: {

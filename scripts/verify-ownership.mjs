@@ -104,19 +104,54 @@ try {
   assert.ok(!bBackup.attempts.some((r) => r.id === a.id));
   const csv = await (await raw(1, "/api/backup?format=csv")).text();
   assert.ok(!csv.includes(marker));
-  const backup = {
-    schemaVersion: 1,
-    attempts: [{ ...a, userId: "forged-owner" }],
-    preview: true,
+  const portable = {
+    format: "ssc-insight-backup",
+    formatVersion: 2,
+    exportedAt: new Date().toISOString(),
+    summary: {
+      attempts: 1,
+      subjectResults: a.subjects.length,
+      firstCompletedAt: a.completedAt,
+      lastCompletedAt: a.completedAt,
+    },
+    settings: { targetScore: 310 },
+    attempts: [
+      {
+        ...a,
+        userId: "forged-owner",
+        subjects: a.subjects.map((s) => ({ ...s, userId: "forged-owner" })),
+      },
+    ],
+    warnings: [],
     userId: "forged-owner",
+    email: "forged@example.com",
   };
-  assert.equal((await api(0, "/api/backup", "POST", backup)).duplicates, 1);
-  assert.equal((await api(1, "/api/backup", "POST", backup)).newRecords, 1);
-  assert.equal(
-    (await api(1, "/api/backup", "POST", { ...backup, preview: false }))
-      .imported,
-    1,
-  );
+  const sameAccount = await api(0, "/api/backup", "POST", {
+    backup: portable,
+    mode: "merge",
+    preview: true,
+  });
+  assert.equal(sameAccount.importable, 0);
+  assert.equal(sameAccount.skippedDuplicates, 1);
+  const bPreview = await api(1, "/api/backup", "POST", {
+    backup: portable,
+    mode: "merge",
+    applyTarget: true,
+    preview: true,
+  });
+  assert.equal(bPreview.importable, 1);
+  assert.equal(bPreview.target.incoming, 310);
+  const imported = await api(1, "/api/backup", "POST", {
+    backup: portable,
+    mode: "merge",
+    applyTarget: true,
+    previewFingerprint: bPreview.previewFingerprint,
+    preview: false,
+  });
+  assert.equal(imported.imported, 1);
+  assert.equal(imported.target.applied, true);
+  assert.equal(imported.target.targetScore, 310);
+  assert.equal((await api(1, "/api/settings")).targetScore, 310);
   const bRows = await api(
     1,
     `/api/mock-attempts?platform=${encodeURIComponent(marker)}`,
@@ -124,6 +159,25 @@ try {
   assert.equal(bRows.length, 1);
   created[1].add(bRows[0].id);
   assert.notEqual(bRows[0].id, a.id);
+  assert.equal(bRows[0].source, "manual");
+  assert.equal("email" in bRows[0], false);
+  assert.equal("userId" in bRows[0], false);
+
+  const stalePreview = await api(1, "/api/backup", "POST", {
+    backup: portable,
+    mode: "merge",
+    applyTarget: false,
+    preview: true,
+  });
+  await api(1, "/api/settings", "PUT", { targetScore: 221 });
+  const stale = await raw(1, "/api/backup", "POST", {
+    backup: portable,
+    mode: "merge",
+    applyTarget: false,
+    previewFingerprint: stalePreview.previewFingerprint,
+    preview: false,
+  });
+  assert.equal(stale.status, 409);
   assert.equal(
     (await api(0, `/api/mock-attempts?platform=${encodeURIComponent(marker)}`))
       .length,

@@ -21,7 +21,7 @@ The database is **PostgreSQL on Neon**, accessed only through Prisma 7.10.1 and 
 - Branch: `production`
 - Existing site: https://sscinsight-lovat.vercel.app/
 
-The original Neon migration started with empty application tables. The private-account migration assigns the two existing shared mocks to the verified `ankitinter9@gmail.com` Auth identity; see [release notes](docs/private-accounts.md). Firebase records and configuration remain untouched; no Firebase records are copied automatically. Existing version-1 JSON backups can still be reviewed and imported manually.
+The original Neon migration started with empty application tables. The private-account migration assigns the two existing shared mocks to the verified `ankitinter9@gmail.com` Auth identity; see [release notes](docs/private-accounts.md). Firebase records and configuration remain untouched; no Firebase records are copied automatically. Existing version-1 JSON backups remain importable; new exports use the portable version-2 format with the target score.
 
 ## Run locally
 
@@ -92,7 +92,18 @@ Redeploy after environment changes. Do not upload personal Firebase CLI credenti
 - Where you stand is one global subject radar built from all mock types. Make every attempt count shows Correct/Incorrect/Unattempted stacks for the selected scope. Subject Wise and Sectional Wise use one separate card per subject/section; Full Mocks keeps one ring card and All Mocks keeps rings grouped by mock type. Each ring center shows a genuine saved exam percentile when one exists, otherwise score percentage (marks ÷ maximum); parent percentiles are never borrowed for subjects or derived sections. Subject deep dive is available on every tab except Subject Wise.
 - One target score out of 390 is configured under Settings and applied as a percentage reference on every scope.
 - Accuracy is total correct divided by total attempted. Full averages exclude Computer. Unknown metrics display a dash; negative marks remain visible.
-- Compare two to four mocks. JSON backups use schema version 1; restore previews duplicates and adds records atomically with new IDs. CSV exports per-subject results.
+- Compare two to four mocks.
+
+## Backup and account transfer
+
+- **JSON backup (format version 2)** is the portable, restorable file. It includes every mock and subject result, notes, rank/participants/percentile, score/time overrides, completion dates, source, the target score, and a summary/manifest. It contains no email, `userId`, or auth credentials.
+- **CSV** is a separate read-only per-subject export for spreadsheets. It cannot be imported.
+- Import into the currently signed-in account. **Merge** preserves existing records, skips exact duplicates, and reports content conflicts. **Replace** deletes all current mocks and mirrors the backup after an explicit safety-backup download and confirmation naming the signed-in account.
+- The target is applied only when checked; a backup with no target can clear the current target only through an explicit clear option. Legacy v1 backups are attempts-only, so no target is applied.
+- Imported records receive new IDs and bookkeeping timestamps; `completedAt` and `source` are preserved. All writes are one transaction, so a failure leaves the destination unchanged.
+- The import limit is 4 MB (10,000 attempts) to stay within the deployment request-body limit. Export warns when a file is too large or contains records that cannot validate; such a file may not be importable.
+- A different Google account is a new Neon Auth workspace, so export/import is the supported move. A same-identity email change keeps the workspace and needs no import. Neon Auth tables stay read-only; the app never reassigns ownership server-side.
+- Backups are manual only: no scheduled jobs, reminders, email, or ZIP archive.
 
 ## API
 
@@ -104,7 +115,7 @@ Routes retain `{data}` / `{error: {code, message}}` response envelopes, validati
 | `/api/mock-attempts/:id` | GET, PUT, DELETE | Inspect; edit; confirmed deletion |
 | `/api/analytics` | GET | Scope projection (`view=full\|subject\|sectional\|all`), radar profile, target snapshots |
 | `/api/settings` | GET, PUT | Private target score out of 390 |
-| `/api/backup` | GET, POST | Export, preview, atomic restore |
+| `/api/backup` | GET, POST | GET v2 JSON backup or read-only CSV; POST merge/replace preview and atomic commit |
 | `/api/auth/*` | SDK methods | Same-origin Neon Auth proxy |
 
 List/analytics filters: `type`, `subject`, `platform`, `from`, `to`, `search`. `type` and `subject` filter Mock history and Compare; dashboard scopes ignore them. Literal substring search escapes PostgreSQL wildcard characters. Date ranges are inclusive IST dates. Domain calculations run on the server; filters run through Prisma.
@@ -121,7 +132,7 @@ npm run start
 npm run verify:neon
 ```
 
-`verify:neon` runs against localhost unless `APP_URL` is supplied. It creates explicitly disposable mock records, verifies persisted CRUD/subject replacement, the 245/390 report, Computer exclusion, cross-type analytics, literal filters, backups/import duplicates, private settings, validation, and anonymous redirects. Its `finally` block removes its records and restores the prior target setting. Set `TEST_SESSION_COOKIE` from a real disposable QA session and run against a QA branch first. Never paste session cookies into chat or commit them. `node scripts/verify-ownership.mjs` additionally requires `TEST_OTHER_SESSION_COOKIE` for a second real account and tests isolation, forged ownership, duplicate imports, exports, and revoked sessions.
+`verify:neon` runs against localhost unless `APP_URL` is supplied. It creates explicitly disposable mock records, verifies persisted CRUD/subject replacement, the 245/390 report, Computer exclusion, cross-type analytics, literal filters, v2 backup/merge duplicates/target import, private settings, validation, and anonymous redirects. Its `finally` block removes its records and restores the prior target setting. Set `TEST_SESSION_COOKIE` from a real disposable QA session and run against a QA branch first. Never paste session cookies into chat or commit them. `node scripts/verify-ownership.mjs` additionally requires `TEST_OTHER_SESSION_COOKIE` for a second real account and tests isolation, forged ownership, cross-account v2 merge/target transfer, stale-preview rejection, exports, and revoked sessions. `scripts/verify-backup-transfer.mjs` is a guarded destructive replace check and requires `ALLOW_DESTRUCTIVE_REPLACE=1` plus two disposable accounts.
 
 A passing session endpoint is not proof of Google login. Browser verification must additionally complete Google consent, reload to confirm the session, and sign out. Report Google login as pending if user participation or provider configuration prevents that check.
 

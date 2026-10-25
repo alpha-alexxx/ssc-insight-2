@@ -20,7 +20,7 @@ The project-local `.neon` link is ignored. `neon.ts` declares Auth and preserves
 ## Application changes
 
 - Prisma 7.10.1 schema, generated client, Neon adapter, pooled runtime connection and direct migration connection.
-- Repository-backed CRUD/settings/analytics and atomic backup restore. Existing JSON contracts and domain calculations retained.
+- Repository-backed CRUD/settings/analytics and atomic backup restore. Existing JSON contracts and domain calculations retained. The portable v2 backup now adds the target score and merge/replace transfer modes while continuing to accept legacy v1 files.
 - Optional Google sign-in, signed session cookies, callback-only Next.js proxy, sign-out and guest access.
 - Firebase/Mongo runtime dependencies and setup helpers removed; local credentials preserved in ignored files and environment backup.
 - Google configuration helper uses a masked secret prompt and stdin; never writes the OAuth secret.

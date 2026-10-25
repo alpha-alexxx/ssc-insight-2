@@ -134,31 +134,70 @@ try {
   );
   assert.equal(stats.trend.points[0].score, 245);
 
+  await api("/api/settings", "PUT", { targetScore: 310 });
   const csv = await (await raw("/api/backup?format=csv")).text();
   assert.ok(csv.includes(full.name));
   const backup = await (await raw("/api/backup")).json();
+  assert.equal(backup.format, "ssc-insight-backup");
+  assert.equal(backup.formatVersion, 2);
+  assert.equal(backup.settings.targetScore, 310);
   const saved = backup.attempts.filter((a) => a.platform === platform);
   assert.equal(saved.length, 3);
-  const preview = await api("/api/backup", "POST", {
-    schemaVersion: 1,
+  const portable = {
+    format: "ssc-insight-backup",
+    formatVersion: 2,
+    exportedAt: new Date().toISOString(),
+    summary: {
+      attempts: 4,
+      subjectResults: [...saved, saved[0]].reduce(
+        (total, attempt) => total + attempt.subjects.length,
+        0,
+      ),
+      firstCompletedAt: [...saved, saved[0]]
+        .map((a) => a.completedAt)
+        .sort()[0],
+      lastCompletedAt: [...saved, saved[0]]
+        .map((a) => a.completedAt)
+        .sort()
+        .at(-1),
+    },
+    settings: { targetScore: 310 },
     attempts: [...saved, saved[0]],
+    warnings: [],
+  };
+  let preview = await api("/api/backup", "POST", {
+    backup: portable,
+    mode: "merge",
+    applyTarget: false,
     preview: true,
   });
-  assert.equal(preview.newRecords, 0);
-  assert.equal(preview.duplicates, 4);
+  assert.equal(preview.importable, 0);
+  assert.equal(preview.skippedDuplicates, 4);
   for (const id of ids) await api(`/api/mock-attempts/${id}`, "DELETE", {});
   ids.clear();
+  preview = await api("/api/backup", "POST", {
+    backup: portable,
+    mode: "merge",
+    applyTarget: true,
+    preview: true,
+  });
+  assert.equal(preview.importable, 3);
+  assert.equal(preview.skippedDuplicates, 1);
   const imported = await api("/api/backup", "POST", {
-    schemaVersion: 1,
-    attempts: [...saved, saved[0]],
+    backup: portable,
+    mode: "merge",
+    applyTarget: true,
+    previewFingerprint: preview.previewFingerprint,
     preview: false,
   });
   assert.equal(imported.imported, 3);
   assert.equal(imported.skipped, 1);
+  assert.equal(imported.target.applied, true);
+  assert.equal(imported.target.targetScore, 310);
   const restored = await api(`/api/mock-attempts?${query}`);
   restored.forEach((a) => ids.add(a.id));
   assert.equal(restored.length, 3);
-  assert.ok(restored.every((a) => a.source === "backup"));
+  assert.ok(restored.every((a) => a.source === "manual"));
 
   await api("/api/settings", "PUT", { targetScore: 300 });
   assert.equal((await api("/api/settings")).targetScore, 300);

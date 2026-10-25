@@ -56,6 +56,17 @@ export function apiError(error: unknown) {
       },
       { status: 409 },
     );
+  if (prismaCode === "P2034")
+    return privateJson(
+      {
+        error: {
+          code: "CONFLICT",
+          message:
+            "Data changed during the import. Review the backup and try again.",
+        },
+      },
+      { status: 409 },
+    );
   // Driver messages can contain connection details; log only safe identifiers.
   console.error("Database request failed", {
     name: error instanceof Error ? error.name : "UnknownError",

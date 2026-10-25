@@ -104,7 +104,11 @@ export function PrivateWorkspace({ userId }: { userId: string }) {
   return (
     <>
       <div hidden={checking}>
-        <Dashboard key={userId} authEnabled />
+        <Dashboard
+          key={userId}
+          authEnabled
+          userEmail={session.user.email ?? ""}
+        />
       </div>
       {checking && (
         <p role="status" className="p-8 muted">

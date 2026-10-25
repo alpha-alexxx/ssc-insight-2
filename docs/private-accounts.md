@@ -4,7 +4,7 @@ The application now requires Google sign-in. Every data route independently veri
 
 ## Ownership
 
-`MockAttempt.userId` is required and indexed with completion date, platform, and mock type. `TrackerSettings.userId` is the primary key. Subject results inherit ownership from their parent. Repository functions require a session-derived owner argument; body/query/import ownership fields are ignored and never mapped. Foreign and missing IDs return matching 404 responses. Version-1 backups remain portable and import into the current user's account with new record IDs.
+`MockAttempt.userId` is required and indexed with completion date, platform, and mock type. `TrackerSettings.userId` is the primary key. Subject results inherit ownership from their parent. Repository functions require a session-derived owner argument; body/query/import ownership fields are ignored and never mapped. Foreign and missing IDs return matching 404 responses. Version-1 backups remain portable and import into the current user's account with new record IDs. Version-2 backups add the target score, preview merge/replace modes, and are restorable across accounts; imported records keep `completedAt` and `source` but receive new IDs and bookkeeping timestamps. A different Google account is a new Neon Auth workspace, so use the manual export/import transfer.
 
 The explicit migration targets only `ssc_insight`. It reads the managed Auth user table to find exactly one email-verified `ankitinter9@gmail.com` identity; no Auth schema or user records are changed. The approved two shared mocks and original target setting are assigned to that stable ID. It never claims records for the first visitor. Production release preflight requires exactly two mocks; SQL also aborts on any unexpected nonzero count. Fresh empty installations can migrate without the named account.
 
@@ -13,7 +13,8 @@ The explicit migration targets only `ssc_insight`. It reads the managed Auth use
 - Isolated branch: `ssc-private-qa-20261024` (`br-curly-wave-b4h76c9h`), expires October 26.
 - Migration: two original mocks and five subject rows preserved exactly.
 - 31 unit tests, lint, TypeScript and production build pass.
-- `scripts/verify-neon.mjs`: authenticated CRUD, ordered subject replacement, 245/390 sample, weighted accuracy, Computer exclusion, cross-type analytics, IST/literal filters, CSV/JSON backup round trip, duplicates, settings, safe errors and anonymous redirect.
+- `scripts/verify-neon.mjs`: authenticated CRUD, ordered subject replacement, 245/390 sample, weighted accuracy, Computer exclusion, cross-type analytics, IST/literal filters, v2 JSON backup/merge duplicate preview, target import, CSV export, settings, safe errors, and anonymous redirect.
+- `scripts/verify-ownership.mjs`: two-account isolation, forged ownership, v2 cross-account merge with target transfer, stale-preview rejection, exports, and revoked sessions. `scripts/verify-backup-transfer.mjs` is a guarded destructive replace check.
 - `scripts/verify-ownership.mjs`: two real Neon Auth sessions against the same isolated database; foreign-ID GET/PUT/DELETE, forged ownership, per-user analytics/settings/exports, duplicate preview/import, all anonymous data APIs, sign-in/page redirects, and revoked-token rejection.
 - Test accounts and records exist only on the expiring QA branch; only explicitly marked disposable records are removed. No demonstration data is seeded in production.
 

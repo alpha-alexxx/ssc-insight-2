@@ -1,13 +1,23 @@
 import { database } from "./db";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
-import { type AttemptInput, type Filters, duplicateKey } from "./domain";
+import { createHash, randomUUID } from "node:crypto";
+import { type AttemptInput, type Filters } from "./domain";
 import {
   attemptData,
   attemptInclude,
   attemptWhere,
   toAttempt,
 } from "./attempt-persistence";
+import {
+  BACKUP_INSERT_CHUNK_SIZE,
+  attemptFingerprint,
+  buildBackup,
+  planImport,
+  type BackupPreview,
+  type ImportOptions,
+  type ImportResult,
+  type ParsedBackup,
+} from "./backup";
 import { RequestError } from "./api";
 
 export async function listAttempts(userId: string, filters: Filters = {}) {
@@ -76,57 +86,185 @@ export async function saveSettings(userId: string, targetScore: number | null) {
   return { targetScore: row.targetScore };
 }
 
-export async function importAttempts(
-  userId: string,
-  attempts: AttemptInput[],
-  preview: boolean,
-) {
-  // Preview and commit share the same duplicate policy; commit is all-or-nothing.
+export async function exportBackup(userId: string) {
   return database().$transaction(
     async (tx) => {
-      const existing = await tx.mockAttempt.findMany({
-        where: { userId },
-        include: attemptInclude,
+      const [rows, settings] = await Promise.all([
+        tx.mockAttempt.findMany({
+          where: { userId },
+          include: attemptInclude,
+          orderBy: [{ completedAt: "asc" }, { id: "asc" }],
+        }),
+        tx.trackerSettings.findUnique({ where: { userId } }),
+      ]);
+      return buildBackup(
+        rows.map(toAttempt),
+        settings?.targetScore ?? null,
+      );
+    },
+    { isolationLevel: "RepeatableRead" },
+  );
+}
+
+function importFingerprint(input: {
+  userId: string;
+  existing: string[];
+  currentTarget: number | null;
+  incoming: string[];
+  target: number | null;
+  mode: ImportOptions["mode"];
+  applyTarget: boolean;
+}) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        input.userId,
+        [...input.existing].sort(),
+        input.currentTarget,
+        [...input.incoming].sort(),
+        input.target,
+        input.mode,
+        input.applyTarget,
+      ]),
+    )
+    .digest("hex");
+}
+
+function* chunks<T>(items: T[], size: number) {
+  for (let index = 0; index < items.length; index += size)
+    yield items.slice(index, index + size);
+}
+
+export async function importBackup(
+  userId: string,
+  backup: ParsedBackup,
+  options: ImportOptions,
+): Promise<BackupPreview | ImportResult> {
+  return database().$transaction(
+    async (tx) => {
+      const [existingRows, settings] = await Promise.all([
+        tx.mockAttempt.findMany({
+          where: { userId },
+          include: attemptInclude,
+        }),
+        tx.trackerSettings.findUnique({ where: { userId } }),
+      ]);
+      const existing = existingRows.map(toAttempt);
+      const currentTarget = settings?.targetScore ?? null;
+      const plan = planImport(existing, backup.attempts, options.mode);
+      const fingerprint = importFingerprint({
+        userId,
+        existing: existing.map((attempt) => attemptFingerprint(attempt)),
+        currentTarget,
+        incoming: backup.attempts.map((attempt) => attemptFingerprint(attempt)),
+        target: backup.hasSettings ? backup.targetScore : null,
+        mode: options.mode,
+        applyTarget: options.applyTarget,
       });
-      const keys = new Set(existing.map((row) => duplicateKey(toAttempt(row))));
-      const unique: AttemptInput[] = [];
-      let duplicates = 0;
-      for (const attempt of attempts) {
-        const key = duplicateKey(attempt);
-        if (keys.has(key)) duplicates++;
-        else {
-          keys.add(key);
-          unique.push(attempt);
-        }
-      }
-      if (preview)
+      const targetAvailable = backup.hasSettings;
+      const targetApplied = targetAvailable && options.applyTarget;
+      const targetChanged =
+        targetApplied && currentTarget !== backup.targetScore;
+      const target = {
+        available: targetAvailable,
+        applied: targetApplied,
+        current: currentTarget,
+        incoming: targetAvailable ? backup.targetScore : null,
+        changed: targetChanged,
+      };
+      if (options.preview)
         return {
-          total: attempts.length,
-          newRecords: unique.length,
-          duplicates,
-        };
-      if (!unique.length) throw new RequestError("No new records to import");
-      const rows = unique.map((attempt) => {
-        const { subjects, ...data } = attemptData({
-          ...attempt,
-          source: "backup",
-        });
+          mode: options.mode,
+          formatVersion: backup.version,
+          legacy: backup.legacy,
+          exportedAt: backup.exportedAt,
+          total: plan.total,
+          subjectResults: backup.attempts.reduce(
+            (total, attempt) => total + attempt.subjects.length,
+            0,
+          ),
+          importable: plan.importable,
+          skippedDuplicates: plan.skippedDuplicates,
+          conflicts: plan.conflicts,
+          existingTargetCount: existing.length,
+          willDelete: options.mode === "replace" ? existing.length : 0,
+          target,
+          samples: {
+            skippedDuplicates: plan.skippedSamples,
+            conflicts: plan.conflictSamples,
+          },
+          warnings: backup.warnings,
+          previewFingerprint: fingerprint,
+        } satisfies BackupPreview;
+
+      if (!options.legacyRequest) {
+        if (!options.previewFingerprint)
+          throw new RequestError(
+            "Preview the backup before importing it.",
+            400,
+          );
+        if (options.previewFingerprint !== fingerprint)
+          throw new RequestError(
+            "Your workspace or preview changed. Review the backup again.",
+            409,
+          );
+      }
+      if (options.mode === "replace" && !options.confirmReplace)
+        throw new RequestError(
+          "Confirm replacing this account's data before importing.",
+          400,
+        );
+
+      let deleted = 0;
+      if (options.mode === "replace") {
+        const result = await tx.mockAttempt.deleteMany({ where: { userId } });
+        deleted = result.count;
+      }
+
+      const rows = plan.accepted.map((attempt) => {
+        const { subjects, ...data } = attemptData(attempt);
         return { id: randomUUID(), data, subjects: subjects.create };
       });
-      await tx.mockAttempt.createMany({
-        data: rows.map(({ id, data }) => ({ id, ...data, userId })),
-      });
-      await tx.subjectResult.createMany({
-        data: rows.flatMap(({ id, subjects }) =>
-          subjects.map((subject) => ({
-            ...subject,
-            attemptId: id,
-          })),
-        ),
-      });
-      return { imported: unique.length, skipped: duplicates };
+      for (const chunk of chunks(rows, BACKUP_INSERT_CHUNK_SIZE)) {
+        await tx.mockAttempt.createMany({
+          data: chunk.map(({ id, data }) => ({ id, ...data, userId })),
+        });
+        await tx.subjectResult.createMany({
+          data: chunk.flatMap(({ id, subjects }) =>
+            subjects.map((subject) => ({
+              ...subject,
+              attemptId: id,
+            })),
+          ),
+        });
+      }
+
+      let targetScore = currentTarget;
+      let appliedTarget = false;
+      if (targetApplied) {
+        const row = await tx.trackerSettings.upsert({
+          where: { userId },
+          create: { userId, targetScore: backup.targetScore },
+          update: { targetScore: backup.targetScore },
+        });
+        targetScore = row.targetScore;
+        appliedTarget = true;
+      }
+
+      return {
+        mode: options.mode,
+        imported: plan.accepted.length,
+        skipped: plan.skippedDuplicates,
+        conflicts: plan.conflicts,
+        deleted,
+        target: { applied: appliedTarget, targetScore },
+      } satisfies ImportResult;
     },
-    { maxWait: 10000, timeout: 60000 },
+    {
+      isolationLevel: "Serializable",
+      maxWait: 10_000,
+      timeout: 55_000,
+    },
   );
 }
 

@@ -16,7 +16,11 @@ SSC aspirants sign in with Google and work in isolated private accounts. Each us
 - See score trends, question breakdowns, subject strengths, accuracy, timing, and target progress. Missing values remain unknown rather than becoming zero.
 - Dashboard tabs switch the analytical grain rather than filtering the saved-record table. Full Mocks projects saved full mocks. Subject Wise projects every subject result from full, sectional, and standalone subject mocks, with all subjects shown together. Sectional Wise projects explicit sectionals plus Section I (Quant + Reasoning) and Section II (English + General Awareness) derived from each full mock. All Mocks projects every saved attempt exactly once and compares percentages across different maxima. A full mock is not additionally counted as its subjects or sections in All Mocks.
 - Where you stand is one global subject radar on every tab. Make every attempt count stacks Correct, Incorrect, and Unattempted for the selected grain. Subject Wise and Sectional Wise show one self-contained card per subject/section; Full Mocks keeps one ring card and All Mocks keeps one card with rings by mock type. Each ring center shows the average saved exam percentile where a genuine result reported one, otherwise score percentage (marks ÷ maximum); a full or sectional mock’s percentile is never reused for its subjects or derived sections. Subject deep dive appears on every tab except Subject Wise.
-- Set one target score out of 390, export JSON backups and CSV, and preview JSON restoration before importing records. The target is applied as a percentage reference on every dashboard tab.
+- Set one target score out of 390 and use it as a percentage reference on every dashboard tab.
+- Download a portable JSON backup containing all mocks, subject results, notes, ranks/percentiles, timings, overrides, source metadata, and the target score. The file excludes email, user IDs, and credentials, so it can be imported into a different signed-in account.
+- Preview an import with merge or replace modes. Merge preserves existing records and skips exact duplicates while reporting content conflicts; replace deletes the current account’s mocks after an explicit safety-backup download and confirmation naming the signed-in account. All imports are atomic.
+- CSV remains a read-only spreadsheet export and cannot be imported. Legacy version-1 backups remain importable; the target is unavailable in them.
+- Imports have a 4 MB transport limit. The app does not change the Google login identity and never reassigns ownership server-side; moving to a different Google account means exporting there and importing here.
 
 ## Product principles
 
@@ -28,7 +32,7 @@ Next.js 16 App Router with React, TypeScript, Tailwind CSS, shadcn-style Radix b
 
 ## Scope boundaries
 
-This is a result tracker, not an exam-taking platform, coaching marketplace, marketing landing page, or account-management product. Backup restoration adds reviewed records and handles duplicates; it is not a reason to silently replace the workspace.
+This is a result tracker, not an exam-taking platform, coaching marketplace, marketing landing page, or account-management product. Backup restoration supports reviewed merge and explicit replace; replacement is never silent and requires a current safety backup and confirmation naming the signed-in account.
 
 ## Private accounts
 
