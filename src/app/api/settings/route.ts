@@ -2,8 +2,9 @@ import { requireUser } from "@/lib/auth/require-user";
 import { z } from "zod";
 import { getSettings, saveSettings } from "@/lib/repository";
 import { apiError, ok, readBody } from "@/lib/api";
+import { FULL_MOCK_MAX_SCORE } from "@/lib/domain";
 const settingsSchema = z.object({
-  targetScore: z.number().min(0).max(390).nullable(),
+  targetScore: z.number().min(0).max(FULL_MOCK_MAX_SCORE).nullable(),
 });
 export const runtime = "nodejs";
 export async function GET() {

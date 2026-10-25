@@ -24,10 +24,13 @@
   --chart-average: #656d4a;
   --chart-time: #567276;
   --chart-quant: #b65335;
-  --chart-reasoning: #656d4a;
-  --chart-english: #567276;
-  --chart-ga: #a77b32;
+  --chart-reasoning: #2a78d6;
+  --chart-english: #1baf7a;
+  --chart-ga: #eda100;
   --chart-computer: #767168;
+  --chart-section-1: #b65335;
+  --chart-section-2: #2a78d6;
+  --chart-target: #6b665e;
   --chart-correct: #656d4a;
   --chart-incorrect: #b65335;
   --chart-skipped: #d5cec1;

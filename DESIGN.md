@@ -21,8 +21,14 @@ colors:
   danger-soft: "#f1dfd8"
   chart-average: "#656d4a"
   chart-time: "#567276"
-  chart-ga: "#a77b32"
+  chart-quant: "#b65335"
+  chart-reasoning: "#2a78d6"
+  chart-english: "#1baf7a"
+  chart-ga: "#eda100"
   chart-computer: "#767168"
+  chart-section-1: "#b65335"
+  chart-section-2: "#2a78d6"
+  chart-target: "#6b665e"
 typography:
   headline:
     fontFamily: '"Source Serif 4 Variable", Georgia, serif'
@@ -101,9 +107,18 @@ The approved visual direction is warm editorial paper: cream canvas, paper surfa
 
 Terracotta identifies primary actions and the score series. Charcoal ink carries text and selected navigation. Paper and cream create subtle surface separation without textures. Muted ink remains legible for units, labels, and descriptions.
 
-Subject charts use terracotta for Quant, olive for Reasoning, teal for English, ochre for General Awareness, and warm gray for Computer. Correct answers use olive, incorrect answers terracotta, and skipped answers the soft rule color. The rolling average uses olive and timing uses teal. `src/lib/chart-theme.ts` maps subject identities to the CSS chart variables; preserve those semantic mappings.
+Subject charts use terracotta for Quant, blue for Reasoning, aqua for English, ochre for General Awareness, and warm gray for the separately scored Computer context. Section I reuses terracotta and Section II reuses blue. Correct answers use olive, incorrect answers terracotta, and skipped answers the soft rule color. Timing uses teal and the target reference uses muted ink in a dashed rule. `src/lib/chart-theme.ts` maps entity identities to the CSS chart variables; preserve those semantic mappings. Subject hues are a fixed categorical order validated for adjacent-pair CVD and normal-vision separation against the paper surface. Do not color nominal series by value or cycle extra hues for additional results.
 
-**The Meaning Rule.** Keep legends, units, and text labels alongside color; color alone must not carry a result's meaning.
+**The Meaning Rule.** Keep legends, units, and text labels alongside color; color alone must not carry a result's meaning. Every chart also exposes a square-bordered hover/focus tooltip and a "View data" table twin.
+
+## Charts
+
+- Score trends use the Shadcn/Recharts 3 `ChartContainer` composition with one percentage axis, 2px lines, light washes, visible dots, horizontal hairline gridlines, and a vertical hover rule. Multi-series subject and section charts show every populated series at once with a legend, sparse values stay absent rather than becoming zero, and the same colors follow each entity across filters.
+- Where you stand is one radar on every dashboard tab, always built from the global cross-type subject profile on a 0–100 scale. Missing subjects are named below rather than drawn as zero; fewer than three populated subjects falls back to labelled bars.
+- Make every attempt count uses 100% stacked radial rings (Correct, Incorrect, Skipped) with square surface gaps between segments, accuracy in the ring center, entity labels below, and raw counts in the tooltip.
+- My target shows the existing out-of-390 goal as a percentage reference, a dashed target line, a dated average snapshot trend, the latest gap, and explicit up/down/flat text with an arrow.
+- Subject deep dive uses two aligned single-axis small multiples (accuracy percentage and minutes), never a dual-axis chart. It is omitted on Subject Wise.
+- Charts keep animation disabled, respect reduced motion, size containers to include axis labels, and use the paper/ink/rule tokens rather than floating cards.
 
 ## Typography
 

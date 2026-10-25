@@ -136,13 +136,16 @@ test("computer remains separate in full averages and does not split comparable f
     createdAt: input.completedAt,
     updatedAt: input.completedAt,
   }));
-  const stats = analyze(rows);
-  assert.equal(stats.averageFullScore, 245);
+  const stats = analyze(rows, "full");
+  assert.equal(stats.trend.points.length, 10);
+  assert.ok(stats.trend.points.every((point) => point.score === 245));
+  assert.equal(stats.trend.series.length, 1);
   assert.equal(
-    stats.subjects.find((s) => s.id === "computer")?.averageScore,
-    42,
+    stats.whereYouStand.find((subject) => subject.subjectId === "computer")
+      ?.averagePercentage,
+    70,
   );
-  assert.equal(stats.improvement, 0);
+  assert.equal(stats.summary.weightedAccuracy, (90 / 115) * 100);
 });
 test("paste reports with all main subjects and Computer remain full mocks", () => {
   const names = [

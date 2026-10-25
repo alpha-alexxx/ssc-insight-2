@@ -87,8 +87,11 @@ Redeploy after environment changes. Do not upload personal Firebase CLI credenti
 - Correct/incorrect counts calculate scores live at +3/-1. Three time blocks sum to the overall time; omitted blocks become zero. Legacy score/time overrides remain compatible with existing backups.
 - Completion dates and filters use IST. Platform presets include Testbook, RBE, Oliveboard, Pundits, Test Ranking, and Others with a custom input.
 - Paste Report extracts supported fields locally and always opens an editable review form.
-- Subject score/accuracy/time series combine full, sectional, and subject mocks; date/platform/search filters apply. Mock-type/subject summary filters do not restrict those series. Percentages allow comparison across different maxima.
-- Accuracy is total correct divided by total attempted. Full averages exclude Computer. Recent improvement requires ten comparable mocks. Unknown metrics display a dash.
+- Dashboard tabs are analytical scopes, not database type filters: Full Mocks projects saved full mocks; Subject Wise projects every subject result from full, sectional, and subject mocks; Sectional Wise projects explicit sectionals plus Section I/II derived from each full mock; All Mocks projects each saved attempt exactly once. Date, platform, and search filters apply to every scope.
+- A full mock is never counted again as four subject rows or two section rows in All Mocks. Derived sections sum their child results and do not inherit the parent score override, rank, percentile, or overall time.
+- Where you stand is one global subject radar built from all mock types. Make every attempt count shows Correct/Incorrect/Skipped stacks for the selected scope. Subject deep dive is available on every tab except Subject Wise.
+- One target score out of 390 is configured under Settings and applied as a percentage reference on every scope.
+- Accuracy is total correct divided by total attempted. Full averages exclude Computer. Unknown metrics display a dash; negative marks remain visible.
 - Compare two to four mocks. JSON backups use schema version 1; restore previews duplicates and adds records atomically with new IDs. CSV exports per-subject results.
 
 ## API
@@ -99,12 +102,12 @@ Routes retain `{data}` / `{error: {code, message}}` response envelopes, validati
 | --- | --- | --- |
 | `/api/mock-attempts` | GET, POST | Filter/list; add |
 | `/api/mock-attempts/:id` | GET, PUT, DELETE | Inspect; edit; confirmed deletion |
-| `/api/analytics` | GET | Filtered summaries and cross-type subject series |
-| `/api/settings` | GET, PUT | Private target score |
+| `/api/analytics` | GET | Scope projection (`view=full\|subject\|sectional\|all`), radar profile, target snapshots |
+| `/api/settings` | GET, PUT | Private target score out of 390 |
 | `/api/backup` | GET, POST | Export, preview, atomic restore |
 | `/api/auth/*` | SDK methods | Same-origin Neon Auth proxy |
 
-List/analytics filters: `type`, `subject`, `platform`, `from`, `to`, `search`. Literal substring search escapes PostgreSQL wildcard characters. Date ranges are inclusive IST dates. Domain calculations run on the server; filters run through Prisma.
+List/analytics filters: `type`, `subject`, `platform`, `from`, `to`, `search`. `type` and `subject` filter Mock history and Compare; dashboard scopes ignore them. Literal substring search escapes PostgreSQL wildcard characters. Date ranges are inclusive IST dates. Domain calculations run on the server; filters run through Prisma.
 
 ## Verification
 

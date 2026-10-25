@@ -116,7 +116,7 @@ test("validation rejects invalid totals, rank, full layout and duplicate subject
     false,
   );
 });
-test("computer is excluded from full averages and weighted accuracy is correct", () => {
+test("computer is excluded from full scoring and weighted accuracy is correct", () => {
   const computer = stored(
     {
       ...input,
@@ -127,11 +127,18 @@ test("computer is excluded from full averages and weighted accuracy is correct",
     },
     "2",
   );
-  const a = analyze([stored(), computer]);
-  assert.equal(a.averageFullScore, 245);
-  assert.equal(a.count, 2);
-  assert.equal(a.subjects.find((s) => s.id === "computer")?.percentage, 100);
-  assert.equal(a.accuracy, (110 / 135) * 100);
+  const all = analyze([stored(), computer], "all");
+  assert.equal(all.sourceAttemptCount, 2);
+  assert.equal(all.pointCount, 2);
+  assert.equal(all.trend.points[0].score, 245);
+  assert.equal(all.trend.points[0].maxScore, 390);
+  assert.equal(
+    all.whereYouStand.find((subject) => subject.subjectId === "computer")
+      ?.averagePercentage,
+    100,
+  );
+  // The subject result's full 20 questions count in All scope question totals.
+  assert.equal(all.summary.weightedAccuracy, (110 / 135) * 100);
 });
 test("IST date range includes the correct UTC boundaries", () => {
   const a = stored({ ...input, completedAt: "2026-10-23T19:00:00.000Z" });
@@ -141,7 +148,7 @@ test("IST date range includes the correct UTC boundaries", () => {
   );
   assert.equal(filterAttempts([a], { from: "2026-10-25" }).length, 0);
 });
-test("rolling percentage, improvement and duplicate key", () => {
+test("ordered snapshots and duplicate key", () => {
   const rows = Array.from({ length: 10 }, (_, i) =>
     stored(
       {
@@ -152,13 +159,20 @@ test("rolling percentage, improvement and duplicate key", () => {
       String(i),
     ),
   );
-  const a = analyze(rows);
-  assert.ok(a.improvement! > 0);
-  assert.ok(
-    Math.abs(
-      a.trend[9].rollingAverage! -
-        ((205 + 206 + 207 + 208 + 209) / 5 / 390) * 100,
-    ) < 1e-10,
+  const a = analyze(rows, "full");
+  assert.equal(a.trend.points.length, 10);
+  assert.deepEqual(
+    a.trend.points.map((point) => point.score),
+    Array.from({ length: 10 }, (_, i) => 200 + i),
+  );
+  assert.equal(a.target.snapshots.length, 10);
+  assert.equal(
+    a.summary.latestSnapshotPercentage,
+    (209 / 390) * 100,
+  );
+  assert.equal(
+    a.summary.previousSnapshotPercentage,
+    (208 / 390) * 100,
   );
   assert.equal(
     duplicateKey(input),

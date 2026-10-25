@@ -10,12 +10,17 @@ import {
 import { Button } from "./ui/button";
 import {
   attemptSchema,
+  MAIN_SUBJECT_IDS,
+  SECTIONS,
+  sectionForSubjects,
+  sectionIds,
   SUBJECTS,
   subjectIds,
   type Attempt,
   type AttemptInput,
   type SubjectId,
   type SubjectResult,
+  type SectionId,
   totals,
   formatNumber,
   formatTime,
@@ -52,6 +57,15 @@ const blankSubject = (id: SubjectId): SubjectResult => ({
   timeSeconds: 0,
   scoreOverride: null,
 });
+function fullMockSectionHeading(subjectId: SubjectId) {
+  const sectionId = sectionIds.find(
+    (id) => SECTIONS[id].subjectIds[0] === subjectId,
+  );
+  if (sectionId)
+    return `${SECTIONS[sectionId].name} · ${SECTIONS[sectionId].description} · ${SECTIONS[sectionId].maxScore} marks`;
+  if (subjectId === "computer") return "Computer Knowledge · qualifying · 60 marks";
+  return null;
+}
 export function MockForm({
   attempt,
   onClose,
@@ -67,9 +81,7 @@ export function MockForm({
       platform: "",
       completedAt: "",
       type: "full",
-      subjects: ["quant", "reasoning", "english", "ga"].map((id) =>
-        blankSubject(id as SubjectId),
-      ),
+      subjects: MAIN_SUBJECT_IDS.map((id) => blankSubject(id)),
       notes: "",
       source: "manual",
     },
@@ -103,15 +115,14 @@ export function MockForm({
     setValues((v) => ({
       ...v,
       type,
-      subjects: (type === "full"
-        ? ["quant", "reasoning", "english", "ga"]
-        : type === "sectional"
-          ? ["quant", "reasoning"]
-          : ["quant"]
+      subjects: (
+        type === "full"
+          ? MAIN_SUBJECT_IDS
+          : type === "sectional"
+            ? SECTIONS.section1.subjectIds
+            : (["quant"] as const)
       ).map(
-        (id) =>
-          v.subjects.find((s) => s.subjectId === id) ??
-          blankSubject(id as SubjectId),
+        (id) => v.subjects.find((s) => s.subjectId === id) ?? blankSubject(id),
       ),
     }));
     setDuplicateReviewed(false);
@@ -345,27 +356,22 @@ export function MockForm({
                 <label>
                   Section
                   <select
-                    value={
-                      values.subjects.some((s) => s.subjectId === "quant")
-                        ? "section1"
-                        : "section2"
-                    }
+                    value={sectionForSubjects(values.subjects) ?? "section1"}
                     onChange={(e) =>
                       set(
                         "subjects",
-                        (e.target.value === "section1"
-                          ? ["quant", "reasoning"]
-                          : ["english", "ga"]
-                        ).map((id) => blankSubject(id as SubjectId)),
+                        SECTIONS[e.target.value as SectionId].subjectIds.map(
+                          (id) => blankSubject(id),
+                        ),
                       )
                     }
                   >
-                    <option value="section1">
-                      Section I · Quant + Reasoning · 180 marks
-                    </option>
-                    <option value="section2">
-                      Section II · English + General Awareness · 210 marks
-                    </option>
+                    {sectionIds.map((id) => (
+                      <option key={id} value={id}>
+                        {SECTIONS[id].name} · {SECTIONS[id].description} ·{" "}
+                        {SECTIONS[id].maxScore} marks
+                      </option>
+                    ))}
                   </select>
                 </label>
               )}
@@ -425,20 +431,18 @@ export function MockForm({
               </p>
             </div>
             <div className="space-y-7">
-              {values.subjects.map((s, i) => (
+              {values.subjects.map((s, i) => {
+                const sectionHeading =
+                  values.type === "full"
+                    ? fullMockSectionHeading(s.subjectId)
+                    : null;
+                return (
                 <div key={s.subjectId}>
-                  {values.type === "full" &&
-                    (s.subjectId === "quant" ||
-                      s.subjectId === "english" ||
-                      s.subjectId === "computer") && (
-                      <p className="mb-4 border-b border-rule-soft pb-2 text-sm font-medium">
-                        {s.subjectId === "quant"
-                          ? "Section I · Quant + Reasoning · 180 marks"
-                          : s.subjectId === "english"
-                            ? "Section II · English + General Awareness · 210 marks"
-                            : "Computer Knowledge · qualifying · 60 marks"}
-                      </p>
-                    )}
+                  {sectionHeading && (
+                    <p className="mb-4 border-b border-rule-soft pb-2 text-sm font-medium">
+                      {sectionHeading}
+                    </p>
+                  )}
                   <h3 className="font-medium text-sm mb-3">
                     {SUBJECTS[s.subjectId].name}
                   </h3>
@@ -510,7 +514,8 @@ export function MockForm({
                     {formatNumber(s.correct * 3 - s.incorrect)} calculated marks
                   </p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
           <section className="panel p-6">
