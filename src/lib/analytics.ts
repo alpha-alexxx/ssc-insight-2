@@ -83,6 +83,12 @@ export type AnswerStack = {
   incorrectPercentage: number;
   unattemptedPercentage: number;
   accuracy: number | null;
+  score: number;
+  maxScore: number;
+  scorePercentage: number;
+  percentile: number | null;
+  percentileCount: number;
+  centerMetric: "percentile" | "score";
 };
 export type WhereYouStandRow = {
   subjectId: SubjectId;
@@ -236,7 +242,10 @@ function subjectPoints(attempt: Attempt): PerformancePoint[] {
       timeSeconds: stats.timeSeconds ?? null,
       rank: attempt.rank ?? null,
       participants: attempt.participants ?? null,
-      percentile: attempt.percentile ?? null,
+      // A full or sectional percentile describes the whole paper, not this
+      // individual subject result. Only standalone subject attempts own one.
+      percentile:
+        attempt.type === "subject" ? (attempt.percentile ?? null) : null,
     };
   });
 }
@@ -354,6 +363,19 @@ function stacksFor(
     const incorrect = sum(rows.map((row) => row.incorrect));
     const unattempted = sum(rows.map((row) => row.unattempted));
     const total = correct + incorrect + unattempted;
+    const score = sum(rows.map((row) => row.score));
+    const maxScore = sum(rows.map((row) => row.maxScore));
+    // Exam percentile belongs to saved attempts, not to derived subject or
+    // section slices. Use only values that genuinely describe this group.
+    const percentileRows = rows.filter((row) => {
+      if (row.percentile == null) return false;
+      if (scope === "subject") return row.sourceType === "subject";
+      if (scope === "sectional") return row.origin === "attempt";
+      return true;
+    });
+    const percentile = average(
+      percentileRows.map((row) => row.percentile!),
+    );
     return {
       id,
       label,
@@ -367,6 +389,13 @@ function stacksFor(
       unattemptedPercentage: total ? (unattempted / total) * 100 : 0,
       accuracy:
         correct + incorrect ? (correct / (correct + incorrect)) * 100 : null,
+      score,
+      maxScore,
+      scorePercentage: maxScore > 0 ? (score / maxScore) * 100 : 0,
+      percentile,
+      percentileCount: percentileRows.length,
+      centerMetric:
+        percentile != null ? ("percentile" as const) : ("score" as const),
     };
   });
 }
