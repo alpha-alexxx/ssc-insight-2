@@ -93,12 +93,12 @@ try {
   assert.equal(updated.subjects[0].subjectId, "computer");
   assert.equal(updated.notes, "Edited disposable integration record");
 
-  let stats = await api(`/api/analytics?${query}&type=full`);
-  assert.equal(stats.averageFullScore, 245);
-  assert.equal(stats.accuracy.toFixed(2), "78.26");
-  assert.equal(stats.correct, 90);
-  assert.equal(stats.incorrect, 25);
-  assert.equal(stats.unattempted, 15);
+  let stats = await api(`/api/analytics?${query}&view=full`);
+  assert.equal(stats.trend.points[0].score, 245);
+  assert.equal(stats.summary.weightedAccuracy.toFixed(2), "78.26");
+  assert.equal(stats.summary.correct, 90);
+  assert.equal(stats.summary.incorrect, 25);
+  assert.equal(stats.summary.unattempted, 15);
   const matching = await api(
     `/api/mock-attempts?${query}&search=${encodeURIComponent("100%_sample")}&from=2026-10-24&to=2026-10-24`,
   );
@@ -126,10 +126,13 @@ try {
     ],
   });
   ids.add(subject.id);
-  stats = await api(`/api/analytics?${query}&type=full`);
-  assert.equal(stats.count, 1);
-  assert.equal(stats.subjects.find((s) => s.id === "quant").count, 3);
-  assert.equal(stats.averageFullScore, 245);
+  stats = await api(`/api/analytics?${query}&view=full`);
+  assert.equal(stats.sourceAttemptCount, 1);
+  assert.equal(
+    stats.whereYouStand.find((s) => s.subjectId === "quant").resultCount,
+    3,
+  );
+  assert.equal(stats.trend.points[0].score, 245);
 
   const csv = await (await raw("/api/backup?format=csv")).text();
   assert.ok(csv.includes(full.name));

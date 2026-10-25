@@ -33,6 +33,56 @@ export const SUBJECTS = {
 } as const;
 export type SubjectId = keyof typeof SUBJECTS;
 export const subjectIds = Object.keys(SUBJECTS) as SubjectId[];
+export const MAIN_SUBJECT_IDS = [
+  "quant",
+  "reasoning",
+  "english",
+  "ga",
+] as const satisfies readonly SubjectId[];
+export const FULL_MOCK_MAX_SCORE = 390;
+export const dashboardScopeSchema = z.enum([
+  "full",
+  "subject",
+  "sectional",
+  "all",
+]);
+export type DashboardScope = z.infer<typeof dashboardScopeSchema>;
+export const SECTIONS = {
+  section1: {
+    name: "Section I",
+    description: "Quant + Reasoning",
+    subjectIds: ["quant", "reasoning"],
+    maxScore: 180,
+  },
+  section2: {
+    name: "Section II",
+    description: "English + General Awareness",
+    subjectIds: ["english", "ga"],
+    maxScore: 210,
+  },
+} as const satisfies Record<
+  string,
+  {
+    name: string;
+    description: string;
+    subjectIds: readonly SubjectId[];
+    maxScore: number;
+  }
+>;
+export type SectionId = keyof typeof SECTIONS;
+export const sectionIds = Object.keys(SECTIONS) as SectionId[];
+export function sectionForSubjects(
+  subjects: readonly { subjectId: SubjectId }[],
+): SectionId | null {
+  const ids = new Set(subjects.map((subject) => subject.subjectId));
+  return (
+    sectionIds.find(
+      (sectionId) =>
+        ids.size === SECTIONS[sectionId].subjectIds.length &&
+        SECTIONS[sectionId].subjectIds.every((subjectId) => ids.has(subjectId)),
+    ) ?? null
+  );
+}
 const optionalNumber = z.number().finite().nullable().optional();
 export const subjectSchema = z
   .object({
@@ -83,10 +133,8 @@ export const attemptSchema = z
       fail("Each subject can appear only once");
     if (
       a.type === "full" &&
-      (mainIds.length !== 4 ||
-        ["quant", "reasoning", "english", "ga"].some(
-          (id) => !ids.includes(id as SubjectId),
-        ) ||
+      (mainIds.length !== MAIN_SUBJECT_IDS.length ||
+        MAIN_SUBJECT_IDS.some((id) => !ids.includes(id)) ||
         a.subjects.some((s) => s.questions !== SUBJECTS[s.subjectId].questions))
     )
       fail(
@@ -94,14 +142,7 @@ export const attemptSchema = z
       );
     if (a.type === "subject" && ids.length !== 1)
       fail("Subject mocks require one subject");
-    if (
-      a.type === "sectional" &&
-      !(
-        ids.length === 2 &&
-        (["quant", "reasoning"].every((id) => ids.includes(id as SubjectId)) ||
-          ["english", "ga"].every((id) => ids.includes(id as SubjectId)))
-      )
-    )
+    if (a.type === "sectional" && sectionForSubjects(a.subjects) == null)
       fail("Select Quant + Reasoning or English + General Awareness");
     if (a.rank && a.participants && a.rank > a.participants)
       ctx.addIssue({

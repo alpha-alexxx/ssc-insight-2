@@ -81,9 +81,11 @@ if (process.argv.includes("--cleanup")) {
     assert.equal(updated.notes, "Updated verification record");
     const fetched = await request(`/api/mock-attempts/${created.id}`);
     assert.equal(fetched.id, created.id);
-    const stats = await request("/api/analytics?platform=Verification%20only");
-    assert.equal(stats.averageFullScore, 245);
-    assert.equal(stats.accuracy.toFixed(2), "78.26");
+    const stats = await request(
+      "/api/analytics?platform=Verification%20only&view=full",
+    );
+    assert.equal(stats.trend.points[0].score, 245);
+    assert.equal(stats.summary.weightedAccuracy.toFixed(2), "78.26");
     const csv = await fetch(base + "/api/backup?format=csv");
     assert.equal(csv.status, 200);
     assert.ok((await csv.text()).includes(input.name));

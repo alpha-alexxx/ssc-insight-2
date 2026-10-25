@@ -30,8 +30,9 @@ import { Button } from "./ui/button";
 import { api, MockForm } from "./mock-form";
 import {
   type Attempt,
+  type DashboardScope,
   type Filters,
-  type SubjectId,
+  FULL_MOCK_MAX_SCORE,
   SUBJECTS,
   subjectIds,
   totals,
@@ -65,13 +66,13 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [filters, setFilters] = useState<Filters>({ type: "full" });
+  const [scope, setScope] = useState<DashboardScope>("full");
+  const [filters, setFilters] = useState<Filters>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Attempt>();
   const [detail, setDetail] = useState<Attempt | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [subject, setSubject] = useState<SubjectId>("quant");
   const [notice, setNotice] = useState("");
   const [target, setTarget] = useState<number | null>(null);
   const [targetInput, setTargetInput] = useState("");
@@ -94,10 +95,22 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
     const query = new URLSearchParams(
       Object.entries(filters).filter(([, v]) => !!v),
     );
+    // Dashboard analytics has its own analytical scope. Persisted type and
+    // subject filters still drive Mock history and Compare.
+    const analyticsQuery = new URLSearchParams(
+      Object.entries(filters).filter(
+        ([key, value]) =>
+          !!value &&
+          key !== "type" &&
+          key !== "subject" &&
+          key !== "search",
+      ),
+    );
+    analyticsQuery.set("view", scope);
     try {
       const [rows, stats, all, settings] = await Promise.all([
         api<Attempt[]>(`/api/mock-attempts?${query}`),
-        api<Analytics>(`/api/analytics?${query}`),
+        api<Analytics>(`/api/analytics?${analyticsQuery}`),
         api<Attempt[]>("/api/mock-attempts"),
         api<{ targetScore: number | null }>("/api/settings"),
       ]);
@@ -113,7 +126,7 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [filters]);
+  }, [filters, scope]);
   useEffect(() => {
     const timer = setTimeout(() => void refresh(), 150);
     return () => clearTimeout(timer);
@@ -223,6 +236,11 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
     .filter((a): a is Attempt => !!a);
 
   const platforms = [...new Set(allAttempts.map((a) => a.platform))].sort();
+  const dashboardAttempts = (analytics?.sourceAttemptIds ?? [])
+    .map((id) => allAttempts.find((attempt) => attempt.id === id))
+    .filter((attempt): attempt is Attempt => !!attempt)
+    .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+  const visibleAttempts = view === "dashboard" ? dashboardAttempts : attempts;
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen">
@@ -438,8 +456,12 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                 {view === "settings" ? (
                   <div className="grid xl:grid-cols-2 gap-6">
                     <Panel
-                      title="Your target"
-                      description="An optional reference point for your full mocks."
+                      title="My target"
+                      description={
+                        target == null
+                          ? "Set one target to show it as a percentage on every dashboard tab."
+                          : `One goal, shown as ${n(target)} / ${FULL_MOCK_MAX_SCORE} and as a percentage on every dashboard tab.`
+                      }
                     >
                       <form
                         className="p-6 pt-2 space-y-4"
@@ -467,17 +489,22 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                         }}
                       >
                         <label>
-                          Target score (out of 390)
+                          Target score (out of {FULL_MOCK_MAX_SCORE})
                           <input
                             type="number"
                             min={0}
-                            max={390}
+                            max={FULL_MOCK_MAX_SCORE}
                             step="0.01"
                             placeholder="e.g. 320"
                             value={targetInput}
                             onChange={(e) => setTargetInput(e.target.value)}
                           />
                         </label>
+                        <p className="text-xs muted leading-relaxed">
+                          The same ratio is applied to subject and sectional
+                          charts, so one target works across every view. Leave
+                          it empty to turn the reference off.
+                        </p>
                         <Button disabled={busy}>Save target</Button>
                       </form>
                     </Panel>
@@ -583,18 +610,28 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                         {[
                           { id: "full", label: "Full mocks" },
                           { id: "subject", label: "Subject wise" },
-                          { id: "sectional", label: "Sectional" },
+                          { id: "sectional", label: "Sectional wise" },
                           { id: "all", label: "All mocks" },
-                        ].map((t) => (
-                          <button
-                            key={t.id}
-                            aria-pressed={filters.type === t.id}
-                            className={`px-3 py-1.5 rounded-none text-xs transition-colors ${filters.type === t.id ? "bg-ink text-paper" : "muted hover:bg-soft"}`}
-                            onClick={() => changeFilter("type", t.id)}
-                          >
-                            {t.label}
-                          </button>
-                        ))}
+                        ].map((t) => {
+                          const active =
+                            view === "dashboard"
+                              ? scope === t.id
+                              : (filters.type ?? "all") === t.id;
+                          return (
+                            <button
+                              key={t.id}
+                              aria-pressed={active}
+                              className={`px-3 py-1.5 rounded-none text-xs transition-colors ${active ? "bg-ink text-paper" : "muted hover:bg-soft"}`}
+                              onClick={() =>
+                                view === "dashboard"
+                                  ? setScope(t.id as DashboardScope)
+                                  : changeFilter("type", t.id)
+                              }
+                            >
+                              {t.label}
+                            </button>
+                          );
+                        })}
                       </div>
                       <div className="ml-auto flex gap-2 flex-wrap">
                         <select
@@ -610,21 +647,23 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                             <option key={p}>{p}</option>
                           ))}
                         </select>
-                        <select
-                          aria-label="Filter by subject"
-                          className="!w-auto !py-2 text-xs"
-                          value={filters.subject ?? "all"}
-                          onChange={(e) =>
-                            changeFilter("subject", e.target.value)
-                          }
-                        >
-                          <option value="all">All subjects</option>
-                          {subjectIds.map((id) => (
-                            <option key={id} value={id}>
-                              {SUBJECTS[id].short}
-                            </option>
-                          ))}
-                        </select>
+                        {view !== "dashboard" && (
+                          <select
+                            aria-label="Filter by subject"
+                            className="!w-auto !py-2 text-xs"
+                            value={filters.subject ?? "all"}
+                            onChange={(e) =>
+                              changeFilter("subject", e.target.value)
+                            }
+                          >
+                            <option value="all">All subjects</option>
+                            {subjectIds.map((id) => (
+                              <option key={id} value={id}>
+                                {SUBJECTS[id].short}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                         <details className="relative">
                           <summary className="border border-rule bg-paper rounded-none py-2 px-3 text-xs text-muted list-none">
                             {filters.from || filters.to
@@ -676,12 +715,7 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                       </p>
                     )}
                     {view === "dashboard" && (
-                      <PerformanceOverview
-                        analytics={analytics}
-                        target={target}
-                        subject={subject}
-                        onSubjectChange={setSubject}
-                      />
+                      <PerformanceOverview analytics={analytics} target={target} />
                     )}
                     {view === "compare" ? (
                       <>
@@ -887,7 +921,7 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                         }
                         description={
                           view === "dashboard"
-                            ? "A little reflection after every attempt goes a long way."
+                            ? `${analytics?.sourceAttemptCount ?? 0} saved attempt${analytics?.sourceAttemptCount === 1 ? "" : "s"} contribute to this view.`
                             : `${attempts.length} results in this view`
                         }
                         action={
@@ -918,7 +952,7 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                         }
                       >
                         <div className="overflow-auto">
-                          {attempts.length ? (
+                          {visibleAttempts.length ? (
                             <table className="w-full whitespace-nowrap tabular">
                               <thead>
                                 <tr>
@@ -934,10 +968,12 @@ export function Dashboard({ authEnabled = false }: { authEnabled?: boolean }) {
                                 </tr>
                               </thead>
                               <tbody>
-                                {attempts
+                                {visibleAttempts
                                   .slice(
                                     0,
-                                    view === "dashboard" ? 5 : attempts.length,
+                                    view === "dashboard"
+                                      ? 5
+                                      : visibleAttempts.length,
                                   )
                                   .map((a) => {
                                     const t = totals(a);

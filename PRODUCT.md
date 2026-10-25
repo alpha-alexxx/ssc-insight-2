@@ -13,9 +13,10 @@ SSC aspirants sign in with Google and work in isolated private accounts. Each us
 - Log a date without a time, choose a platform preset or enter a custom platform, and enter durations using three hour/minute/second blocks. Scores update live from question counts; overall time is calculated automatically. Empty time blocks become zero.
 - Review history using type, subject, platform, date, and text filters. Compare two to four attempts, using percentages where maximum marks differ.
 - Paste a result report into a reviewable form before saving; preserve manual correction and explicit review.
-- See score trends, rolling averages, question breakdowns, subject strengths, accuracy, and timing. Missing values remain unknown rather than becoming zero.
-- Subject performance combines the subject's results from full, sectional and standalone subject mocks, with date/platform/search constraints retained. The selected mock-type filter affects summary/history, not the cross-type subject series. Section I is Quant + Reasoning; Section II is English + General Awareness.
-- Set a target score, export JSON backups and CSV, and preview JSON restoration before importing records.
+- See score trends, question breakdowns, subject strengths, accuracy, timing, and target progress. Missing values remain unknown rather than becoming zero.
+- Dashboard tabs switch the analytical grain rather than filtering the saved-record table. Full Mocks projects saved full mocks. Subject Wise projects every subject result from full, sectional, and standalone subject mocks, with all subjects shown together. Sectional Wise projects explicit sectionals plus Section I (Quant + Reasoning) and Section II (English + General Awareness) derived from each full mock. All Mocks projects every saved attempt exactly once and compares percentages across different maxima. A full mock is not additionally counted as its subjects or sections in All Mocks.
+- Where you stand is one global subject radar on every tab. Make every attempt count stacks Correct, Incorrect, and Skipped for the selected grain. Subject deep dive appears on every tab except Subject Wise.
+- Set one target score out of 390, export JSON backups and CSV, and preview JSON restoration before importing records. The target is applied as a percentage reference on every dashboard tab.
 
 ## Product principles
 
