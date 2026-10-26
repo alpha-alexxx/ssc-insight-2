@@ -2,6 +2,7 @@
 import { PlainIcon, DuotoneIcon } from "./icon";
 import { Button } from "./ui/button";
 import { Panel } from "./dashboard-panels";
+import { AppearancePanel } from "./appearance-panel";
 import {
   type BackupPreview,
   type ImportMode,
@@ -63,6 +64,9 @@ export function SettingsPanels({
 }: SettingsPanelsProps) {
   return (
     <div className="grid xl:grid-cols-2 gap-6">
+      <div className="xl:col-span-2">
+        <AppearancePanel />
+      </div>
       <Panel
         icon="target"
         title="My target"

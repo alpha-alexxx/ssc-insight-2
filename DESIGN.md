@@ -103,6 +103,41 @@ The approved visual direction is warm editorial paper: cream canvas, paper surfa
 - Expressive serif headings paired with compact sans-serif controls.
 - A divided metric strip and coordinated earthy charts.
 
+## Multi-theme system (palettes × styles)
+
+Every visual decision flows from two data attributes on `<html>`, set before
+paint by the ThemeStyleProvider script and persisted in localStorage
+(`ssc.palette`, `ssc.style`) — defaults reproduce this document exactly, so
+an absent or invalid stored value is always safe:
+
+- **`data-palette`** — color identity: `orange` (the original terracotta,
+  default), `blue`, `lime`, `violet`, `rose`. Each palette re-declares the
+  same semantic tokens (canvas/paper/ink/muted/rule/soft + accent trio) with
+  its own tinted paper family, and only its own chart hues: accent-derived
+  series alias `--accent`, and the second/third/fourth categorical hues move
+  per palette (the second hue shifts only when the accent owns that slot).
+  Olive average, teal time, and warm-gray computer stay shared. Semantic
+  positive/warning/danger colors are deliberately NOT re-tinted per palette.
+- **`data-style`** — visual style: `vega` (the original editorial ledger —
+  square, hairline rules, no shadows; default), `sera` (brutal: square,
+  2px ink panel rules, hard offset `--elev-pop`, weight-600 display type,
+  decisive 170ms motion), `mira` (compact: 6px radii, 34px controls, 10px
+  table rows, tighter paddings, 140ms motion). Styles change geometry,
+  density, elevation, and motion — never layout, content, or behavior.
+  Density lives in CSS custom properties (`--control-height`, `--table-cell-*`,
+  `--control-pad-*`, consumed by the base layer and component classes), so
+  Tailwind utilities still win where a view deliberately opts out.
+
+Rules across all 15 combinations: accent-on-paper button text ≥ 4.5:1 (all
+palettes verified, light and dark); muted text ≥ 4.5:1 on canvas; focus
+outlines and semantic status colors unchanged; chart animation stays
+disabled; the outcome-card exception keeps `--radius-card` so sera squares
+it and mira tightens it. `src/components/theme-style-provider.tsx` owns the
+preference model; `src/components/appearance-panel.tsx` (Settings) is the
+selection UI — palettes and styles are chosen independently and apply
+instantly. Do not hardcode palette hexes in components; add new semantic
+tokens to `globals.css` instead.
+
 ## Colors
 
 Terracotta identifies primary actions and the score series. Charcoal ink carries text and selected navigation. Paper and cream create subtle surface separation without textures. Muted ink remains legible for units, labels, and descriptions.

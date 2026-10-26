@@ -6,15 +6,21 @@
 
 /* ============================================================
    SSC Insight — design tokens (warm editorial paper)
-   Phase 3 of the UI overhaul: tokenized radius, elevation,
-   easing; element defaults in @layer base so Tailwind utilities
-   can override without `!important`.
+   Multi-theme system: TWO independent attributes on <html>
+   (set before paint by the ThemeStyleProvider script):
+   - data-palette="orange|blue|lime|violet|rose"  (color identity)
+   - data-style="vega|sera|mira"                  (visual style)
+   Defaults (no attribute = orange + vega) reproduce the original
+   warm editorial paper exactly; every other combination swaps the
+   same semantic tokens. next-themes keeps owning light/dark (.dark).
    ============================================================ */
 
 :root {
   color-scheme: light;
   --font-body: "DM Sans Variable", "Segoe UI", sans-serif;
   --font-heading: "Source Serif 4 Variable", Georgia, serif;
+
+  /* ---- palette: orange (the original terracotta paper) ---- */
   --canvas: #f4f1e8;
   --paper: #faf8f2;
   --ink: #25231f;
@@ -32,33 +38,54 @@
   --danger: #962f28;
   --danger-hover: #75231e;
   --danger-soft: #f1dfd8;
-  --chart-score: #b65335;
+
+  /* Chart hues. Accent-derived series alias the accent token so each
+     palette only declares its own hue set; olive/teal/gray are earthy
+     neutrals shared by every palette (validated categorical order). */
+  --chart-score: var(--accent);
   --chart-average: #656d4a;
   --chart-time: #567276;
-  --chart-quant: #b65335;
+  --chart-quant: var(--accent);
   --chart-reasoning: #2a78d6;
   --chart-english: #1baf7a;
   --chart-ga: #eda100;
   --chart-computer: #767168;
-  --chart-section-1: #b65335;
-  --chart-section-2: #2a78d6;
-  --chart-target: #6b665e;
-  --chart-correct: #656d4a;
-  --chart-incorrect: #b65335;
-  --chart-skipped: #d5cec1;
+  --chart-section-1: var(--accent);
+  --chart-section-2: var(--chart-reasoning);
+  --chart-target: var(--muted);
+  --chart-correct: var(--chart-average);
+  --chart-incorrect: var(--accent);
+  --chart-skipped: var(--rule-soft);
+  --outcome-unattempted: #c9bda7;
 
-  /* --- geometry & elevation scale (Phase 3) --- */
-  /* Structural surfaces stay square (the ledger identity); controls get a
-     moderate 4px; expressive cards 10px; pills for dots and share bars. */
+  /* ---- geometry & elevation scale (style: vega — the original) ---- */
   --radius-panel: 0px;
   --radius-control: 4px;
   --radius-card: 10px;
   --radius-pill: 999px;
+  --panel-border-width: 1px;
+  --panel-border-color: var(--rule-soft);
+  --stat-rule-width: 1px;
   /* Ink-tinted elevation for lifted surfaces: popovers, toasts, dialogs. */
   --elev-pop:
     0 1px 2px rgba(37, 35, 31, 0.05), 0 16px 40px -20px rgba(37, 35, 31, 0.22);
 
-  /* --- motion tokens (Phase 9 anchor) --- */
+  /* ---- density scale (consumed by base + component classes) ---- */
+  --control-pad-y: 10px;
+  --control-pad-x: 12px;
+  --control-height: 40px;
+  --control-height-sm: 32px;
+  --table-cell-pad-y: 15px;
+  --table-cell-pad-x: 18px;
+  --label-gap: 7px;
+  --nav-pad-y: 12px;
+  --nav-pad-x: 14px;
+  --segment-pad-y: 6px;
+  --segment-pad-x: 12px;
+  --stat-cell-pad-y: 23px;
+  --stat-cell-pad-x: 24px;
+
+  /* ---- motion tokens ---- */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-quick: 140ms;
   --dur-enter: 220ms;
@@ -67,7 +94,8 @@
 
 /* Dark mode: warm charcoal variant of the paper aesthetic. next-themes
    (layout.tsx) resolves light / dark / system and sets the `.dark` class on
-   <html> before paint; these overrides replace the :root values above. */
+   <html> before paint. Per-palette dark overrides below only need to restate
+   accent + categorical chart hues; the charcoal neutrals are shared. */
 .dark {
   color-scheme: dark;
   --canvas: #1a1815;
@@ -87,20 +115,201 @@
   --danger: #d8655a;
   --danger-hover: #c64f43;
   --danger-soft: #2a1714;
-  --chart-score: #d97048;
   --chart-average: #93a25c;
   --chart-time: #7fa3a7;
-  --chart-quant: #d97048;
   --chart-reasoning: #5a9be8;
   --chart-english: #4dd49f;
   --chart-ga: #ffc340;
   --chart-computer: #aaa094;
-  --chart-section-1: #d97048;
-  --chart-section-2: #5a9be8;
-  --chart-target: #9a9489;
-  --chart-correct: #93a25c;
-  --chart-incorrect: #d97048;
-  --chart-skipped: #38342f;
+  --outcome-unattempted: #3f3a32;
+}
+
+/* ---------- palette: blue — professional and precise ----------
+   Cool slate-tinted paper family; the chart's second hue moves to
+   violet because the accent now owns the blue slot. */
+[data-palette="blue"] {
+  --canvas: #eef0f3;
+  --paper: #f9fafb;
+  --ink: #20252b;
+  --muted: #646c76;
+  --rule: #7d858f;
+  --rule-soft: #d6dade;
+  --soft: #e6e9ed;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: #dbe5f8;
+  --chart-reasoning: #7c3aed;
+  --chart-english: #0d9488;
+  --chart-ga: #ca8a04;
+}
+.dark[data-palette="blue"] {
+  --canvas: #16181d;
+  --paper: #1e2127;
+  --ink: #e5e8ee;
+  --muted: #98a0ac;
+  --rule: #545b66;
+  --rule-soft: #343a43;
+  --soft: #262b33;
+  --accent: #82a7f5;
+  --accent-hover: #6d94ea;
+  --accent-soft: #1d2438;
+  --chart-reasoning: #a78bfa;
+  --chart-english: #3fc9b0;
+  --chart-ga: #e5a50a;
+}
+
+/* ---------- palette: lime — fresh and analytical ----------
+   Green-tinted warm paper; the accent deepens to green-700 so paper
+   text on accent buttons keeps AA contrast (never neon). */
+[data-palette="lime"] {
+  --canvas: #f0f2e6;
+  --paper: #f9faf2;
+  --ink: #23271d;
+  --muted: #6a7059;
+  --rule: #83887a;
+  --rule-soft: #dbdfc9;
+  --soft: #e9ecda;
+  --accent: #4d7c0f;
+  --accent-hover: #3f6212;
+  --accent-soft: #e3ecc7;
+}
+.dark[data-palette="lime"] {
+  --canvas: #16180f;
+  --paper: #1e2113;
+  --ink: #e7ead9;
+  --muted: #9ba18a;
+  --rule: #575c49;
+  --rule-soft: #353a26;
+  --soft: #262a17;
+  --accent: #94c33d;
+  --accent-hover: #84b132;
+  --accent-soft: #20260f;
+}
+
+/* ---------- palette: violet — futuristic and sophisticated ---------- */
+[data-palette="violet"] {
+  --canvas: #f1eff5;
+  --paper: #faf9fd;
+  --ink: #262233;
+  --muted: #6c6679;
+  --rule: #837c94;
+  --rule-soft: #dbd6e6;
+  --soft: #eae6f2;
+  --accent: #6d28d8;
+  --accent-hover: #5b21b6;
+  --accent-soft: #e7def8;
+}
+.dark[data-palette="violet"] {
+  --canvas: #17141f;
+  --paper: #201c2b;
+  --ink: #e9e5f2;
+  --muted: #9d96ad;
+  --rule: #59526b;
+  --rule-soft: #373145;
+  --soft: #2a2438;
+  --accent: #a684f5;
+  --accent-hover: #8f6ae8;
+  --accent-soft: #241a38;
+}
+
+/* ---------- palette: rose — elegant and expressive ---------- */
+[data-palette="rose"] {
+  --canvas: #f5eff1;
+  --paper: #fcf8f9;
+  --ink: #2b2226;
+  --muted: #75656b;
+  --rule: #8c7d82;
+  --rule-soft: #e3d7da;
+  --soft: #f1e8ea;
+  --accent: #be123c;
+  --accent-hover: #9f1239;
+  --accent-soft: #f6dee3;
+}
+.dark[data-palette="rose"] {
+  --canvas: #1b1416;
+  --paper: #241b1e;
+  --ink: #f0e5e8;
+  --muted: #a89299;
+  --rule: #635055;
+  --rule-soft: #3d2f33;
+  --soft: #2e2327;
+  --accent: #fb7185;
+  --accent-hover: #e56478;
+  --accent-soft: #3a1620;
+}
+
+/* ---------- style: sera — brutal ----------
+   Square everything, ink-weight rules, hard offset elevation, decisive
+   motion, heavier display type. Deliberate, not decorative. */
+[data-style="sera"] {
+  --radius-panel: 0px;
+  --radius-control: 0px;
+  --radius-card: 0px;
+  --panel-border-width: 2px;
+  --panel-border-color: var(--ink);
+  --stat-rule-width: 2px;
+  --elev-pop: 5px 5px 0 0 var(--ink);
+  --dur-quick: 110ms;
+  --dur-enter: 160ms;
+  --dur-view: 170ms;
+  --ease-out-soft: cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+[data-style="sera"] .page-title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+[data-style="sera"] .panel-title {
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+[data-style="sera"] .stat-value {
+  font-weight: 600;
+}
+[data-style="sera"] .segment-group,
+[data-style="sera"] .dialog-content {
+  border-color: var(--ink);
+}
+[data-style="sera"] .duotone-tile:hover {
+  box-shadow: -3px 3px 0 0 var(--ink);
+}
+
+/* ---------- style: mira — compact ----------
+   Information-dense: softened radii, tighter controls, shorter rows,
+   quick quiet feedback. Legibility floor: 12px text, 28px controls. */
+[data-style="mira"] {
+  --radius-panel: 6px;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --control-pad-y: 7px;
+  --control-pad-x: 10px;
+  --control-height: 34px;
+  --control-height-sm: 28px;
+  --table-cell-pad-y: 10px;
+  --table-cell-pad-x: 12px;
+  --label-gap: 5px;
+  --nav-pad-y: 9px;
+  --nav-pad-x: 12px;
+  --segment-pad-y: 4px;
+  --segment-pad-x: 10px;
+  --stat-cell-pad-y: 16px;
+  --stat-cell-pad-x: 18px;
+  --dur-quick: 90ms;
+  --dur-enter: 130ms;
+  --dur-view: 140ms;
+  --elev-pop:
+    0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 20px -14px rgba(0, 0, 0, 0.28);
+}
+[data-style="mira"] .page-title {
+  font-size: clamp(28px, 2.8vw, 38px);
+}
+[data-style="mira"] .panel-title {
+  font-size: 20px;
+}
+[data-style="mira"] .stat-value {
+  font-size: 34px;
+}
+[data-style="mira"] .chart-empty {
+  min-height: 170px;
 }
 
 @theme inline {
@@ -129,6 +338,7 @@
   /* radius / elevation / easing utilities (rounded-control, shadow-pop, …) */
   --radius-control: var(--radius-control);
   --radius-card: var(--radius-card);
+  --radius-panel: var(--radius-panel);
   --shadow-pop: var(--elev-pop);
   --ease-out-soft: var(--ease-out-soft);
 }
@@ -186,7 +396,7 @@
     min-width: 0;
     border: 1px solid var(--rule);
     border-radius: var(--radius-control);
-    padding: 10px 12px;
+    padding: var(--control-pad-y) var(--control-pad-x);
     background: var(--paper);
     color: var(--ink);
   }
@@ -214,7 +424,7 @@
   }
   label {
     display: grid;
-    gap: 7px;
+    gap: var(--label-gap);
     font-size: 12px;
     color: var(--muted);
     font-weight: 500;
@@ -254,7 +464,7 @@
   }
   td,
   th {
-    padding: 15px 18px;
+    padding: var(--table-cell-pad-y) var(--table-cell-pad-x);
     border-bottom: 1px solid var(--rule-soft);
   }
   thead th {
@@ -273,7 +483,7 @@
 @layer components {
   .panel {
     min-width: 0;
-    border: 1px solid var(--rule-soft);
+    border: var(--panel-border-width) solid var(--panel-border-color);
     border-radius: var(--radius-panel);
     background: var(--paper);
   }
@@ -320,12 +530,12 @@
   .stat-strip {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    border-block: 1px solid var(--ink);
+    border-block: var(--stat-rule-width) solid var(--ink);
     margin-block: 28px;
   }
   .stat-cell {
     min-width: 0;
-    padding: 23px 24px;
+    padding: var(--stat-cell-pad-y) var(--stat-cell-pad-x);
   }
   .stat-cell + .stat-cell {
     border-left: 1px solid var(--rule-soft);
@@ -358,7 +568,7 @@
     align-items: center;
     gap: 11px;
     width: 100%;
-    padding: 12px 14px;
+    padding: var(--nav-pad-y) var(--nav-pad-x);
     border-radius: var(--radius-control);
     font-weight: 500;
     color: var(--muted);
@@ -392,7 +602,7 @@
   }
   .segment {
     white-space: nowrap;
-    padding: 6px 12px;
+    padding: var(--segment-pad-y) var(--segment-pad-x);
     border-radius: calc(var(--radius-control) - 1px);
     font-size: 12px;
     color: var(--muted);
@@ -613,6 +823,10 @@ html {
 }
 
 @media (max-width: 767px) {
+  :root {
+    --table-cell-pad-y: 13px;
+    --table-cell-pad-x: 12px;
+  }
   .stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -631,15 +845,11 @@ html {
   .panel-title {
     font-size: 21px;
   }
-  td,
-  th {
-    padding: 13px 12px;
-  }
 }
 /* Very narrow phones: tighten segmented controls so four options fit. */
 @media (max-width: 420px) {
   .segment {
-    padding: 6px 8px;
+    padding-inline: 8px;
     font-size: 11px;
   }
 }

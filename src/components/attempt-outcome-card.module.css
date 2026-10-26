@@ -8,13 +8,13 @@
 .card {
   --outcome-correct: var(--chart-average, #656d4a);
   --outcome-incorrect: var(--accent, #b65335);
-  --outcome-unattempted: #c9bda7;
+  --outcome-unattempted: var(--outcome-unattempted, #c9bda7);
   min-width: 0;
   width: 100%;
   container: outcome-card / inline-size;
   padding: 20px 16px;
   border: 1px solid var(--rule-soft);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: var(--paper);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -51,7 +51,7 @@
   width: 52px;
   height: 52px;
   border: 1px solid var(--rule-soft);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   background: var(--canvas);
   color: var(--outcome-correct);
 }

@@ -30,6 +30,7 @@ import { useWorkspaceData } from "./use-workspace-data";
 import { SettingsPanels } from "./settings-panels";
 import { ToastProvider, useToast } from "./toast";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
+import { useThemePrefs, viewTransition } from "./theme-style-provider";
 import { Button } from "./ui/button";
 import { api } from "@/lib/api-client";
 import { BACKUP_MAX_BYTES } from "@/lib/backup";
@@ -104,9 +105,12 @@ function WorkspaceShellInner({
   const reduced = useReducedMotion();
   const router = useRouter();
   const pathname = usePathname();
+  const { style: themeStyle } = useThemePrefs();
   // The view follows the URL; the (workspace) layout keeps this component
   // mounted across navigations so workspace state persists.
   const view = PATH_VIEW[pathname] ?? "dashboard";
+  // Sera transitions decisive, Vega smooth, Mira quick (style tokens).
+  const viewMotion = viewTransition(themeStyle);
   const {
     filters,
     setFilters,
@@ -414,7 +418,7 @@ function WorkspaceShellInner({
                 initial={reduced ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduced ? undefined : { opacity: 0, y: -6 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
+                transition={viewMotion}
               >
             {view === "add" ? (
               <MockForm
