@@ -219,33 +219,14 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
-  // ── 6. Sign-in guest bounce ───────────────────────────────────────────
-  // Signed-in visitors should never see the sign-in page. Probe the session
-  // by invoking the auth middleware: a redirect response means "not signed
-  // in" (show the page), a pass-through means "signed in" (bounce to the
-  // workspace, carrying any refreshed session cookies along).
-  if (pathname === LOGIN_URL) {
-    try {
-      const probe = await auth().middleware({ loginUrl: LOGIN_URL })(forwarded);
-      const location = probe.headers.get("location");
-      if (location) {
-        const locationPath = new URL(location, forwarded.url).pathname;
-        if (locationPath === LOGIN_URL) {
-          return passThrough("sign-in:anonymous");
-        }
-        // Some other auth-flow redirect (e.g. token refresh) — forward it.
-        return finish(withPublicLocation(probe, forwarded), "sign-in:flow");
-      }
-      const bounce = NextResponse.redirect(new URL("/", forwarded.url));
-      for (const cookie of probe.cookies.getAll()) {
-        bounce.cookies.set(cookie);
-      }
-      return gate(bounce, "sign-in:authenticated");
-    } catch {
-      // Auth backend unreachable: fail open for a public marketing page.
-      return passThrough("sign-in:probe-failed");
-    }
-  }
+  // ── 6. Sign-in page: always reachable ─────────────────────────────────
+  // The page itself verifies the session (requireUser) and bounces
+  // signed-in visitors to "/", so the proxy never needs to probe here.
+  // Neon Auth's middleware always ALLOWS the login path (it special-cases
+  // the loginUrl), so probing it can never distinguish anonymous from
+  // signed-in visitors — doing so previously bounced every /sign-in request
+  // to "/" while "/" redirected anonymous users back, an infinite loop.
+  if (pathname === LOGIN_URL) return passThrough("sign-in");
 
   // ── 7. Private pages: session guard ───────────────────────────────────
   try {
