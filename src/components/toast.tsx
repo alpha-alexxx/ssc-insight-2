@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -40,8 +41,23 @@ const TONE_STYLES: Record<ToastTone, { border: string; bg: string; text: string;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
+  // Pending auto-dismiss timers, so a manual dismiss (or unmount) cancels
+  // the scheduled one instead of letting it fire on a gone toast.
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending.values()) clearTimeout(timer);
+      pending.clear();
+    };
+  }, []);
 
   const dismiss = useCallback((id: number) => {
+    const timer = timers.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timers.current.delete(id);
+    }
     setToasts((list) => list.filter((t) => t.id !== id));
   }, []);
 
@@ -51,19 +67,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const ttl = tone === "error" ? 6000 : 4000;
       setToasts((list) => [...list, { id, tone, title, detail, ttl }]);
       if (ttl > 0) {
-        setTimeout(() => dismiss(id), ttl);
+        timers.current.set(
+          id,
+          setTimeout(() => dismiss(id), ttl),
+        );
       }
     },
     [dismiss],
   );
 
-  const api: ToastApi = {
-    success: (t, d) => push("success", t, d),
-    error: (t, d) => push("error", t, d),
-    info: (t, d) => push("info", t, d),
-    warning: (t, d) => push("warning", t, d),
-    dismiss,
-  };
+  // Stable context value: consumers (every panel using useToast) must not
+  // re-render when unrelated provider state changes.
+  const api = useMemo<ToastApi>(
+    () => ({
+      success: (t, d) => push("success", t, d),
+      error: (t, d) => push("error", t, d),
+      info: (t, d) => push("info", t, d),
+      warning: (t, d) => push("warning", t, d),
+      dismiss,
+    }),
+    [push, dismiss],
+  );
 
   return (
     <ToastContext.Provider value={api}>

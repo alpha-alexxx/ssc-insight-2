@@ -8,7 +8,7 @@
 
 export function PanelSkeleton({ title = true }: { title?: boolean }) {
   return (
-    <section className="panel p-6 animate-pulse" aria-busy="true" aria-hidden="true">
+    <section className="panel p-6 animate-pulse" aria-busy="true">
       {title && (
         <div className="mb-5">
           <div className="h-2.5 w-16 bg-rule-soft rounded mb-2" />

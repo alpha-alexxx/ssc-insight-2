@@ -223,19 +223,9 @@ function DuoGlyph({
   tone: IconTone;
   className?: string;
 }) {
-  const duo = resolveIcon(name).duo;
-  if (!duo) return null;
-  const Glyph = duo;
-  const toneClass =
-    tone === "accent"
-      ? "icon-accent"
-      : tone === "paper"
-        ? "icon-paper"
-        : tone === "muted"
-          ? "icon-muted"
-          : tone === "mono"
-            ? "icon-mono"
-            : "";
+  const Glyph = resolveIcon(name).duo;
+  // Hooks stay above the early return: a DuoGlyph whose name has no Duo
+  // mapping must still call useRef/useEffect in the same order every render.
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!ref.current) return;
@@ -250,6 +240,17 @@ function DuoGlyph({
       }
     }
   }, []);
+  if (!Glyph) return null;
+  const toneClass =
+    tone === "accent"
+      ? "icon-accent"
+      : tone === "paper"
+        ? "icon-paper"
+        : tone === "muted"
+          ? "icon-muted"
+          : tone === "mono"
+            ? "icon-mono"
+            : "";
   return (
     <span ref={ref} className="contents" aria-hidden="true">
       <Glyph

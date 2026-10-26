@@ -1,4 +1,5 @@
 "use client";
+import { memo, useMemo } from "react";
 import { DuotoneIcon } from "./icon";
 import { Button } from "./ui/button";
 import { EmptyChart, Panel } from "./dashboard-panels";
@@ -11,6 +12,7 @@ import {
   formatTime,
   type Attempt,
 } from "@/lib/domain";
+import { mockTypeLabel, shortDate } from "@/lib/format";
 
 /**
  * Compare view — picker + side-by-side ledger (Phase 6).
@@ -18,16 +20,11 @@ import {
  * the table keeps horizontal scroll per the Readable Table Rule.
  */
 
-const dateLabel = (date: string) =>
-  new Date(date).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    timeZone: "Asia/Kolkata",
-  });
-const typeName = (type: string) =>
-  type === "full" ? "Full mock" : type === "sectional" ? "Sectional" : "Subject";
+const dateLabel = shortDate;
+const typeName = mockTypeLabel;
 
-export function CompareView({
+/** Memoized: the shell re-renders per chat token/keystroke; the ledger doesn't. */
+export const CompareView = memo(function CompareView({
   attempts,
   compared,
   selected,
@@ -40,6 +37,12 @@ export function CompareView({
   onToggle: (id: string) => void;
   onClear: () => void;
 }) {
+  // One totals() reduction per compared attempt, not ~10 per metric row.
+  const totalsByAttempt = useMemo(
+    () => new Map(compared.map((a) => [a.id, totals(a)])),
+    [compared],
+  );
+  const t = (a: Attempt) => totalsByAttempt.get(a.id) ?? totals(a);
   return (
     <>
       <Panel
@@ -113,61 +116,55 @@ export function CompareView({
               {[
                 {
                   label: "Score",
-                  get: (a: Attempt) =>
-                    `${n(totals(a).score)} / ${totals(a).maxScore}`,
+                  get: (a: Attempt) => `${n(t(a).score)} / ${t(a).maxScore}`,
                 },
                 {
                   label: "Score percentage",
-                  get: (a: Attempt) => `${n(totals(a).percentage)}%`,
+                  get: (a: Attempt) => `${n(t(a).percentage)}%`,
                 },
                 {
                   label: "Difference vs first",
                   get: (a: Attempt) =>
-                    `${n(totals(a).percentage - totals(compared[0]!).percentage)} pp`,
+                    `${n(t(a).percentage - t(compared[0]!).percentage)} pp`,
                 },
                 {
                   label: "Accuracy",
                   get: (a: Attempt) =>
-                    totals(a).accuracy == null
-                      ? "—"
-                      : `${n(totals(a).accuracy)}%`,
+                    t(a).accuracy == null ? "—" : `${n(t(a).accuracy)}%`,
                 },
                 {
                   label: "Accuracy change vs first",
                   get: (a: Attempt) =>
-                    totals(a).accuracy == null ||
-                    totals(compared[0]!).accuracy == null
+                    t(a).accuracy == null || t(compared[0]!).accuracy == null
                       ? "—"
-                      : `${n(totals(a).accuracy! - totals(compared[0]!).accuracy!)} pp`,
+                      : `${n(t(a).accuracy! - t(compared[0]!).accuracy!)} pp`,
                 },
                 {
                   label: "Score change vs first",
                   get: (a: Attempt) =>
-                    totals(a).maxScore === totals(compared[0]!).maxScore
-                      ? `${n(totals(a).score - totals(compared[0]!).score)} marks`
+                    t(a).maxScore === t(compared[0]!).maxScore
+                      ? `${n(t(a).score - t(compared[0]!).score)} marks`
                       : "Different maximum · compare %",
                 },
                 {
                   label: "Attempted",
-                  get: (a: Attempt) =>
-                    `${totals(a).attempted} / ${totals(a).questions}`,
+                  get: (a: Attempt) => `${t(a).attempted} / ${t(a).questions}`,
                 },
                 {
                   label: "Time taken",
-                  get: (a: Attempt) => formatTime(totals(a).timeSeconds),
+                  get: (a: Attempt) => formatTime(t(a).timeSeconds),
                 },
                 {
                   label: "Attempt change vs first",
                   get: (a: Attempt) =>
-                    `${totals(a).attempted - totals(compared[0]!).attempted} questions`,
+                    `${t(a).attempted - t(compared[0]!).attempted} questions`,
                 },
                 {
                   label: "Time change vs first",
                   get: (a: Attempt) =>
-                    totals(a).timeSeconds == null ||
-                    totals(compared[0]!).timeSeconds == null
+                    t(a).timeSeconds == null || t(compared[0]!).timeSeconds == null
                       ? "—"
-                      : `${n((totals(a).timeSeconds! - totals(compared[0]!).timeSeconds!) / 60)} min`,
+                      : `${n((t(a).timeSeconds! - t(compared[0]!).timeSeconds!) / 60)} min`,
                 },
               ].map((row) => (
                 <tr key={row.label}>
@@ -232,4 +229,4 @@ export function CompareView({
       )}
     </>
   );
-}
+});

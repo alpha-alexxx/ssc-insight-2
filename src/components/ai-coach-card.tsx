@@ -4,16 +4,7 @@ import { Panel } from "./dashboard-panels";
 import { Button } from "./ui/button";
 import type { AiStatus, CoachMeta } from "@/lib/ai/client-types";
 import type { CoachInsight } from "@/lib/ai/schemas";
-
-function shortDate(value: string | null) {
-  if (!value) return null;
-  return new Date(value).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Kolkata",
-  });
-}
+import { longDate } from "@/lib/format";
 
 function Bullets({ items }: { items: string[] }) {
   return (
@@ -48,7 +39,7 @@ export function AiCoachCard({
   onOpenChat: () => void;
 }) {
   const usage = status.usage;
-  const dataDate = shortDate(meta?.dataAsOf ?? null);
+  const dataDate = meta?.dataAsOf ? longDate(meta.dataAsOf) : null;
   return (
     <Panel
       title="AI coach"

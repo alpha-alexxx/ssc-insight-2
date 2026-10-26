@@ -1,9 +1,21 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AnimatePresence, motion, MotionConfig, useReducedMotion } from "motion/react";
+import {
+  AnimatePresence,
+  motion,
+  MotionConfig,
+  useReducedMotion,
+} from "motion/react";
 import { PlainIcon } from "./icon";
-import { AppHeader, AppSidebar, MobileNav, VIEW_HREF, VIEW_META, type AppView } from "./app-shell";
+import {
+  AppHeader,
+  AppSidebar,
+  MobileNav,
+  VIEW_HREF,
+  VIEW_META,
+  type AppView,
+} from "./app-shell";
 import { CompareView } from "./compare-view";
 import { DateRangeFilter } from "./date-range-filter";
 import { HistoryPanel } from "./history-panel";
@@ -12,35 +24,24 @@ import { MockForm } from "./mock-form";
 import { PerformanceOverview } from "./performance-overview";
 import { AiCoachCard } from "./ai-coach-card";
 import { AiChatDrawer } from "./ai-chat-drawer";
-import { NdjsonDecoder, parseChatEvent } from "@/lib/ai/ndjson";
-import type {
-  AiStatus,
-  ChatMessage,
-  CoachMeta,
-  CoachResponse,
-} from "@/lib/ai/client-types";
-import type { CoachInsight } from "@/lib/ai/schemas";
+import { useAiWorkspace } from "./use-ai-workspace";
+import { useBackupImport } from "./use-backup-import";
+import { useWorkspaceData } from "./use-workspace-data";
 import { SettingsPanels } from "./settings-panels";
 import { ToastProvider, useToast } from "./toast";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import { Button } from "./ui/button";
 import { api } from "@/lib/api-client";
+import { BACKUP_MAX_BYTES } from "@/lib/backup";
 import {
-  BACKUP_MAX_BYTES,
-  type BackupPreview,
-  type ImportMode,
-  type ImportResult,
-} from "@/lib/backup";
-import {
+  SUBJECTS,
+  subjectIds,
   type Attempt,
   type DashboardScope,
   type Filters,
-  SUBJECTS,
-  subjectIds,
 } from "@/lib/domain";
-import type { Analytics } from "@/lib/analytics";
-import { Dialog } from "radix-ui";
 import { formatNumber as n } from "@/lib/domain";
+import { Dialog } from "radix-ui";
 
 /**
  * Workspace shell — the persistent client orchestrator behind the real
@@ -49,9 +50,14 @@ import { formatNumber as n } from "@/lib/domain";
  * in-progress edit, AI chat) survives route navigation; the active view is
  * derived from the pathname and navigation is router.push.
  *
- * Owns workspace state and data flow; presentation lives in focused modules:
- * app-shell (sidebar/header/mobile nav), settings-panels, compare-view,
- * history-panel, mock-detail-dialog, performance-overview, ai-insights.
+ * Composition:
+ * - useWorkspaceData — filters/scope (+ URL mirror), attempts, analytics,
+ *   target, refresh; one deduplicated request set per change.
+ * - useAiWorkspace — optional AI coach card and chat drawer state.
+ * - useBackupImport — preview/fingerprint/confirm import flow.
+ * The shell owns view routing, the shared `busy` flag, and the handlers.
+ * Handlers passed to memoized panels are useCallback-stable and derived
+ * props are useMemo'd so streaming chat tokens do not re-render charts.
  */
 
 /** Route path → shell view. Unknown paths fall back to the dashboard. */
@@ -101,471 +107,151 @@ function WorkspaceShellInner({
   // The view follows the URL; the (workspace) layout keeps this component
   // mounted across navigations so workspace state persists.
   const view = PATH_VIEW[pathname] ?? "dashboard";
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [scope, setScope] = useState<DashboardScope>("full");
-  const [filters, setFilters] = useState<Filters>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    filters,
+    setFilters,
+    scope,
+    setScope,
+    attempts,
+    allAttempts,
+    analytics,
+    target,
+    setTarget,
+    targetInput,
+    setTargetInput,
+    loading,
+    error,
+    refresh,
+    loadSettings,
+  } = useWorkspaceData();
+  const ai = useAiWorkspace();
+  const {
+    insight: coachInsight,
+    meta: coachMeta,
+    busy: coachBusy,
+    error: coachError,
+    generate: generateCoach,
+    clear: clearCoach,
+    open: openCoachChat,
+  } = ai.coach;
   const [editing, setEditing] = useState<Attempt>();
   const [detail, setDetail] = useState<Attempt | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [target, setTarget] = useState<number | null>(null);
-  const [targetInput, setTargetInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [backupFile, setBackupFile] = useState<unknown | null>(null);
-  const [backupName, setBackupName] = useState("");
-  const [preview, setPreview] = useState<BackupPreview | null>(null);
-  const [importMode, setImportMode] = useState<ImportMode>("merge");
-  const [applyTarget, setApplyTarget] = useState(false);
-  const [safetyDownloaded, setSafetyDownloaded] = useState(false);
-  const [replaceOpen, setReplaceOpen] = useState(false);
+  // The hidden file input lives in this component's JSX; the import hook
+  // only touches it inside callbacks.
   const fileRef = useRef<HTMLInputElement>(null);
-  const previewId = useRef(0);
-  const requestId = useRef(0);
-  const chatAbort = useRef<AbortController | null>(null);
-  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
-  const [coachInsight, setCoachInsight] = useState<CoachInsight | null>(null);
-  const [coachMeta, setCoachMeta] = useState<CoachMeta | null>(null);
-  const [coachBusy, setCoachBusy] = useState(false);
-  const [coachError, setCoachError] = useState("");
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatStreaming, setChatStreaming] = useState(false);
-  const [chatError, setChatError] = useState("");
-
-  const newId = () =>
-    globalThis.crypto?.randomUUID?.() ??
-    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-  const refresh = useCallback(async () => {
-    const id = ++requestId.current;
-    setLoading(true);
-    setError("");
-    const query = new URLSearchParams(
-      Object.entries(filters).filter(([, v]) => !!v),
-    );
-    // Dashboard analytics has its own analytical scope. Persisted type and
-    // subject filters still drive Mock history and Compare.
-    const analyticsQuery = new URLSearchParams(
-      Object.entries(filters).filter(
-        ([key, value]) =>
-          !!value &&
-          key !== "type" &&
-          key !== "subject" &&
-          key !== "search",
-      ),
-    );
-    analyticsQuery.set("view", scope);
-    try {
-      const [rows, stats, all, settings] = await Promise.all([
-        api<Attempt[]>(`/api/mock-attempts?${query}`),
-        api<Analytics>(`/api/analytics?${analyticsQuery}`),
-        api<Attempt[]>("/api/mock-attempts"),
-        api<{ targetScore: number | null }>("/api/settings"),
-      ]);
-      if (id !== requestId.current) return;
-      setAttempts(rows);
-      setAnalytics(stats);
-      setAllAttempts(all);
-      setTarget(settings.targetScore);
-      setTargetInput(settings.targetScore?.toString() ?? "");
-    } catch (e) {
-      if (id === requestId.current)
-        setError(e instanceof Error ? e.message : "Could not load data");
-    } finally {
-      if (id === requestId.current) setLoading(false);
-    }
-  }, [filters, scope]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => void refresh(), 150);
-    return () => clearTimeout(timer);
-  }, [refresh]);
-
-  // Client-side views swap without navigation, so keep the tab title in
-  // step with the visible screen.
-  useEffect(() => {
-    document.title = `${VIEW_META[view].label} · SSC Insight`;
-  }, [view]);
-
-  const refreshAiStatus = useCallback(async () => {
-    try {
-      setAiStatus(await api<AiStatus>("/api/ai/status"));
-    } catch {
-      // AI is optional; a status failure must never block the dashboard.
-    }
-  }, []);
-  useEffect(() => {
-    const timer = setTimeout(() => void refreshAiStatus(), 0);
-    return () => clearTimeout(timer);
-  }, [refreshAiStatus]);
-  useEffect(
-    () => () => {
-      chatAbort.current?.abort();
-    },
-    [],
-  );
-  function clearCoach() {
-    setCoachInsight(null);
-    setCoachMeta(null);
-  }
-  async function generateCoach() {
-    setCoachBusy(true);
-    setCoachError("");
-    try {
-      const result = await api<CoachResponse>("/api/ai/coach", {
-        method: "POST",
-        body: "{}",
-      });
-      setCoachInsight(result.insight);
-      setCoachMeta(result.meta);
-    } catch (e) {
-      setCoachError(
-        e instanceof Error ? e.message : "Could not generate an insight",
-      );
-    } finally {
-      setCoachBusy(false);
-      void refreshAiStatus();
-    }
-  }
-  async function sendChat(text: string) {
-    if (chatStreaming) return;
-    const userMessage: ChatMessage = {
-      id: newId(),
-      role: "user",
-      content: text,
-    };
-    const assistantId = newId();
-    const history = [...chatMessages, userMessage]
-      .map((message) => ({ role: message.role, content: message.content }))
-      .filter((message) => message.content.trim())
-      .slice(-8);
-    while (history.length && history[0].role === "assistant") history.shift();
-    setChatMessages((current) => [
-      ...current,
-      userMessage,
-      { id: assistantId, role: "assistant", content: "" },
-    ]);
-    setChatStreaming(true);
-    setChatError("");
-    const abort = new AbortController();
-    chatAbort.current = abort;
-    try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
-        signal: abort.signal,
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        if (response.status === 401)
-          window.dispatchEvent(new Event("ssc:session-ended"));
-        if (body?.error?.code === "AUTH_UNAVAILABLE")
-          window.dispatchEvent(new Event("ssc:auth-unavailable"));
-        throw new Error(
-          body?.error?.message ?? "The coach could not answer. Try again.",
-        );
-      }
-      if (!response.body) throw new Error("The coach returned an empty answer.");
-      const reader = response.body.getReader();
-      const decoder = new NdjsonDecoder();
-      let finished = false;
-      const handle = (line: string) => {
-        const event = parseChatEvent(line);
-        if (!event) return;
-        if (event.type === "delta") {
-          setChatMessages((current) =>
-            current.map((message) =>
-              message.id === assistantId
-                ? { ...message, content: message.content + event.text }
-                : message,
-            ),
-          );
-        } else if (event.type === "error") {
-          setChatError(event.message);
-          finished = true;
-        } else if (event.type === "done") {
-          finished = true;
-        }
-      };
-      while (!finished) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of decoder.push(value)) {
-          handle(line);
-          if (finished) break;
-        }
-      }
-      for (const line of decoder.flush()) {
-        handle(line);
-        if (finished) break;
-      }
-      await reader.cancel().catch(() => undefined);
-    } catch (e) {
-      if (!abort.signal.aborted)
-        setChatError(
-          e instanceof Error ? e.message : "The coach could not answer.",
-        );
-    } finally {
-      setChatStreaming(false);
-      if (chatAbort.current === abort) chatAbort.current = null;
-      void refreshAiStatus();
-    }
-  }
 
   /** Plain route change — keeps in-progress state (editing, selection). */
-  function go(next: AppView) {
-    router.push(VIEW_HREF[next]);
-  }
+  const go = useCallback(
+    (next: AppView) => {
+      router.push(VIEW_HREF[next]);
+    },
+    [router],
+  );
   /** Workspace navigation — starts the destination view from scratch. */
-  function navigate(next: AppView) {
-    setEditing(undefined);
-    if (next === "history") setFilters((f) => ({ ...f, type: "all" }));
-    go(next);
-  }
-  function add() {
-    navigate("add");
-  }
-  useKeyboardShortcuts({
-    onAddMock: add,
-    onNavigate: (v) => navigate(v),
-    onShowHelp: () =>
-      toast.info(
-        "Shortcuts",
-        "n=new mock · g d/h/c/s=navigate · /=focus search · ?=help",
-      ),
-  });
-  function changeFilter(key: keyof Filters, value: string) {
-    setFilters((f) => ({ ...f, [key]: value }));
-  }
-  async function remove(a: Attempt) {
-    setBusy(true);
-    try {
-      await api(`/api/mock-attempts/${a.id}`, { method: "DELETE", body: "{}" });
-      setDetail(null);
-      setSelected((ids) => ids.filter((id) => id !== a.id));
-      clearCoach();
-      toast.success("Mock deleted");
-      await refresh();
-    } catch (e) {
-      toast.error(
-        "Couldn’t delete",
-        e instanceof Error ? e.message : "Could not delete",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function download(format: "json" | "csv"): Promise<boolean> {
-    try {
-      const response = await fetch(`/api/backup?format=${format}`, {
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        if (response.status === 401)
-          window.dispatchEvent(new Event("ssc:session-ended"));
-        if (body?.error?.code === "AUTH_UNAVAILABLE")
-          window.dispatchEvent(new Event("ssc:auth-unavailable"));
-        throw new Error(body?.error?.message ?? "Export failed");
-      }
-      let blob: Blob;
-      if (format === "json") {
-        const text = await response.text();
-        try {
-          const parsed = JSON.parse(text) as { warnings?: string[] };
-          if (parsed.warnings?.length)
-            toast.warning("Backup has warnings", parsed.warnings.join(" "));
-        } catch {
-          // The server always returns JSON here; validation happens on import.
-        }
-        if (text.length > BACKUP_MAX_BYTES)
-          toast.warning(
-            "Backup is large",
-            "Backup downloaded, but it is larger than the 4 MB import limit.",
-          );
-        blob = new Blob([text], { type: "application/json" });
-      } else {
-        blob = await response.blob();
-      }
-      const date = new Date().toISOString().slice(0, 10);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download =
-        format === "json"
-          ? `ssc-insight-backup-${date}.json`
-          : `ssc-insight-export-${date}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      return true;
-    } catch (e) {
-      toast.error("Export failed", e instanceof Error ? e.message : undefined);
-      return false;
-    }
-  }
-  async function runPreview(
-    file: unknown,
-    mode: ImportMode,
-    apply: boolean,
-  ): Promise<BackupPreview | null> {
-    const id = ++previewId.current;
-    setBusy(true);
-    setSafetyDownloaded(false);
-    setReplaceOpen(false);
-    try {
-      const result = await api<BackupPreview>("/api/backup", {
-        method: "POST",
-        body: JSON.stringify({
-          backup: file,
-          preview: true,
-          mode,
-          applyTarget: apply,
-        }),
-      });
-      if (id !== previewId.current) return null;
-      setPreview(result);
-      return result;
-    } catch (e) {
-      if (id === previewId.current) {
-        setPreview(null);
+  const navigate = useCallback(
+    (next: AppView) => {
+      setEditing(undefined);
+      if (next === "history") setFilters((f) => ({ ...f, type: "all" }));
+      go(next);
+    },
+    [go, setFilters],
+  );
+  const add = useCallback(() => navigate("add"), [navigate]);
+  const changeFilter = useCallback(
+    (key: keyof Filters, value: string) => {
+      setFilters((f) => ({ ...f, [key]: value }));
+    },
+    [setFilters],
+  );
+  const searchFilter = useCallback(
+    (value: string) => changeFilter("search", value),
+    [changeFilter],
+  );
+  const viewAllHistory = useCallback(() => navigate("history"), [navigate]);
+
+  const remove = useCallback(
+    async (a: Attempt) => {
+      setBusy(true);
+      try {
+        await api(`/api/mock-attempts/${a.id}`, {
+          method: "DELETE",
+          body: "{}",
+        });
+        setDetail(null);
+        setSelected((ids) => ids.filter((id) => id !== a.id));
+        clearCoach();
+        toast.success("Mock deleted");
+        await refresh();
+      } catch (e) {
         toast.error(
-          "Could not preview backup",
+          "Couldn’t delete",
+          e instanceof Error ? e.message : "Could not delete",
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [clearCoach, refresh, toast],
+  );
+
+  const download = useCallback(
+    async (format: "json" | "csv"): Promise<boolean> => {
+      try {
+        const response = await fetch(`/api/backup?format=${format}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          if (response.status === 401)
+            window.dispatchEvent(new Event("ssc:session-ended"));
+          if (body?.error?.code === "AUTH_UNAVAILABLE")
+            window.dispatchEvent(new Event("ssc:auth-unavailable"));
+          throw new Error(body?.error?.message ?? "Export failed");
+        }
+        let blob: Blob;
+        if (format === "json") {
+          const text = await response.text();
+          try {
+            const parsed = JSON.parse(text) as { warnings?: string[] };
+            if (parsed.warnings?.length)
+              toast.warning("Backup has warnings", parsed.warnings.join(" "));
+          } catch {
+            // The server always returns JSON here; validation happens on import.
+          }
+          if (text.length > BACKUP_MAX_BYTES)
+            toast.warning(
+              "Backup is large",
+              "Backup downloaded, but it is larger than the 4 MB import limit.",
+            );
+          blob = new Blob([text], { type: "application/json" });
+        } else {
+          blob = await response.blob();
+        }
+        const date = new Date().toISOString().slice(0, 10);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download =
+          format === "json"
+            ? `ssc-insight-backup-${date}.json`
+            : `ssc-insight-export-${date}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return true;
+      } catch (e) {
+        toast.error(
+          "Export failed",
           e instanceof Error ? e.message : undefined,
         );
+        return false;
       }
-      return null;
-    } finally {
-      if (id === previewId.current) setBusy(false);
-    }
-  }
-  async function readBackup(file?: File) {
-    if (!file) return;
-    if (file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv") {
-      toast.info(
-        "CSV is read-only",
-        "Choose the JSON backup file to import.",
-      );
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
-    if (file.size > BACKUP_MAX_BYTES) {
-      toast.error("Backup too large", "Backup must be under 4 MB");
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
-    try {
-      const parsed: unknown = JSON.parse(await file.text());
-      setBackupFile(parsed);
-      setBackupName(file.name);
-      setPreview(null);
-      setImportMode("merge");
-      setApplyTarget(false);
-      setSafetyDownloaded(false);
-      const first = await runPreview(parsed, "merge", false);
-      if (first) {
-        const recommended =
-          first.target.incoming != null && first.target.current == null;
-        setApplyTarget(recommended);
-        if (recommended) await runPreview(parsed, "merge", true);
-      }
-    } catch (e) {
-      toast.error(
-        "Invalid backup",
-        e instanceof SyntaxError
-          ? "This is not a valid JSON backup file."
-          : e instanceof Error
-            ? e.message
-            : "Invalid backup",
-      );
-    } finally {
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }
-  function changeImportMode(mode: ImportMode) {
-    setImportMode(mode);
-    if (backupFile) void runPreview(backupFile, mode, applyTarget);
-  }
-  function changeApplyTarget(next: boolean) {
-    setApplyTarget(next);
-    if (backupFile) void runPreview(backupFile, importMode, next);
-  }
-  async function downloadSafetyBackup() {
-    const saved = await download("json");
-    if (!saved) return;
-    setSafetyDownloaded(true);
-    toast.success(
-      "Backup downloaded",
-      "Verify it in your downloads before replacing.",
-    );
-  }
-  function resetImport() {
-    setBackupFile(null);
-    setBackupName("");
-    setPreview(null);
-    setImportMode("merge");
-    setApplyTarget(false);
-    setSafetyDownloaded(false);
-    setReplaceOpen(false);
-    if (fileRef.current) fileRef.current.value = "";
-  }
-  async function commitImport(confirmed: boolean) {
-    if (!backupFile || !preview) return;
-    if (importMode === "replace" && (!confirmed || !safetyDownloaded)) return;
-    setBusy(true);
-    setReplaceOpen(false);
-    try {
-      const result = await api<ImportResult>("/api/backup", {
-        method: "POST",
-        body: JSON.stringify({
-          backup: backupFile,
-          preview: false,
-          mode: importMode,
-          applyTarget,
-          previewFingerprint: preview.previewFingerprint,
-          confirmReplace: importMode === "replace" && confirmed,
-        }),
-      });
-      const parts: string[] = [];
-      if (importMode === "replace")
-        parts.push(`Replaced account with ${result.imported} mocks`);
-      else if (result.imported) parts.push(`${result.imported} mocks imported`);
-      if (result.skipped) parts.push(`${result.skipped} duplicates skipped`);
-      if (result.conflicts) parts.push(`${result.conflicts} conflicts added`);
-      if (result.deleted)
-        parts.push(`${result.deleted} existing mocks removed`);
-      if (result.target.applied)
-        parts.push(
-          result.target.targetScore == null
-            ? "target cleared"
-            : `target set to ${n(result.target.targetScore)} / 390`,
-        );
-      toast.success(
-        "Backup imported",
-        parts.length ? parts.join(" · ") : undefined,
-      );
-      resetImport();
-      await refresh();
-    } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Could not import the backup";
-      if (/preview|workspace changed/i.test(message)) {
-        setPreview(null);
-        setSafetyDownloaded(false);
-        toast.warning("Re-previewing backup", message);
-        await runPreview(backupFile, importMode, applyTarget);
-        return;
-      }
-      toast.error("Import failed", message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function saveTarget() {
+    },
+    [toast],
+  );
+
+  const saveTarget = useCallback(async () => {
     setBusy(true);
     try {
       await api("/api/settings", {
@@ -584,30 +270,124 @@ function WorkspaceShellInner({
     } finally {
       setBusy(false);
     }
-  }
+  }, [setTarget, targetInput, toast]);
 
-  const compared = selected
-    .map((id) => allAttempts.find((a) => a.id === id))
-    .filter((a): a is Attempt => !!a);
+  const backup = useBackupImport({
+    download,
+    refresh,
+    onTargetApplied: loadSettings,
+    setBusy,
+    fileRef,
+  });
 
-  const platforms = [...new Set(allAttempts.map((a) => a.platform))].sort();
-  const dashboardAttempts = (analytics?.sourceAttemptIds ?? [])
-    .map((id) => allAttempts.find((attempt) => attempt.id === id))
-    .filter((attempt): attempt is Attempt => !!attempt)
-    .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
-  const visibleAttempts = view === "dashboard" ? dashboardAttempts : attempts;
-  const targetChange =
-    preview != null &&
-    applyTarget &&
-    preview.target.available &&
-    preview.target.current !== preview.target.incoming;
-  const targetAction = !preview
-    ? ""
-    : applyTarget && preview.target.available
-      ? preview.target.incoming == null
-        ? "clear the current target"
-        : `set target to ${n(preview.target.incoming)} / 390`
-      : "keep the current target";
+  useKeyboardShortcuts(
+    useMemo(
+      () => ({
+        onAddMock: add,
+        onNavigate: navigate,
+        onShowHelp: () =>
+          toast.info(
+            "Shortcuts",
+            "n=new mock · g d/h/c/s=navigate · /=focus search · ?=help",
+          ),
+      }),
+      [add, navigate, toast],
+    ),
+  );
+
+  // Client-side views swap without navigation, so keep the tab title in
+  // step with the visible screen.
+  useEffect(() => {
+    document.title = `${VIEW_META[view].label} · SSC Insight`;
+  }, [view]);
+
+  // Derived view inputs. Memoized so the memoized panels below skip
+  // re-renders while chat streams or unrelated shell state changes.
+  const compared = useMemo(
+    () =>
+      selected
+        .map((id) => allAttempts.find((a) => a.id === id))
+        .filter((a): a is Attempt => !!a),
+    [allAttempts, selected],
+  );
+  const platforms = useMemo(
+    () => [...new Set(allAttempts.map((a) => a.platform))].sort(),
+    [allAttempts],
+  );
+  const dashboardAttempts = useMemo(() => {
+    if (!analytics) return [];
+    return (analytics.sourceAttemptIds ?? [])
+      .map((id) => allAttempts.find((attempt) => attempt.id === id))
+      .filter((attempt): attempt is Attempt => !!attempt)
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+  }, [allAttempts, analytics]);
+  const visibleAttempts =
+    view === "dashboard" ? dashboardAttempts : attempts;
+
+  const openDetail = useCallback((a: Attempt) => setDetail(a), []);
+  const closeDetail = useCallback(() => setDetail(null), []);
+  const editFromDetail = useCallback(
+    (a: Attempt) => {
+      setEditing(a);
+      setDetail(null);
+      go("add");
+    },
+    [go],
+  );
+  const compareFromDetail = useCallback(
+    (a: Attempt) => {
+      setSelected((ids) =>
+        ids.includes(a.id) ? ids : ids.length < 4 ? [...ids, a.id] : ids,
+      );
+      setDetail(null);
+      go("compare");
+    },
+    [go],
+  );
+  const clearCompare = useCallback(() => setSelected([]), []);
+  const toggleCompare = useCallback(
+    (id: string) =>
+      setSelected((ids) =>
+        ids.includes(id)
+          ? ids.filter((x) => x !== id)
+          : ids.length < 4
+            ? [...ids, id]
+            : ids,
+      ),
+    [],
+  );
+  const savedMock = useCallback(() => {
+    navigate("dashboard");
+    toast.success("Mock saved", "Your progress is up to date.");
+    void refresh();
+  }, [navigate, refresh, toast]);
+  const closeForm = useCallback(() => navigate("dashboard"), [navigate]);
+
+  // Stable coach card node: lets the memoized PerformanceOverview skip
+  // re-renders while chat tokens stream or filters change underneath it.
+  const coachNode = useMemo(
+    () =>
+      ai.aiStatus?.enabled ? (
+        <AiCoachCard
+          status={ai.aiStatus}
+          insight={coachInsight}
+          meta={coachMeta}
+          busy={coachBusy}
+          error={coachError}
+          onGenerate={() => void generateCoach()}
+          onOpenChat={openCoachChat}
+        />
+      ) : undefined,
+    [
+      ai.aiStatus,
+      coachBusy,
+      coachError,
+      generateCoach,
+      coachInsight,
+      coachMeta,
+      openCoachChat,
+    ],
+  );
 
   return (
     <MotionConfig reducedMotion="user">
@@ -640,12 +420,9 @@ function WorkspaceShellInner({
               <MockForm
                 key={editing?.id ?? "new"}
                 attempt={editing}
-                onClose={() => navigate("dashboard")}
-                onSaved={() => {
-                  navigate("dashboard");
-                  toast.success("Mock saved", "Your progress is up to date.");
-                  void refresh();
-                }}
+                knownAttempts={allAttempts}
+                onClose={closeForm}
+                onSaved={savedMock}
               />
             ) : (
               <>
@@ -727,22 +504,28 @@ function WorkspaceShellInner({
                         ref={fileRef}
                         aria-label="Choose backup file"
                         onChange={(e) =>
-                          void readBackup(e.target.files?.[0])
+                          void backup.readBackup(e.target.files?.[0])
                         }
                       />
                     }
-                    backupName={backupName}
-                    preview={preview}
-                    importMode={importMode}
-                    changeImportMode={changeImportMode}
-                    applyTarget={applyTarget}
-                    changeApplyTarget={changeApplyTarget}
-                    safetyDownloaded={safetyDownloaded}
-                    onDownloadSafety={() => void downloadSafetyBackup()}
-                    onReset={resetImport}
-                    onCommit={() => void commitImport(false)}
-                    targetChange={targetChange}
-                    onOpenReplace={() => setReplaceOpen(true)}
+                    backupName={backup.backupName}
+                    preview={backup.preview}
+                    importMode={backup.importMode}
+                    changeImportMode={backup.changeImportMode}
+                    applyTarget={backup.applyTarget}
+                    changeApplyTarget={backup.changeApplyTarget}
+                    safetyDownloaded={backup.safetyDownloaded}
+                    onDownloadSafety={() => void backup.downloadSafetyBackup()}
+                    onReset={backup.resetImport}
+                    onCommit={() => void backup.commitImport(false)}
+                    targetChange={
+                      backup.preview != null &&
+                      backup.applyTarget &&
+                      backup.preview.target.available &&
+                      backup.preview.target.current !==
+                        backup.preview.target.incoming
+                    }
+                    onOpenReplace={() => backup.setReplaceOpen(true)}
                   />
                 ) : (
                   <>
@@ -773,22 +556,7 @@ function WorkspaceShellInner({
                         <PerformanceOverview
                           analytics={analytics}
                           target={target}
-                          coach={
-                            aiStatus?.enabled ? (
-                              <AiCoachCard
-                                status={aiStatus}
-                                insight={coachInsight}
-                                meta={coachMeta}
-                                busy={coachBusy}
-                                error={coachError}
-                                onGenerate={() => void generateCoach()}
-                                onOpenChat={() => {
-                                  setChatError("");
-                                  setChatOpen(true);
-                                }}
-                              />
-                            ) : undefined
-                          }
+                          coach={coachNode}
                         />
                       </div>
                     )}
@@ -798,16 +566,8 @@ function WorkspaceShellInner({
                           attempts={attempts}
                           compared={compared}
                           selected={selected}
-                          onToggle={(id) =>
-                            setSelected((ids) =>
-                              ids.includes(id)
-                                ? ids.filter((x) => x !== id)
-                                : ids.length < 4
-                                  ? [...ids, id]
-                                  : ids,
-                            )
-                          }
-                          onClear={() => setSelected([])}
+                          onToggle={toggleCompare}
+                          onClear={clearCompare}
                         />
                       </div>
                     ) : (
@@ -817,9 +577,9 @@ function WorkspaceShellInner({
                         totalCount={allAttempts.length}
                         sourceCount={analytics?.sourceAttemptCount ?? 0}
                         search={filters.search ?? ""}
-                        onSearch={(value) => changeFilter("search", value)}
-                        onViewAll={() => navigate("history")}
-                        onOpen={(a) => setDetail(a)}
+                        onSearch={searchFilter}
+                        onViewAll={viewAllHistory}
+                        onOpen={openDetail}
                         onAdd={add}
                       />
                     )}
@@ -840,25 +600,15 @@ function WorkspaceShellInner({
         </div>
         <MockDetailDialog
           attempt={detail}
-          onClose={() => setDetail(null)}
-          onEdit={(a) => {
-            setEditing(a);
-            setDetail(null);
-            go("add");
-          }}
-          onCompare={(a) => {
-            setSelected((ids) =>
-              ids.includes(a.id) ? ids : ids.length < 4 ? [...ids, a.id] : ids,
-            );
-            setDetail(null);
-            go("compare");
-          }}
+          onClose={closeDetail}
+          onEdit={editFromDetail}
+          onCompare={compareFromDetail}
           onDelete={(a) => void remove(a)}
           busy={busy}
         />
         <Dialog.Root
-          open={replaceOpen && preview !== null}
-          onOpenChange={setReplaceOpen}
+          open={backup.replaceOpen && backup.preview !== null}
+          onOpenChange={backup.setReplaceOpen}
         >
           <Dialog.Portal>
             <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-ink/40 z-40" />
@@ -870,18 +620,28 @@ function WorkspaceShellInner({
                 Signed in as {userEmail || "the current account"}. This action
                 cannot be undone from the app.
               </Dialog.Description>
-              {preview && (
+              {backup.preview && (
                 <div className="mt-5 space-y-3 text-sm">
                   <p>
                     This permanently deletes{" "}
-                    <strong className="tabular">{preview.willDelete}</strong>{" "}
+                    <strong className="tabular">
+                      {backup.preview.willDelete}
+                    </strong>{" "}
                     existing mocks in this account and imports{" "}
-                    <strong className="tabular">{preview.importable}</strong>{" "}
+                    <strong className="tabular">
+                      {backup.preview.importable}
+                    </strong>{" "}
                     mocks from the backup.
                   </p>
                   <p className="text-xs muted">
-                    Target: {targetAction}.{" "}
-                    {safetyDownloaded
+                    Target:{" "}
+                    {backup.applyTarget && backup.preview.target.available
+                      ? backup.preview.target.incoming == null
+                        ? "clear the current target"
+                        : `set target to ${n(backup.preview.target.incoming)} / 390`
+                      : "keep the current target"}
+                    .{" "}
+                    {backup.safetyDownloaded
                       ? "A safety backup was downloaded."
                       : "Download a safety backup first."}
                   </p>
@@ -896,15 +656,15 @@ function WorkspaceShellInner({
                   variant="outline"
                   size="sm"
                   disabled={busy}
-                  onClick={() => setReplaceOpen(false)}
+                  onClick={() => backup.setReplaceOpen(false)}
                 >
                   Cancel
                 </Button>
                 <Button
                   variant="destructive"
                   size="sm"
-                  disabled={busy || !safetyDownloaded}
-                  onClick={() => void commitImport(true)}
+                  disabled={busy || !backup.safetyDownloaded}
+                  onClick={() => void backup.commitImport(true)}
                 >
                   Replace account data
                 </Button>
@@ -913,21 +673,14 @@ function WorkspaceShellInner({
           </Dialog.Portal>
         </Dialog.Root>
         <AiChatDrawer
-          open={chatOpen}
-          onOpenChange={(open) => {
-            if (!open) chatAbort.current?.abort();
-            setChatOpen(open);
-          }}
-          messages={chatMessages}
-          streaming={chatStreaming}
-          error={chatError}
-          onSend={(text) => void sendChat(text)}
-          onStop={() => chatAbort.current?.abort()}
-          onClear={() => {
-            chatAbort.current?.abort();
-            setChatMessages([]);
-            setChatError("");
-          }}
+          open={ai.chat.open}
+          onOpenChange={ai.chat.setOpen}
+          messages={ai.chat.messages}
+          streaming={ai.chat.streaming}
+          error={ai.chat.error}
+          onSend={(text) => void ai.chat.send(text)}
+          onStop={ai.chat.stop}
+          onClear={ai.chat.clear}
         />
       </div>
     </MotionConfig>

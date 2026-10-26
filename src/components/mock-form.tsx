@@ -55,10 +55,14 @@ function fullMockSectionHeading(subjectId: SubjectId) {
 }
 export function MockForm({
   attempt,
+  knownAttempts,
   onClose,
   onSaved,
 }: {
   attempt?: Attempt;
+  /** Already-loaded attempts from the shell; saves an extra fetch when the
+   * duplicate check runs. Empty/undefined falls back to fetching. */
+  knownAttempts?: Attempt[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -165,7 +169,12 @@ export function MockForm({
         completedAt: date ? completionTimestamp(date) : "",
       });
       if (!attempt && !duplicateReviewed) {
-        const existing = await api<Attempt[]>("/api/mock-attempts");
+        // Reuse the workspace's loaded attempts when available; fetch only
+        // if the shell hasn't delivered them yet (e.g. an immediate save).
+        const existing =
+          knownAttempts && knownAttempts.length
+            ? knownAttempts
+            : await api<Attempt[]>("/api/mock-attempts");
         const duplicate = existing.some(
           (a) =>
             a.name.toLowerCase() === input.name.toLowerCase() &&

@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState, type ReactNode } from "react";
+import { useId, memo, useState, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -46,20 +46,10 @@ import {
   type WhereYouStandRow,
   targetPercentage,
 } from "@/lib/analytics";
-const dateLabel = (date: string) =>
-  new Date(date).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    timeZone: "Asia/Kolkata",
-  });
-const typeLabel = (type: string) =>
-  type === "full"
-    ? "Full mock"
-    : type === "sectional"
-      ? "Sectional"
-      : type === "subject"
-        ? "Subject"
-        : "Mock";
+import { mockTypeLabel, shortDate } from "@/lib/format";
+
+const dateLabel = shortDate;
+const typeLabel = mockTypeLabel;
 const scopeCopy: Record<
   DashboardScope,
   { trend: string; trendDescription: string }
@@ -860,7 +850,12 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
     </div>
   );
 }
-export function PerformanceOverview({
+/**
+ * Memoized at the top level: the shell re-renders on every chat-stream
+ * token and filter keystroke, but analytics/target/coach are stable between
+ * data refreshes, so the four charts and their derived rows are skipped.
+ */
+export const PerformanceOverview = memo(function PerformanceOverview({
   analytics,
   target,
   coach,
@@ -958,4 +953,4 @@ export function PerformanceOverview({
       )}
     </>
   );
-}
+});

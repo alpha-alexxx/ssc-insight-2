@@ -17,10 +17,10 @@ import {
 const average = (values: number[]) =>
   values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
-const istDateKey = (date: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
-    new Date(date),
-  );
+// One formatter per process, not one per call — istDateKey runs for every
+// performance point on every analytics request.
+const istDayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" });
+const istDateKey = (date: string) => istDayKey.format(new Date(date));
 export function filterAttempts(attempts: AnalyticsAttempt[], f: Filters) {
   return attempts.filter(
     (a) =>
@@ -480,7 +480,9 @@ function targetSnapshots(points: PerformancePoint[]): TargetSnapshot[] {
   const groups = new Map<string, PerformancePoint[]>();
   for (const point of points) {
     const key = istDateKey(point.date);
-    groups.set(key, [...(groups.get(key) ?? []), point]);
+    const group = groups.get(key);
+    if (group) group.push(point);
+    else groups.set(key, [point]);
   }
   return [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

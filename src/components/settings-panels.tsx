@@ -7,6 +7,7 @@ import {
   type ImportMode,
 } from "@/lib/backup";
 import { FULL_MOCK_MAX_SCORE, formatNumber as n } from "@/lib/domain";
+import { longDate } from "@/lib/format";
 
 /**
  * Settings view — target, backup & transfer, about (Phase 6).
@@ -14,14 +15,6 @@ import { FULL_MOCK_MAX_SCORE, formatNumber as n } from "@/lib/domain";
  * preview box was re-composed with the token system (radius-control,
  * consistent warning surfaces, check-row labels).
  */
-
-const longDate = (date: string) =>
-  new Date(date).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Kolkata",
-  });
 
 export type SettingsPanelsProps = {
   target: number | null;

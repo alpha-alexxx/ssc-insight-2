@@ -1,8 +1,10 @@
 "use client";
+import { memo } from "react";
 import { PlainIcon, DuotoneTile } from "./icon";
 import { Button } from "./ui/button";
 import { Panel } from "./dashboard-panels";
 import { totals, formatNumber as n, formatTime, type Attempt } from "@/lib/domain";
+import { mockTypeLabel, shortDate } from "@/lib/format";
 
 /**
  * Mock history / recent mocks panel (Phase 6 + 11).
@@ -11,14 +13,6 @@ import { totals, formatNumber as n, formatTime, type Attempt } from "@/lib/domai
  * duotone-tile empty state consistent with the rest of the app.
  */
 
-const dateLabel = (date: string) =>
-  new Date(date).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    timeZone: "Asia/Kolkata",
-  });
-const typeName = (type: string) =>
-  type === "full" ? "Full mock" : type === "sectional" ? "Sectional" : "Subject";
 /**
  * Accuracy reads best when the tone carries meaning, not decoration:
  * ≥70% positive, 50–70% neutral, below 50% warning. The value itself is
@@ -31,7 +25,8 @@ function accuracyTone(accuracy: number | null) {
   return "bg-warning-soft text-warning";
 }
 
-export function HistoryPanel({
+/** Memoized: the shell re-renders per chat token/keystroke; rows don't need to. */
+export const HistoryPanel = memo(function HistoryPanel({
   mode,
   attempts,
   totalCount,
@@ -138,11 +133,11 @@ export function HistoryPanel({
                         </span>
                         <span className="block text-[11px] muted mt-1">
                           {a.platform} <span className="mx-1">·</span>{" "}
-                          {typeName(a.type)}
+                          {mockTypeLabel(a.type)}
                         </span>
                       </button>
                     </td>
-                    <td className="text-xs muted">{dateLabel(a.completedAt)}</td>
+                    <td className="text-xs muted">{shortDate(a.completedAt)}</td>
                     <td className="font-medium text-[13px]">
                       {n(t.score)}
                       <span className="muted font-normal text-xs">
@@ -196,4 +191,4 @@ export function HistoryPanel({
       </div>
     </Panel>
   );
-}
+});

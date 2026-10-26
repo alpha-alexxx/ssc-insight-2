@@ -10,6 +10,7 @@ import {
   formatTime,
   type Attempt,
 } from "@/lib/domain";
+import { longDate, mockTypeLabel } from "@/lib/format";
 
 /**
  * Result detail dialog + delete confirmation (Phase 6 + 11).
@@ -18,15 +19,7 @@ import {
  * explicit activation. Dialog enter/exit run on CSS data-state animations.
  */
 
-const longDate = (date: string) =>
-  new Date(date).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Kolkata",
-  });
-const typeName = (type: string) =>
-  type === "full" ? "Full mock" : type === "sectional" ? "Sectional" : "Subject";
+const typeName = mockTypeLabel;
 
 export function MockDetailDialog({
   attempt,

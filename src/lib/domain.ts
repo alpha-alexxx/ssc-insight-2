@@ -182,6 +182,21 @@ export type Filters = {
   to?: string;
   search?: string;
 };
+/**
+ * Validation for the persisted-record filter params, shared by the analytics
+ * API (strict parse → 400) and the workspace URL mirror (lenient parse →
+ * malformed params fall back to defaults). Keep in sync with filterAttempts().
+ */
+export const filtersSchema = z.object({
+  type: z.enum(["all", "full", "subject", "sectional"]).optional(),
+  subject: z
+    .enum(["all", "quant", "reasoning", "english", "ga", "computer"])
+    .optional(),
+  platform: z.string().max(80).optional(),
+  search: z.string().max(150).optional(),
+  from: z.iso.date().or(z.literal("")).optional(),
+  to: z.iso.date().or(z.literal("")).optional(),
+});
 export function subjectStats(s: SubjectResult) {
   const attempted = s.correct + s.incorrect;
   const score = s.scoreOverride ?? s.correct * 3 - s.incorrect;

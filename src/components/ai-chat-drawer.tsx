@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "radix-ui";
 import { Send, Square, Trash2, X } from "lucide-react";
 import { Button } from "./ui/button";
@@ -32,14 +32,24 @@ export function AiChatDrawer({
 }) {
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
-  const lastUser = [...messages]
-    .reverse()
-    .find((message) => message.role === "user");
+  const logRef = useRef<HTMLDivElement>(null);
+  const lastUser = useMemo(
+    () => messages.findLast((message) => message.role === "user"),
+    [messages],
+  );
 
+  // Opening the drawer always lands on the latest message; while streaming,
+  // follow the new tokens only if the reader hasn't scrolled up to reread.
   useEffect(() => {
-    if (!open) return;
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [open, messages, streaming]);
+    if (open) endRef.current?.scrollIntoView({ block: "end" });
+  }, [open]);
+  useEffect(() => {
+    const log = logRef.current;
+    if (!log) return;
+    const nearBottom =
+      log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    if (nearBottom) endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, streaming]);
 
   function submit(text: string) {
     const value = text.trim();
@@ -72,6 +82,7 @@ export function AiChatDrawer({
           </header>
 
           <div
+            ref={logRef}
             role="log"
             aria-live="polite"
             aria-busy={streaming}

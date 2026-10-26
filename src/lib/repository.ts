@@ -1,7 +1,6 @@
 import { database } from "./db";
-import { z } from "zod";
 import { createHash, randomUUID } from "node:crypto";
-import { type AttemptInput, type Filters } from "./domain";
+import { type AttemptInput, type Filters, filtersSchema } from "./domain";
 import {
   attemptData,
   attemptInclude,
@@ -324,16 +323,7 @@ export async function importBackup(
 }
 
 export function filtersFrom(url: string): Filters {
-  return z
-    .object({
-      type: z.enum(["all", "full", "subject", "sectional"]).optional(),
-      subject: z
-        .enum(["all", "quant", "reasoning", "english", "ga", "computer"])
-        .optional(),
-      platform: z.string().max(80).optional(),
-      search: z.string().max(150).optional(),
-      from: z.iso.date().or(z.literal("")).optional(),
-      to: z.iso.date().or(z.literal("")).optional(),
-    })
-    .parse(Object.fromEntries(new URL(url).searchParams.entries()));
+  return filtersSchema.parse(
+    Object.fromEntries(new URL(url).searchParams.entries()),
+  );
 }

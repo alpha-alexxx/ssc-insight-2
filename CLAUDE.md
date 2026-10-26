@@ -56,7 +56,7 @@ ALLOW_DESTRUCTIVE_REPLACE=1 TEST_SESSION_COOKIE=... TEST_OTHER_SESSION_COOKIE=..
 - App Router; server components by default. Client state lives behind `"use client"` boundaries.
 - Cache Components are not enabled. Personalized APIs use `Cache-Control: private, no-store`; do not add shared caching or `revalidate` behavior to account data.
 - Route handlers authenticate independently; page middleware (`src/proxy.ts`) covers only pages.
-- The client JSON helper is `api()` in `src/components/mock-form.tsx`; it sets `cache: "no-store"` and unwraps `{ data }`.
+- The client JSON helper is `api()` in `src/lib/api-client.ts`; it sets `cache: "no-store"`, unwraps `{ data }`, and dispatches session events on 401/AUTH_UNAVAILABLE.
 
 ## Request and ownership architecture
 
@@ -151,13 +151,21 @@ AI is optional, read-only, and server-only. It must fail closed without breaking
 
 ## UI and charts
 
-- `src/components/dashboard.tsx` is the client orchestrator: dashboard/history/compare/add/settings views, filters, dialogs, settings, and backup-transfer UI.
+- `src/components/workspace-shell.tsx` is the client orchestrator (mounted by the `(workspace)` layout, view derived from pathname). Its state lives in three dedicated hooks — keep responsibilities there, not in the shell:
+  - `use-workspace-data.ts` — filters/scope (with the URL mirror), attempts, analytics, target, `refresh()`.
+  - `use-ai-workspace.ts` — AI status, coach insight, chat drawer (in-memory only, abort on close/unmount).
+  - `use-backup-import.ts` — preview/fingerprint/confirm import flow; `fileRef` stays owned by the shell.
+- Filters and the dashboard scope are mirrored to the address bar via `history.replaceState` (parse/serialize in `src/lib/filters-url.ts`): shared links restore the view on load, but Back changes routes, not filters — deliberate, no RSC round-trips while typing. The strict filter schema (`filtersSchema` in `lib/domain.ts`) is shared by the analytics API and the lenient URL parser.
+- `refresh()` fetches filtered attempts, analytics, and the unfiltered list in parallel (the two attempt fetches share one request while no filter is set), aborts superseded requests, and does NOT refetch settings or AI status — those load once and reload on explicit actions only.
+- `PerformanceOverview`, `HistoryPanel`, and `CompareView` are `memo`-wrapped; the shell stabilizes their props (useCallback handlers, `useMemo` derived lists, a `useMemo`'d coach node) so chat-stream tokens and filter keystrokes do not re-render the charts.
 - `src/components/performance-overview.tsx` renders the dashboard cards; `src/components/ui/chart.tsx` is the local shadcn-style Recharts wrapper; `src/components/dashboard-panels.tsx` provides `Panel`/`EmptyChart`.
 - `src/app/globals.css` + `src/lib/chart-theme.ts` define paper/ink/accent and semantic chart tokens. Preserve them.
 - Design rules: warm paper surfaces, square corners, thin rules, serif headings, no shadows, disabled chart animation, reduced-motion support, visible legends/labels, and accessible data tables (`View data`). The reference-led outcome cards are the scoped exception: they use soft rounding and subject icons without changing surrounding dashboard geometry.
 - “Make every attempt count” renders `analytics.radial` as responsive outcome cards across every scope. Cards show coverage, a score-centered answer-distribution ring, three outcome counts/shares and proportion bars, marks/max, accuracy, and genuine reported-percentile availability. Parent full/sectional percentiles are never copied to subject slices or derived sections; the ring center always shows score percentage (marks ÷ maximum).
 - Charts use a single percentage axis; raw marks stay in tooltips/tables. Do not introduce dual-axis charts.
-- Dates are displayed in Asia/Kolkata.
+- Dates are displayed in Asia/Kolkata via the memoized formatters in `src/lib/format.ts` (`shortDate`, `longDate`, `mockTypeLabel`) — do not construct new `Intl.DateTimeFormat` instances in components.
+- `src/app/not-found.tsx` is the styled 404 for unknown pages; unknown `/api/*` paths answer with the JSON envelope via the catch-all route handler.
+- **Client-state decision (2026-10 overhaul):** no Zustand and no TanStack Query. All shared client state is owned by the shell-scoped hooks above (the shell never unmounts inside the workspace, so there is no cross-component sync problem for a store to solve), server data is fetched with plain `api()` + SWR headers, and the only cross-branch context is `ToastProvider`. Revisit only if a feature introduces genuinely global client state or polling/infinite-scroll server state. Cache policies: `docs/caching.md`.
 
 ## Testing
 

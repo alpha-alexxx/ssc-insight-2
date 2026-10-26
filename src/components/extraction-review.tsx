@@ -34,6 +34,13 @@ function NullableDuration({
       ? ""
       : `${Math.floor(value / 3600)}:${String(Math.floor(value / 60) % 60).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
   const [text, setText] = useState(formatted);
+  const [lastValue, setLastValue] = useState(value);
+  // External value changes re-sync the text during render, so the parent no
+  // longer needs a remount key and typing never loses focus.
+  if (value !== lastValue) {
+    setLastValue(value);
+    setText(formatted);
+  }
   const [error, setError] = useState("");
   const errorId = `${subject.toLowerCase().replaceAll(" ", "-")}-time-error`;
 
@@ -350,7 +357,6 @@ export function ExtractionReview({
                     </label>
                   ))}
                   <NullableDuration
-                    key={`${subject.subjectId}-${subject.timeSeconds ?? "missing"}`}
                     value={subject.timeSeconds}
                     subject={SUBJECTS[subject.subjectId].short}
                     onChange={(timeSeconds) => updateSubject(index, { timeSeconds })}

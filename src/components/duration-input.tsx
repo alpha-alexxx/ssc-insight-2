@@ -2,6 +2,14 @@
 import { useState } from "react";
 import { durationSeconds } from "@/lib/mock-entry";
 
+function formatParts(value: number | null | undefined): string[] {
+  return value == null
+    ? ["", "", ""]
+    : [Math.floor(value / 3600), Math.floor(value / 60) % 60, value % 60].map(
+        (n) => String(n).padStart(2, "0"),
+      );
+}
+
 export function DurationInput({
   subjectName,
   value,
@@ -11,13 +19,14 @@ export function DurationInput({
   value: number | null | undefined;
   onChange: (seconds: number) => void;
 }) {
-  const [parts, setParts] = useState(() =>
-    value == null
-      ? ["", "", ""]
-      : [Math.floor(value / 3600), Math.floor(value / 60) % 60, value % 60].map(
-          (n) => String(n).padStart(2, "0"),
-        ),
-  );
+  const [parts, setParts] = useState(() => formatParts(value));
+  const [lastValue, setLastValue] = useState(value);
+  // External value changes (e.g. an AI-extracted draft) re-sync the fields
+  // during render — no remount key needed, so focus survives typing.
+  if (value !== lastValue) {
+    setLastValue(value);
+    setParts(formatParts(value));
+  }
   function change(index: number, value: string) {
     const next = parts.map((part, i) => (i === index ? value : part));
     setParts(next);
