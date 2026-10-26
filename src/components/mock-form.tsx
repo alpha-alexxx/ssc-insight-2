@@ -1,15 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
-import {
-  ArrowLeft,
-  ClipboardPaste,
-  Save,
-  AlertCircle,
-  Check,
-  RefreshCw,
-  Sparkles,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "./ui/button";
+import { PlainIcon } from "./icon";
 import {
   attemptSchema,
   MAIN_SUBJECT_IDS,
@@ -36,6 +28,7 @@ import {
 } from "@/lib/mock-entry";
 import { DurationInput } from "./duration-input";
 import { parseReport } from "@/lib/report-parser";
+import { api } from "@/lib/api-client";
 import type { AiStatus, ExtractResponse } from "@/lib/ai/client-types";
 import {
   extractionToAttempt,
@@ -43,21 +36,6 @@ import {
   type ExtractionDraft,
 } from "@/lib/ai/extraction";
 import { ExtractionReview } from "./extraction-review";
-export async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    cache: "no-store",
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  const result = await response.json();
-  if (response.status === 401)
-    window.dispatchEvent(new Event("ssc:session-ended"));
-  if (result.error?.code === "AUTH_UNAVAILABLE")
-    window.dispatchEvent(new Event("ssc:auth-unavailable"));
-  if (!response.ok)
-    throw new Error(result.error?.message ?? "Request failed. Please retry.");
-  return result.data;
-}
 const blankSubject = (id: SubjectId): SubjectResult => ({
   subjectId: id,
   questions: SUBJECTS[id].questions,
@@ -117,6 +95,7 @@ export function MockForm({
         values.notes,
     ),
   );
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const [aiStatusChecked, setAiStatusChecked] = useState(false);
   const [aiDraft, setAiDraft] = useState<ExtractionDraft | null>(null);
@@ -206,7 +185,13 @@ export function MockForm({
       });
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save mock");
+      const message = e instanceof Error ? e.message : "Could not save mock";
+      setError(message);
+      // Surface the failure: the error lives above the form so it can never
+      // hide below the fold next to a long subject list.
+      requestAnimationFrame(() =>
+        errorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      );
     } finally {
       setBusy(false);
     }
@@ -324,10 +309,10 @@ export function MockForm({
   return (
     <div className="mx-auto max-w-6xl">
       <button
-        className="mb-4 flex items-center gap-2 text-sm muted hover:text-accent"
+        className="mb-4 flex items-center gap-2 text-sm muted hover:text-accent transition-colors"
         onClick={onClose}
       >
-        <ArrowLeft size={16} /> Back to dashboard
+        <PlainIcon name="arrowLeft" size={16} /> Back to dashboard
       </button>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-rule pb-4">
         <div>
@@ -336,29 +321,31 @@ export function MockForm({
             Record the result now; refine the details before saving.
           </p>
         </div>
-        <div className="inline-flex border border-rule bg-paper p-1" role="group" aria-label="Entry method">
-          <Button
-            size="sm"
-            variant="ghost"
-            className={mode === "form" ? "bg-ink text-paper hover:bg-ink hover:text-paper" : ""}
+        <div
+          role="group"
+          aria-label="Entry method"
+          className="segment-group"
+        >
+          <button
+            type="button"
             aria-pressed={mode === "form"}
+            className="segment"
             onClick={() => setMode("form")}
           >
             Manual
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className={mode === "paste" ? "bg-ink text-paper hover:bg-ink hover:text-paper" : ""}
+          </button>
+          <button
+            type="button"
             aria-pressed={mode === "paste"}
+            className="segment inline-flex items-center gap-1.5"
             onClick={() => setMode("paste")}
           >
-            <ClipboardPaste size={14} /> Paste report
-          </Button>
+            <PlainIcon name="paste" size={14} /> Paste report
+          </button>
         </div>
       </div>
       {mode === "paste" ? (
-        <section className="panel p-4 sm:p-5">
+        <section className="panel p-4 sm:p-6">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="panel-title">
@@ -395,7 +382,7 @@ export function MockForm({
               <label>
                 Result report
                 <textarea
-                  rows={10}
+                  rows={12}
                   placeholder="Your Score… Sectional Summary…"
                   value={paste}
                   disabled={aiBusy}
@@ -418,7 +405,7 @@ export function MockForm({
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <Button disabled={!paste.trim() || aiBusy} onClick={importPaste}>
-                  Import with standard parser <Check size={15} />
+                  Import with standard parser <PlainIcon name="check" size={15} />
                 </Button>
                 <Button
                   variant="outline"
@@ -438,9 +425,9 @@ export function MockForm({
                   onClick={() => void importWithAi()}
                 >
                   {aiBusy ? (
-                    <RefreshCw size={15} className="animate-spin" />
+                    <PlainIcon name="refresh" size={15} className="animate-spin" />
                   ) : (
-                    <Sparkles size={15} />
+                    <PlainIcon name="sparkles" size={15} />
                   )}
                   {aiBusy ? "Arranging…" : "Arrange with AI"}
                 </Button>
@@ -469,7 +456,7 @@ export function MockForm({
               {aiError && (
                 <p
                   role="alert"
-                  className="mt-4 border border-warning bg-warning-soft px-4 py-3 text-xs text-warning"
+                  className="mt-4 border border-warning bg-warning-soft rounded-control px-4 py-3 text-xs text-warning"
                 >
                   {aiError}
                 </p>
@@ -478,11 +465,11 @@ export function MockForm({
           )}
         </section>
       ) : (
-        <form onSubmit={save} className="space-y-4">
+        <form onSubmit={save} className="space-y-6">
           {warnings.length > 0 && (
             <div
               role="status"
-              className="border border-warning bg-warning-soft p-3 text-sm text-warning"
+              className="rounded-control bg-warning-soft p-4 text-warning text-sm"
             >
               <strong>Review your report</strong>
               {warnings.map((w, i) => (
@@ -492,11 +479,27 @@ export function MockForm({
               ))}
             </div>
           )}
-          <section className="panel p-4 sm:p-5">
-            <h2 className="panel-title mb-5">Mock details</h2>
+          {error && (
+            <p
+              ref={errorRef}
+              role="alert"
+              className="flex gap-2 items-start bg-danger-soft text-danger rounded-control p-4 text-sm whitespace-pre-wrap break-words"
+            >
+              <PlainIcon name="danger" size={18} className="shrink-0 mt-0.5" />
+              {error}
+            </p>
+          )}
+          <section className="panel p-4 sm:p-6">
+            <h2 className="panel-title mb-1">Mock details</h2>
+            <p className="text-xs muted mb-5">
+              Fields marked <span className="req" aria-hidden="true">*</span> are
+              required.
+            </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label>
-                Mock name
+                <span>
+                  Mock name <span className="req" aria-hidden="true">*</span>
+                </span>
                 <input
                   required
                   maxLength={150}
@@ -506,7 +509,9 @@ export function MockForm({
                 />
               </label>
               <label>
-                Platform
+                <span>
+                  Platform <span className="req" aria-hidden="true">*</span>
+                </span>
                 <select
                   required
                   value={platformChoice}
@@ -543,7 +548,9 @@ export function MockForm({
                 </label>
               )}
               <label>
-                Completed on
+                <span>
+                  Completed on <span className="req" aria-hidden="true">*</span>
+                </span>
                 <input
                   required
                   type="date"
@@ -633,100 +640,100 @@ export function MockForm({
               </div>
             )}
           </section>
-          <section className="panel p-4 sm:p-5">
-            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <section className="panel p-4 sm:p-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-6">
               <h2 className="panel-title">Subject results</h2>
-              <p className="text-xs muted">+3 correct · −1 incorrect</p>
+              <p className="text-xs muted">
+                +3 correct · −1 incorrect · 0 unattempted
+              </p>
             </div>
-            <div className="hidden grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(4.75rem,.65fr))_minmax(12rem,1.2fr)] gap-3 border-y border-rule-soft bg-canvas px-3 py-2 text-[10px] uppercase tracking-wide text-muted lg:grid">
-              <span>Subject</span>
-              <span>Questions</span>
-              <span>Correct</span>
-              <span>Incorrect</span>
-              <span>Score</span>
-              <span>Time</span>
-            </div>
-            <div className="divide-y divide-rule-soft border-b border-rule-soft">
+            <div className="space-y-7">
               {values.subjects.map((s, i) => {
                 const sectionHeading =
                   values.type === "full"
                     ? fullMockSectionHeading(s.subjectId)
                     : null;
                 return (
-                  <div key={s.subjectId} className="py-3">
-                    {sectionHeading && (
-                      <p className="mb-2 text-[10px] uppercase tracking-wide text-muted">
-                        {sectionHeading}
-                      </p>
-                    )}
-                    <div className="grid grid-cols-2 items-end gap-3 lg:grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(4.75rem,.65fr))_minmax(12rem,1.2fr)]">
-                      <div className="col-span-2 self-center lg:col-span-1">
-                        <h3 className="text-sm font-medium">
-                          {SUBJECTS[s.subjectId].name}
-                        </h3>
-                        <p className="mt-1 text-[11px] tabular muted">
-                          {s.correct + s.incorrect} attempted · {s.questions - s.correct - s.incorrect} skipped
-                        </p>
-                      </div>
-                      <label>
-                        <span className="lg:sr-only">Questions</span>
-                        <input
-                          aria-label={`${SUBJECTS[s.subjectId].short} questions`}
-                          type="number"
-                          min={1}
-                          max={500}
-                          required
-                          readOnly={values.type === "full"}
-                          value={s.questions}
-                          onChange={(e) =>
-                            updateSubject(i, { questions: Number(e.target.value) })
-                          }
-                        />
-                      </label>
-                      <label>
-                        <span className="lg:sr-only">Correct</span>
-                        <input
-                          aria-label={`${SUBJECTS[s.subjectId].short} correct`}
-                          type="number"
-                          min={0}
-                          max={s.questions}
-                          required
-                          value={s.correct}
-                          onChange={(e) =>
-                            updateSubject(i, { correct: Number(e.target.value) })
-                          }
-                        />
-                      </label>
-                      <label>
-                        <span className="lg:sr-only">Incorrect</span>
-                        <input
-                          aria-label={`${SUBJECTS[s.subjectId].short} incorrect`}
-                          type="number"
-                          min={0}
-                          max={s.questions}
-                          required
-                          value={s.incorrect}
-                          onChange={(e) =>
-                            updateSubject(i, { incorrect: Number(e.target.value) })
-                          }
-                        />
-                      </label>
-                      <div className="self-end">
-                        <span className="mb-[7px] block text-xs font-medium text-muted lg:sr-only">Score</span>
-                        <output className="flex h-10 items-center border border-rule-soft bg-canvas px-3 text-sm font-medium tabular">
-                          {formatNumber(s.correct * 3 - s.incorrect)}
-                        </output>
-                      </div>
-                      <DurationInput
-                        key={`${s.subjectId}-${importVersion}`}
-                        subjectName={SUBJECTS[s.subjectId].short}
-                        value={s.timeSeconds}
-                        onChange={(seconds) =>
-                          updateSubject(i, { timeSeconds: seconds })
+                <div key={s.subjectId}>
+                  {sectionHeading && (
+                    <p className="mb-4 border-b border-rule-soft pb-2 text-sm font-medium">
+                      {sectionHeading}
+                    </p>
+                  )}
+                  <h3 className="font-medium text-sm mb-3">
+                    {SUBJECTS[s.subjectId].name}
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <label>
+                      Questions
+                      <input
+                        type="number"
+                        className="no-spin"
+                        min={1}
+                        max={500}
+                        required
+                        readOnly={values.type === "full"}
+                        value={s.questions}
+                        onChange={(e) =>
+                          updateSubject(i, {
+                            questions: Number(e.target.value),
+                          })
                         }
                       />
-                    </div>
+                    </label>
+                    <label>
+                      Correct
+                      <input
+                        type="number"
+                        className="no-spin"
+                        min={0}
+                        max={s.questions}
+                        required
+                        value={s.correct}
+                        onChange={(e) =>
+                          updateSubject(i, { correct: Number(e.target.value) })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Incorrect
+                      <input
+                        type="number"
+                        className="no-spin"
+                        min={0}
+                        max={s.questions}
+                        required
+                        value={s.incorrect}
+                        onChange={(e) =>
+                          updateSubject(i, {
+                            incorrect: Number(e.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Score
+                      <input
+                        type="number"
+                        readOnly
+                        value={s.correct * 3 - s.incorrect}
+                      />
+                    </label>
+                    <DurationInput
+                      key={`${s.subjectId}-${importVersion}`}
+                      subjectName={SUBJECTS[s.subjectId].short}
+                      value={s.timeSeconds}
+                      onChange={(seconds) =>
+                        updateSubject(i, { timeSeconds: seconds })
+                      }
+                    />
                   </div>
+                  <p className="text-xs muted mt-3">
+                    {s.correct + s.incorrect} attempted ·{" "}
+                    {s.questions - s.correct - s.incorrect} unattempted ·{" "}
+                    {formatNumber(s.correct * 3 - s.incorrect)} calculated marks
+                  </p>
+                </div>
                 );
               })}
             </div>
@@ -736,58 +743,62 @@ export function MockForm({
             open={additionalOpen}
             onToggle={(event) => setAdditionalOpen(event.currentTarget.open)}
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-5">
-              <span className="panel-title">Additional results</span>
-              <span className="text-xs muted group-open:hidden">Optional · expand</span>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-6 sm:py-5">
+              <span className="panel-title">
+                Additional results{" "}
+                <span className="font-normal muted text-base">· optional</span>
+              </span>
+              <span className="text-xs muted group-open:hidden">Expand</span>
               <span className="hidden text-xs muted group-open:inline">Collapse</span>
             </summary>
-            <div className="border-t border-rule-soft p-4 sm:p-5">
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-              {(["rank", "participants", "percentile"] as const).map((key) => (
-                <label key={key}>
-                  {
+            <div className="border-t border-rule-soft p-4 sm:p-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {(["rank", "participants", "percentile"] as const).map((key) => (
+                  <label key={key}>
                     {
-                      rank: "Rank",
-                      participants: "Participants",
-                      percentile: "Percentile (%)",
-                    }[key]
-                  }
-                  <input
-                    type="number"
-                    step={key === "percentile" ? "0.01" : "1"}
-                    value={values[key] ?? ""}
-                    onChange={(e) =>
-                      set(
-                        key,
-                        e.target.value === "" ? null : Number(e.target.value),
-                      )
+                      {
+                        rank: "Rank",
+                        participants: "Participants",
+                        percentile: "Percentile (%)",
+                      }[key]
                     }
+                    <input
+                      type="number"
+                      step={key === "percentile" ? "0.01" : "1"}
+                      value={values[key] ?? ""}
+                      onChange={(e) =>
+                        set(
+                          key,
+                          e.target.value === "" ? null : Number(e.target.value),
+                        )
+                      }
+                    />
+                  </label>
+                ))}
+                <label>
+                  Overall time (hh:mm:ss)
+                  <input
+                    readOnly
+                    value={formatTime(computedValues.overallTimeSeconds).padStart(
+                      8,
+                      "0",
+                    )}
                   />
                 </label>
-              ))}
-            </div>
-            <label className="mt-4">
-              Notes
-              <textarea
-                rows={3}
-                maxLength={5000}
-                placeholder="What went well? What needs another look?"
-                value={values.notes}
-                onChange={(e) => set("notes", e.target.value)}
-              />
-            </label>
+              </div>
+              <label className="mt-5">
+                Notes
+                <textarea
+                  rows={3}
+                  maxLength={5000}
+                  placeholder="What went well? What needs another look?"
+                  value={values.notes}
+                  onChange={(e) => set("notes", e.target.value)}
+                />
+              </label>
             </div>
           </details>
-          {error && (
-            <p
-              role="alert"
-              className="flex gap-2 border border-danger bg-danger-soft p-3 text-sm text-danger whitespace-pre-wrap break-words"
-            >
-              <AlertCircle size={18} className="shrink-0" />
-              {error}
-            </p>
-          )}
-          <div className="panel sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-4 border-ink bg-paper/95 p-4 backdrop-blur-sm">
+          <div className="panel sticky bottom-0 z-20 shadow-pop flex flex-wrap items-center justify-between gap-5 p-4 sm:p-5">
             <div className="tabular" aria-live="polite" aria-atomic="true">
               <strong className="text-xl">
                 {formatNumber(stats.score)}{" "}
@@ -795,7 +806,7 @@ export function MockForm({
                   / {stats.maxScore}
                 </span>
               </strong>
-              <p className="mt-1 text-xs muted">
+              <p className="text-xs muted mt-1">
                 {stats.attempted} attempted · {formatNumber(stats.accuracy, 2)}
                 {stats.accuracy == null ? "" : "%"} accuracy · {formatTime(computedValues.overallTimeSeconds)} total
               </p>
@@ -812,7 +823,7 @@ export function MockForm({
                 Cancel
               </Button>
               <Button type="submit" disabled={busy}>
-                <Save size={16} />
+                <PlainIcon name="save" size={16} />
                 {busy
                   ? "Saving…"
                   : duplicateReviewed

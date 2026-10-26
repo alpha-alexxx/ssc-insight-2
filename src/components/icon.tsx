@@ -49,6 +49,7 @@ import {
   Save,
   Search,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   X,
   type LucideIcon,
@@ -98,6 +99,7 @@ export type IconName =
   | "refresh"
   | "more"
   | "paste"
+  | "sparkles"
   // data & files
   | "download"
   | "upload"
@@ -173,6 +175,7 @@ const ICONS: Record<IconName, IconEntry> = {
   refresh: { lucide: RefreshCw },
   more: { lucide: Ellipsis },
   paste: { lucide: ClipboardPaste },
+  sparkles: { lucide: Sparkles },
   download: { lucide: ArrowDownToLine },
   fileCheck: { lucide: FileCheck2 },
   report: { lucide: ChartNoAxesColumnIncreasing },

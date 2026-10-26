@@ -1,5 +1,5 @@
 "use client";
-import { type ReactNode, useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -16,12 +16,6 @@ import {
   YAxis,
 } from "recharts";
 import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Minus,
-  TrendingUp,
-} from "lucide-react";
-import {
   ChartContainer,
   ChartLegend,
   ChartLegendContent,
@@ -29,6 +23,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "./ui/chart";
+import { PlainIcon } from "./icon";
 import {
   sectionColors,
   subjectColors,
@@ -437,7 +432,7 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
       )}
       {missing.length > 0 && (
         <p className="mt-3 text-[10px] muted">
-          No data yet: {missing.map((row) => row.label).join(", ")}.
+          No data yet for {missing.map((row) => row.label).join(", ")}.
         </p>
       )}
       <ViewData
@@ -534,20 +529,20 @@ function TargetPanel({
                 {gap > 0 ? "+" : ""}
                 {n(gap)} pp
                 {gap >= 0 ? (
-                  <ArrowUpRight size={14} aria-hidden />
+                  <PlainIcon name="arrowUpRight" size={14} />
                 ) : (
-                  <ArrowDownRight size={14} aria-hidden />
+                  <PlainIcon name="arrowDownRight" size={14} />
                 )}
               </>
             )}
           </p>
           <p className="text-[10px] muted mt-1 flex items-center gap-1">
             {direction === "up" ? (
-              <TrendingUp size={12} aria-hidden />
+              <PlainIcon name="trend" size={12} />
             ) : direction === "down" ? (
-              <ArrowDownRight size={12} aria-hidden />
+              <PlainIcon name="arrowDownRight" size={12} />
             ) : (
-              <Minus size={12} aria-hidden />
+              <PlainIcon name="minus" size={12} />
             )}
             {change == null
               ? "Need two dated snapshots"
@@ -704,7 +699,7 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
           </div>
         </div>
         <select
-          className="!w-auto !py-1.5 !px-2 text-xs"
+          className="w-auto py-1.5 px-2 text-xs"
           aria-label="Subject deep dive"
           value={current.id}
           onChange={(event) => setRequested(event.target.value as SubjectId)}

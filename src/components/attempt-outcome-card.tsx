@@ -1,13 +1,4 @@
-import {
-  Brain,
-  Calculator,
-  ChartNoAxesColumnIncreasing,
-  FileCheck2,
-  Globe2,
-  Layers3,
-  Monitor,
-  BookOpen,
-} from "lucide-react";
+import { PlainIcon, type IconName } from "./icon";
 import type { AnswerStack } from "@/lib/analytics";
 import { type DashboardScope, formatNumber as n } from "@/lib/domain";
 import styles from "./attempt-outcome-card.module.css";
@@ -22,12 +13,12 @@ const outcomes = [
   },
 ] as const;
 
-const subjectIcons = {
-  reasoning: Brain,
-  quant: Calculator,
-  english: BookOpen,
-  ga: Globe2,
-  computer: Monitor,
+const subjectIcons: Record<string, IconName> = {
+  reasoning: "reasoning",
+  quant: "quant",
+  english: "english",
+  ga: "ga",
+  computer: "computer",
 };
 const circumference = 2 * Math.PI * 78;
 
@@ -44,7 +35,7 @@ export function AttemptOutcomeCard({
       : scope === "all" && stack.id === "subject"
         ? "Subject mocks"
         : stack.label;
-  const Icon = subjectIcons[stack.id as keyof typeof subjectIcons] ?? Layers3;
+  const iconName = subjectIcons[stack.id] ?? "layers";
   const missingPercentile =
     scope === "subject"
       ? "No standalone subject percentile recorded"
@@ -63,7 +54,7 @@ export function AttemptOutcomeCard({
           </p>
         </div>
         <span className={styles.subjectIcon}>
-          <Icon aria-hidden="true" />
+          <PlainIcon name={iconName} size={30} tone="mono" />
         </span>
       </header>
 
@@ -129,14 +120,14 @@ export function AttemptOutcomeCard({
 
       <dl className={styles.marksStrip}>
         <div>
-          <FileCheck2 aria-hidden="true" />
+          <PlainIcon name="fileCheck" size={34} tone="mono" />
           <dt>Marks obtained</dt>
           <dd>
             {n(stack.score)} <span>/ {n(stack.maxScore)}</span>
           </dd>
         </div>
         <div>
-          <ChartNoAxesColumnIncreasing aria-hidden="true" />
+          <PlainIcon name="report" size={34} tone="mono" />
           <dt>Score</dt>
           <dd>{n(stack.scorePercentage)}%</dd>
         </div>

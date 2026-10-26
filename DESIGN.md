@@ -109,14 +109,14 @@ Terracotta identifies primary actions and the score series. Charcoal ink carries
 
 Subject charts use terracotta for Quant, blue for Reasoning, aqua for English, ochre for General Awareness, and warm gray for the separately scored Computer context. Section I reuses terracotta and Section II reuses blue. Correct answers use olive, incorrect answers terracotta, and skipped answers the soft rule color. Timing uses teal and the target reference uses muted ink in a dashed rule. `src/lib/chart-theme.ts` maps entity identities to the CSS chart variables; preserve those semantic mappings. Subject hues are a fixed categorical order validated for adjacent-pair CVD and normal-vision separation against the paper surface. Do not color nominal series by value or cycle extra hues for additional results.
 
-**The Meaning Rule.** Keep legends, units, and text labels alongside color; color alone must not carry a result's meaning. Every chart also exposes a square-bordered hover/focus tooltip and a "View data" table twin. Complete textual summaries such as the outcome cards are not charts and need neither.
+**The Meaning Rule.** Keep legends, units, and text labels alongside color; color alone must not carry a result's meaning. Every chart also exposes a square-bordered hover/focus tooltip and a "View data" table twin.
 
 ## Charts
 
 - Score trends use the Shadcn/Recharts 3 `ChartContainer` composition with one percentage axis, 2px lines, light washes, visible dots, horizontal hairline gridlines, and a vertical hover rule. Multi-series subject and section charts show every populated series at once with a legend, sparse values stay absent rather than becoming zero, and the same colors follow each entity across filters.
 - Where you stand is one radar on every dashboard tab, always built from the global cross-type subject profile on a 0–100 scale. Missing subjects are named below rather than drawn as zero; fewer than three populated subjects falls back to labelled bars.
-- Make every attempt count follows the supplied `docs/images/card.png` reference: softly rounded paper cards, prominent serif subject headings, a subject icon, and an olive/terracotta/beige answer-distribution ring with score percentage at its center. A ruled answer ledger shows counts, shares, and proportion bars. A pale marks/score strip and a three-column accuracy, reported-percentile availability, and score-definition footer complete each card. The ring represents question shares; its center represents marks divided by maximum, not accuracy or percentile. These reference-specific rounded corners and icon treatments are scoped to the outcome cards; the surrounding dashboard keeps its existing geometry.
-- Outcome cards use semantic articles and definition lists with visible values, so color is supplementary. The grid uses three cards per row at desktop widths (1280px and above), two on tablets (768–1279px), and one on mobile. Card internals use container queries so type, answer labels, and footers adapt to each card’s width rather than just the viewport. Compact layouts preserve the ring and answer ledger; very narrow widths stack them. Missing accuracy uses a dash and missing percentile is explicit; inherited full-mock percentiles never describe a derived subject or section.
+- Make every attempt count uses 100% stacked radial rings (Correct, Incorrect, Unattempted) with square surface gaps between segments. Full Mocks keeps one ring card and All Mocks keeps one panel with rings by mock type. Subject Wise and Sectional Wise use one bordered card per subject/section instead of grouping rings: each card has its own ring, three-column colour key with counts and shares, marks/score line, and percentile provenance note.
+- The ring center shows the average saved exam percentile where genuine percentiles exist; otherwise it shows score percentage (marks ÷ maximum) explicitly labelled “score”. A full or sectional mock’s percentile is never reused for its subject slices or derived sections. Accuracy remains available in the note and data table.
 - My target shows the existing out-of-390 goal as a percentage reference, a dashed target line, a dated average snapshot trend, the latest gap, and explicit up/down/flat text with an arrow.
 - Subject deep dive uses two aligned single-axis small multiples (accuracy percentage and minutes), never a dual-axis chart. It is omitted on Subject Wise.
 - Charts keep animation disabled, respect reduced motion, size containers to include axis labels, and use the paper/ink/rule tokens rather than floating cards.
@@ -147,7 +147,7 @@ Panels, controls, selected navigation, badges, avatars, status markers, and dial
 
 ## Components
 
-Google sign-in is required through a public serif-led landing page at `/sign-in`. The landing page uses the same canvas/paper/ink/accent tokens, square ledger surfaces, thin rules, and no shadows; its illustrative figures are explicitly labelled sample data and never seed an account. The signed-in header shows the account and a compact outline sign-out control. Session errors hide and unmount the private workspace until verification succeeds; account changes remount it. Preserve square geometry and paper/ink tokens throughout.
+Google sign-in is required through a serif-led paper sign-in page. The signed-in header shows the account and a compact outline sign-out control. Session errors hide and unmount the private workspace until verification succeeds; account changes remount it. Preserve square geometry and paper/ink tokens throughout.
 
 Primary buttons use terracotta with paper text and a darker hover. Outline buttons use a rule border; ghost buttons gain a soft fill; destructive buttons use danger red. Standard and icon controls are 40px high; compact buttons are 32px. Disabled controls reduce opacity and block pointer interaction. Keyboard focus remains explicit with an accent outline and offset.
 
@@ -157,20 +157,6 @@ Panel headers use 24px horizontal padding, 20px top padding, and 12px bottom pad
 
 Tooltips are square paper boxes with rule borders and 12px text. Empty charts reserve at least 220px with centered explanatory text. Chart animations are disabled. MotionConfig respects the user's reduced-motion preference, and global CSS minimizes animation and transition durations for that preference. Notifications use only a small vertical entrance.
 
-### Mock entry
-
-Log a mock is a compact ruled worksheet rather than a stack of spacious cards. Mock details use a responsive metadata grid; subject results become ledger rows with one desktop header and compact mobile blocks. Calculated score is text, not another editable-looking input. Score, attempted count, accuracy, overall time, and Save live in one sticky summary bar instead of being repeated across sections. Optional rank, percentile, and notes sit in a disclosure that opens when existing values are present.
-
-Manual and Paste are a neutral ink/paper segmented switch; terracotta remains reserved for consequential actions. Paste mode shows Paste → Review → Save progress and distinguishes the standard parser from AI review. AI review uses ruled sections, collapsed reported-value cross-checks, a concise issue summary, and a sticky action bar. Mobile uses two-column count grids with time at full width; desktop switches to a single ledger row only when it has sufficient width.
-
-### AI coach and chat
-
-The AI coach is one full-width paper panel placed immediately after the divided stat strip and before the paired trend/radar row. Keep the same square corners, thin rule border, serif title, and terracotta action as other panels; do not give it a gradient, glow, icon tile, or shadow. Insight headings use small uppercase section labels. Provenance, usage, and the “AI can be wrong” note stay in muted 10–11px text.
-
-The chat drawer is a controlled right-side paper surface: full width on mobile, about 420px wide from the small breakpoint, `bg-paper` with a left rule, no shadow. It uses the standard ink overlay, a serif `Dialog.Title`, a muted `Dialog.Description`, a visible close control, focus trap, Escape/overlay close, and reduced-motion-safe scrolling. User messages use ink fill with paper text; assistant messages use a thin accent left rule on the canvas surface. Answers are plain text with preserved line breaks, not rendered HTML or markdown.
-
-AI must never look like a primary record action. “Generate insight” is explicit, never automatic. Extraction opens a square, paper-and-rule review surface with editable mock details, subject rows, timings, and optional results. Missing values stay blank, derived values are labeled, and blockers appear both in a concise summary and beside the affected field. “Use reviewed values” copies a blocker-free draft into the normal form; the existing Save action remains separate. Disabled AI controls remain visibly disabled when the server has no configuration.
-
 ## Do's and Don'ts
 
 - Do keep labels, legends, and units visible beside metrics.
@@ -179,4 +165,9 @@ AI must never look like a primary record action. “Generate insight” is expli
 - Don't add rounded dashboard cards or colorful icon tiles.
 - Don't introduce paper textures or heavy shadows.
 - Don't animate charts or ignore reduced-motion preferences.
-- Don't auto-generate AI content, auto-apply an AI draft, or style AI output as authoritative saved data.
+
+## Reference-led outcome cards
+
+Make every attempt count follows the supplied `docs/images/card.png` reference: softly rounded paper cards, prominent serif subject headings, a subject icon, and an olive/terracotta/beige answer-distribution ring with score percentage at its center. A ruled answer ledger shows counts, shares, and proportion bars. A pale marks/score strip and a three-column accuracy, reported-percentile availability, and score-definition footer complete each card. The ring represents question shares; its center represents marks divided by maximum, not accuracy or percentile. These reference-specific rounded corners and icon treatments are scoped to the outcome cards; the surrounding dashboard keeps its existing geometry.
+
+Outcome cards use semantic articles and definition lists with visible values, so color is supplementary. The grid uses three cards per row at desktop widths (1280px and above), two on tablets (768–1279px), and one on mobile. Card internals use container queries so type, answer labels, and footers adapt to each card’s width rather than just the viewport. Compact layouts preserve the ring and answer ledger; very narrow widths stack them. Missing accuracy uses a dash and missing percentile is explicit; inherited full-mock percentiles never describe a derived subject or section.
