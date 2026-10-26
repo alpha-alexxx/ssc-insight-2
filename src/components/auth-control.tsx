@@ -26,7 +26,8 @@ function ConnectedAuthControl() {
     try {
       const result = await authClient.signIn.social({
         provider: "google",
-        callbackURL: `${window.location.origin}/auth/complete`,
+        callbackURL: "/auth/complete",
+        errorCallbackURL: "/sign-in?error=oauth",
       });
       if (result.error)
         throw new Error("Sign-in could not start. Please retry.");

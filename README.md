@@ -1,6 +1,6 @@
 # SSC Insight
 
-A warm-paper SSC CGL Tier 2 mock tracker built with Next.js 16, React 19, TypeScript, Tailwind CSS, Radix components, Recharts, and Motion. Opens directly to the dashboard.
+A warm-paper SSC CGL Tier 2 mock tracker built with Next.js 16, React 19, TypeScript, Tailwind CSS, Radix components, Recharts, and Motion. Opens to a public landing page; signed-in visitors go straight to the dashboard.
 
 **Google sign-in is required.** Each account has private mocks, analytics, comparisons, settings, and exports. New users start empty. There is no sharing or administrator access.
 
@@ -82,9 +82,20 @@ Use the Neon Console to enter the client secret directly, or run the local maske
 
 The helper targets the selected production project/branch, sends the credentials over stdin, and does not save or print the secret. Confirm `neon neon-auth oauth-provider list` reports `google standard` with your client ID. Then set `GOOGLE_AUTH_ENABLED=true` and rebuild/redeploy.
 
-The public `/sign-in` route is also the product landing page. It performs an authoritative server-side `requireUser()` check with cookie caching disabled and redirects an already verified account to `/`; the client Google control only starts OAuth or offers a fallback workspace link after its own session hook resolves.
+The public `/sign-in` route performs an authoritative server-side `requireUser()` check with cookie caching disabled and redirects an already verified account to `/dashboard`; the client Google control only starts OAuth or offers a fallback workspace link after its own session hook resolves. Failed OAuth flows return to `/sign-in?error=oauth` through the sign-in call's `errorCallbackURL`.
 
 The app uses the pinned `@neondatabase/auth` Next.js SDK for Google redirects, signed session cookies, and sign-out. The dashboard and OAuth completion route use session middleware, with an independent server session guard on the page and every data API. Missing sessions receive `401 UNAUTHENTICATED`; verification outages receive `503 AUTH_UNAVAILABLE`. The server obtains ownership exclusively from the verified session. Foreign record IDs return the same 404 as nonexistent IDs. Personalized responses and downloads use `Cache-Control: private, no-store`. Sign-out, session failures, and account changes unmount private dashboard state.
+
+### OAuth setup checklist
+
+Follows the [Neon Auth OAuth guide](https://neon.com/docs/auth/guides/setup-oauth):
+
+- Register `{NEON_AUTH_BASE_URL}/callback/google` (no trailing slash) as an **Authorized redirect URI** in the Google Cloud Console Web-application client, once per branch/environment you sign in from. The `callbackURL` passed to `signIn.social()` (our `/auth/complete`) is where users land after the flow — it is not the URI registered with Google.
+- Add **Authorized JavaScript origins**: each app origin (`https://sscinsight-lovat.vercel.app`, `http://localhost:3000` while testing) plus the Auth base URL origin.
+- Add Neon Auth **trusted domains** for every origin used as a `callbackURL`: the production domain, `localhost`, and a wildcard for Vercel preview deployments if previews should sign in.
+- Configure credentials per branch — each Neon branch has its own Auth base URL. Use the Console (branch → Settings → Auth → OAuth providers), the CLI (`neon neon-auth oauth-provider add`), or `.\scripts\configure-google-oauth.ps1`.
+- Google consent screen: set the app name, support email, and authorized domain. Apps in "Testing" status only work for listed test users; publishing and verification are required for public use.
+- Set `GOOGLE_AUTH_ENABLED=true` and rebuild/redeploy.
 
 ## Vercel
 

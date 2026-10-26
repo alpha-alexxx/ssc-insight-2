@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SSC Insight is a private SSC CGL Tier 2 mock tracker. It records full, sectional, and subject mocks, derives performance views, and supports a portable JSON backup that can be imported into a different signed-in account.
 
-The root route `/` is the authenticated dashboard; there is no separate `/dashboard` route. Authoritative product/design/setup docs:
+`/` is a public landing (signed-in visitors redirect to `/dashboard`); the authenticated workspace is the `(workspace)` route group (`/dashboard`, `/add`, `/history`, `/compare`, `/settings`), whose layout renders `WorkspaceShell` for the current pathname. Authoritative product/design/setup docs:
 
 - `PRODUCT.md` — product behavior, scope boundaries, private-account rules.
 - `DESIGN.md` — paper-and-ink visual system, chart tokens, interaction rules.
@@ -72,7 +72,7 @@ Browser client components
 - `src/lib/api.ts` centralizes `{ data }` / `{ error: { code, message } }`, `private, no-store`, same-origin write checks, JSON/body size limits, and Prisma error mapping. The backup GET is the exception: it returns a raw downloadable file.
 - Foreign and nonexistent record IDs intentionally return the same 404.
 - `src/components/private-workspace.tsx` re-verifies the session and unmounts private UI on mismatch; session failures hide data.
-- `/sign-in` is the public landing page but remains a dynamic Server Component wrapper: it calls `requireUser()` with cookie caching disabled and redirects verified users to `/`. Keep the landing presentation separate from this authoritative server check; client `useSession()` is only a UI fallback.
+- `/sign-in` remains a dynamic Server Component wrapper: it calls `requireUser()` with cookie caching disabled and redirects verified users to `/dashboard`. Failed OAuth flows return to `/sign-in?error=oauth` (`errorCallbackURL` on the social sign-in call; `/auth/complete` also forwards error params there). Keep the sign-in presentation separate from this authoritative server check; client `useSession()` is only a UI fallback.
 - Auth uses Neon Auth with Google. The app stores no email/user row and has no ownership relation to Neon Auth tables. A different Google account is a separate workspace. Do not write to `neon_auth` or add a server-side owner-reassignment endpoint.
 
 ## Persistence and domain model
