@@ -1,10 +1,36 @@
 import { auth } from "@/lib/auth/server";
+import { devAuthBypassActive, devSessionPayload } from "@/lib/auth/dev-bypass";
 import { RequestError, readBody, apiError } from "@/lib/api";
 
 export const runtime = "nodejs";
 type Context = { params: Promise<{ path: string[] }> };
 
+const privateNoStore = { "Cache-Control": "private, no-store" };
+
+// Local development only: minimal Better Auth-shaped answers so the client
+// session hooks work without the managed Neon Auth service. See dev-bypass.ts.
+async function devHandle(request: Request, context: Context) {
+  const { path } = await context.params;
+  const route = path.join("/");
+  if (request.method === "GET" && route === "get-session") {
+    return Response.json(devSessionPayload(), { headers: privateNoStore });
+  }
+  if (request.method === "POST" && route === "sign-out") {
+    return Response.json({ success: true }, { headers: privateNoStore });
+  }
+  return Response.json(
+    {
+      error: {
+        code: "AUTH_UNAVAILABLE",
+        message: "Not available while running with the local dev bypass.",
+      },
+    },
+    { status: 404, headers: privateNoStore },
+  );
+}
+
 async function handle(request: Request, context: Context) {
+  if (devAuthBypassActive()) return devHandle(request, context);
   try {
     if (request.method !== "GET") {
       // Validate same-origin writes and the streamed size without consuming

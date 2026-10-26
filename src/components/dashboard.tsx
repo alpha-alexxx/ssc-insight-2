@@ -84,9 +84,11 @@ const newId = () =>
 export function Dashboard({
   authEnabled = false,
   userEmail = "",
+  userName = "",
 }: {
   authEnabled?: boolean;
   userEmail?: string;
+  userName?: string;
 }) {
   const [view, setView] = useState<View>("dashboard");
   const [attempts, setAttempts] = useState<Attempt[]>([]);

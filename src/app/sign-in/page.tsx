@@ -1,41 +1,31 @@
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { SignInLanding } from "@/components/sign-in-landing";
+import { SignInCard } from "@/components/sign-in-card";
 import { requireUser } from "@/lib/auth/require-user";
 import { SessionError } from "@/lib/auth/session-policy";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "SSC Insight · Make every mock count",
-  description:
-    "A private SSC CGL Tier 2 mock tracker for full, subject, and sectional performance.",
-};
-
-export default async function SignInPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const query = await searchParams;
+export default async function SignInPage() {
   let signedIn = false;
-  let unavailable = query.error === "unavailable";
-
+  let unavailable = false;
   try {
     await requireUser();
     signedIn = true;
   } catch (error) {
-    if (!(error instanceof SessionError) || error.status !== 401)
-      unavailable = true;
+    unavailable = !(error instanceof SessionError && error.status === 401);
   }
-
-  // Keep the redirect outside the session try/catch: redirect() throws by design.
   if (signedIn) redirect("/");
-
   return (
-    <SignInLanding
-      googleEnabled={process.env.GOOGLE_AUTH_ENABLED === "true"}
-      authUnavailable={unavailable}
-    />
+    <>
+      {unavailable && (
+        <p
+          role="alert"
+          className="mx-auto max-w-lg px-5 pt-6 text-sm text-danger"
+        >
+          Sign-in is temporarily unavailable. Please retry shortly.
+        </p>
+      )}
+      <SignInCard authEnabled={process.env.GOOGLE_AUTH_ENABLED === "true"} />
+    </>
   );
 }

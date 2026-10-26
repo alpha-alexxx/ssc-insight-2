@@ -1,4 +1,12 @@
 @import "tailwindcss";
+
+/* ============================================================
+   SSC Insight — design tokens (warm editorial paper)
+   Phase 3 of the UI overhaul: tokenized radius, elevation,
+   easing; element defaults in @layer base so Tailwind utilities
+   can override without `!important`.
+   ============================================================ */
+
 :root {
   color-scheme: light;
   --font-body: "DM Sans Variable", "Segoe UI", sans-serif;
@@ -34,7 +42,105 @@
   --chart-correct: #656d4a;
   --chart-incorrect: #b65335;
   --chart-skipped: #d5cec1;
+
+  /* --- geometry & elevation scale (Phase 3) --- */
+  /* Structural surfaces stay square (the ledger identity); controls get a
+     moderate 4px; expressive cards 10px; pills for dots and share bars. */
+  --radius-panel: 0px;
+  --radius-control: 4px;
+  --radius-card: 10px;
+  --radius-pill: 999px;
+  /* Ink-tinted elevation for lifted surfaces: popovers, toasts, dialogs. */
+  --elev-pop:
+    0 1px 2px rgba(37, 35, 31, 0.05), 0 16px 40px -20px rgba(37, 35, 31, 0.22);
+
+  /* --- motion tokens (Phase 9 anchor) --- */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-quick: 140ms;
+  --dur-enter: 220ms;
+  --dur-view: 240ms;
 }
+
+/* Dark mode: warm charcoal variant of the paper aesthetic. Triggered by
+   `prefers-color-scheme: dark` UNLESS the user has explicitly chosen light
+   via [data-theme="light"] on <html>. The user can also force dark with
+   [data-theme="dark"]. The toggle is in the header. */
+:root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    color-scheme: dark;
+    --canvas: #1a1815;
+    --paper: #221f1b;
+    --ink: #ede6d6;
+    --muted: #9a9489;
+    --rule: #5a5550;
+    --rule-soft: #38342f;
+    --soft: #2a2722;
+    --accent: #d97048;
+    --accent-hover: #c75d35;
+    --accent-soft: #2e2017;
+    --positive: #93a25c;
+    --positive-soft: #1d2316;
+    --warning: #c79a3a;
+    --warning-soft: #221b0c;
+    --danger: #d8655a;
+    --danger-hover: #c64f43;
+    --danger-soft: #2a1714;
+    --chart-score: #d97048;
+    --chart-average: #93a25c;
+    --chart-time: #7fa3a7;
+    --chart-quant: #d97048;
+    --chart-reasoning: #5a9be8;
+    --chart-english: #4dd49f;
+    --chart-ga: #ffc340;
+    --chart-computer: #aaa094;
+    --chart-section-1: #d97048;
+    --chart-section-2: #5a9be8;
+    --chart-target: #9a9489;
+    --chart-correct: #93a25c;
+    --chart-incorrect: #d97048;
+    --chart-skipped: #38342f;
+  }
+}
+/* Explicit dark via [data-theme="dark"] overrides the media query. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #1a1815;
+  --paper: #221f1b;
+  --ink: #ede6d6;
+  --muted: #9a9489;
+  --rule: #5a5550;
+  --rule-soft: #38342f;
+  --soft: #2a2722;
+  --accent: #d97048;
+  --accent-hover: #c75d35;
+  --accent-soft: #2e2017;
+  --positive: #93a25c;
+  --positive-soft: #1d2316;
+  --warning: #c79a3a;
+  --warning-soft: #221b0c;
+  --danger: #d8655a;
+  --danger-hover: #c64f43;
+  --danger-soft: #2a1714;
+  --chart-score: #d97048;
+  --chart-average: #93a25c;
+  --chart-time: #7fa3a7;
+  --chart-quant: #d97048;
+  --chart-reasoning: #5a9be8;
+  --chart-english: #4dd49f;
+  --chart-ga: #ffc340;
+  --chart-computer: #aaa094;
+  --chart-section-1: #d97048;
+  --chart-section-2: #5a9be8;
+  --chart-target: #9a9489;
+  --chart-correct: #93a25c;
+  --chart-incorrect: #d97048;
+  --chart-skipped: #38342f;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
 @theme inline {
   --font-sans: var(--font-body);
   --font-serif: var(--font-heading);
@@ -58,225 +164,492 @@
   --color-chart-correct: var(--chart-correct);
   --color-chart-incorrect: var(--chart-incorrect);
   --color-chart-skipped: var(--chart-skipped);
+  /* radius / elevation / easing utilities (rounded-control, shadow-pop, …) */
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --shadow-pop: var(--elev-pop);
+  --ease-out-soft: var(--ease-out-soft);
 }
-* {
-  box-sizing: border-box;
+
+/* ---------- Element defaults (layer: base) ----------
+   Living in the base layer means any Tailwind utility can override these
+   without `!important` — the root cause of the old `!flex`/`!w-auto` hacks. */
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button,
+  a,
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:not(:disabled),
+  select,
+  summary {
+    cursor: pointer;
+  }
+  ::selection {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* On ink-filled surfaces the accent ring still reads; keep paper as an
+     explicit option for controls that sit on charcoal fills. */
+  .focus-paper:focus-visible {
+    outline-color: var(--paper);
+  }
+  input,
+  textarea {
+    caret-color: var(--accent);
+  }
+  :where(input:not([type="checkbox"]), select, textarea) {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    padding: 10px 12px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted);
+  }
+  input[readonly] {
+    background: var(--soft);
+  }
+  input[type="checkbox"] {
+    accent-color: var(--ink);
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  /* Numeric spinner suppression is opt-in via .no-spin (Phase 11). */
+  input.no-spin {
+    appearance: textfield;
+  }
+  input.no-spin::-webkit-inner-spin-button,
+  input.no-spin::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+  label {
+    display: grid;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+    min-width: 0;
+  }
+  /* Checkbox / radio rows opt out of the grid label via .check-row. */
+  label.check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
+    font-weight: 400;
+  }
+  /* Required-field marker (Phase 11): a quiet asterisk after the label
+     text; never the only signal (inputs are also natively required). */
+  .req {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  ::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--canvas);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--rule);
+  }
+  th {
+    position: relative;
+    font-weight: 500;
+    text-align: left;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  td,
+  th {
+    padding: 15px 18px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  thead th {
+    border-bottom: 1px solid var(--rule);
+    background: var(--canvas);
+  }
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  tbody tr:hover {
+    background: var(--soft);
+  }
 }
-body {
-  margin: 0;
-  background: var(--canvas);
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 14px;
-  -webkit-font-smoothing: antialiased;
+
+/* ---------- Design-system component classes ---------- */
+@layer components {
+  .panel {
+    min-width: 0;
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius-panel);
+    background: var(--paper);
+  }
+  .panel-title {
+    font-family: var(--font-heading);
+    font-size: 22px;
+    line-height: 1.2;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+  }
+  .page-title {
+    font-family: var(--font-heading);
+    font-size: clamp(32px, 3.2vw, 44px);
+    line-height: 1.12;
+    font-weight: 450;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .section-label {
+    color: var(--muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+  }
+  .chart-empty {
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 24px;
+  }
+  .stat-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-block: 1px solid var(--ink);
+    margin-block: 28px;
+  }
+  .stat-cell {
+    min-width: 0;
+    padding: 23px 24px;
+  }
+  .stat-cell + .stat-cell {
+    border-left: 1px solid var(--rule-soft);
+  }
+  .stat-value {
+    font-family: var(--font-heading);
+    font-size: 42px;
+    font-weight: 450;
+    line-height: 1.2;
+    letter-spacing: -0.035em;
+    /* Value + unit suffix ("278.7 / 390") are one atom — a wrap between
+       them reads as two separate figures (Phase 5 fix). */
+    white-space: nowrap;
+  }
+  .wordmark {
+    font-family: var(--font-heading);
+    font-size: 31px;
+    font-weight: 550;
+    letter-spacing: -0.035em;
+    line-height: 1;
+  }
+  .wordmark-mobile {
+    font-family: var(--font-heading);
+    font-size: 23px;
+    font-weight: 550;
+    letter-spacing: -0.035em;
+  }
+  .nav-button {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: var(--radius-control);
+    font-weight: 500;
+    color: var(--muted);
+    text-align: left;
+    transition:
+      color var(--dur-quick) ease,
+      background-color var(--dur-quick) ease;
+  }
+  .nav-button:hover {
+    background: var(--soft);
+    color: var(--ink);
+  }
+  .nav-button.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  /* ---------- Segmented controls (one pattern, three views) ----------
+     Scope tabs (dashboard/history/compare), the mock-form entry-mode
+     toggle, and the backup import-mode toggle share this treatment. */
+  .segment-group {
+    display: inline-flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 1px;
+    padding: 1px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    background: var(--paper);
+    max-width: 100%;
+  }
+  .segment {
+    white-space: nowrap;
+    padding: 6px 12px;
+    border-radius: calc(var(--radius-control) - 1px);
+    font-size: 12px;
+    color: var(--muted);
+    transition:
+      color var(--dur-quick) ease,
+      background-color var(--dur-quick) ease;
+  }
+  .segment:hover {
+    background: var(--soft);
+    color: var(--ink);
+  }
+  .segment[aria-pressed="true"],
+  .segment[aria-pressed="true"]:hover {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .segment:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* ---------- Tables in scroll containers ----------
+     Keeps the row identity visible while the remaining columns scroll
+     on narrow viewports (Phase 5). Pair with .sticky-col on the first
+     header/body cell. */
+  .table-scroll {
+    overflow: auto;
+  }
+  .sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--paper);
+    /* Edge rule separates the pinned column from the scrolling ones. */
+    border-right: 1px solid var(--rule-soft);
+    min-width: 0;
+  }
+  thead .sticky-col {
+    background: var(--canvas);
+    z-index: 2;
+  }
+  .recharts-default-tooltip {
+    background: var(--paper) !important;
+    border: 1px solid var(--rule) !important;
+    border-radius: var(--radius-control) !important;
+    color: var(--ink);
+    font-size: 12px;
+    box-shadow: var(--elev-pop);
+  }
+  .recharts-tooltip-cursor {
+    stroke: var(--rule-soft);
+  }
+
+  /* ---------- Overlays: dialogs, popovers, alerts ----------
+     Radix drives data-state; CSS owns the animation so reduced-motion and
+     the duration tokens live in one place. Uses the individual `scale`
+     property (not `transform`) so it composes with Tailwind's `translate`
+     positioning; popovers fade only — their position transform is Radix's. */
+  .dialog-overlay {
+    animation: overlay-in 160ms ease;
+  }
+  .dialog-overlay[data-state="closed"] {
+    animation: overlay-out 150ms ease;
+  }
+  .dialog-content {
+    animation: dialog-in 200ms var(--ease-out-soft);
+  }
+  .dialog-content[data-state="closed"] {
+    animation: dialog-out 150ms ease;
+  }
+  .popover-content {
+    animation: popover-in 180ms var(--ease-out-soft);
+  }
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes overlay-out {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      scale: 0.98;
+    }
+  }
+  @keyframes dialog-out {
+    to {
+      opacity: 0;
+      scale: 0.98;
+    }
+  }
+  @keyframes popover-in {
+    from {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+
+  /* ---------- Duotone icon system ----------
+     Two constructions share one treatment (two tones per glyph):
+     - @duo-icons/react glyphs: the primary layer carries ink (or accent),
+       the secondary layer carries the accent wash. CSS overrides the SVG
+       fill/opacity presentation attributes, so tokens flip in dark mode.
+     - Lucide fallbacks: the echo technique (offset tinted duplicate). */
+  .icon-duo .duo-icons-primary-layer {
+    fill: var(--ink);
+  }
+  .icon-duo .duo-icons-secondary-layer {
+    fill: var(--accent);
+    opacity: 0.5;
+  }
+  .icon-duo.icon-accent .duo-icons-primary-layer {
+    fill: var(--accent);
+  }
+  .icon-duo.icon-accent .duo-icons-secondary-layer {
+    fill: var(--accent);
+    opacity: 0.35;
+  }
+  .icon-duo.icon-paper .duo-icons-primary-layer {
+    fill: var(--paper);
+  }
+  .icon-duo.icon-paper .duo-icons-secondary-layer {
+    fill: var(--paper);
+    opacity: 0.4;
+  }
+  .icon-duo.icon-muted .duo-icons-primary-layer {
+    fill: var(--muted);
+  }
+  .icon-duo.icon-muted .duo-icons-secondary-layer {
+    fill: var(--muted);
+    opacity: 0.35;
+  }
+  /* mono: both layers follow currentColor (subject icons, custom contexts) */
+  .icon-duo.icon-mono .duo-icons-primary-layer {
+    fill: currentColor;
+  }
+  .icon-duo.icon-mono .duo-icons-secondary-layer {
+    fill: currentColor;
+    opacity: 0.3;
+  }
+  .duotone .duotone-echo {
+    transform: translate(2.5px, -2.5px);
+    opacity: 0.32;
+    transition:
+      transform var(--dur-enter) var(--ease-out-soft),
+      opacity var(--dur-enter) ease;
+  }
+  .duotone:hover .duotone-echo,
+  .duotone-tile:hover .duotone .duotone-echo {
+    transform: translate(4.5px, -4.5px);
+    opacity: 0.55;
+  }
+  .duotone-tile {
+    transition:
+      transform var(--dur-enter) var(--ease-out-soft),
+      box-shadow var(--dur-enter) ease;
+  }
+  .duotone-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: -3px 3px 0 0 var(--accent-soft);
+  }
+
+  /* ---------- Skip link (keyboard a11y) ---------- */
+  .skip-link {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 100;
+    padding: 10px 14px;
+    border-radius: var(--radius-control);
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transform: translateY(-200%);
+    transition: transform var(--dur-quick) ease;
+  }
+  .skip-link:focus-visible {
+    transform: translateY(0);
+    outline-color: var(--paper);
+  }
+
+  /* ---------- Landing page helpers ---------- */
+  .landing-blob {
+    position: absolute;
+    border-radius: var(--radius-pill);
+    pointer-events: none;
+    filter: blur(90px);
+  }
+  .landing-grid-lines {
+    background-image:
+      linear-gradient(to right, var(--rule-soft) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--rule-soft) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 75%);
+  }
+  .landing-wordmark {
+    font-family: var(--font-heading);
+    font-weight: 550;
+    letter-spacing: -0.035em;
+    line-height: 1;
+  }
 }
-button,
-input,
-select,
-textarea {
-  font: inherit;
+
+html {
+  scroll-behavior: smooth;
 }
-button,
-a,
-select {
-  -webkit-tap-highlight-color: transparent;
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
-button:not(:disabled),
-select,
-summary {
-  cursor: pointer;
-}
-::selection {
-  background: var(--ink);
-  color: var(--paper);
-}
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
-}
-input,
-textarea {
-  caret-color: var(--accent);
-}
-input:not([type="checkbox"]),
-select,
-textarea {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--rule);
-  border-radius: 0;
-  padding: 10px 12px;
-  background: var(--paper);
-  color: var(--ink);
-}
-input::placeholder,
-textarea::placeholder {
-  color: var(--muted);
-}
-input[readonly] {
-  background: var(--soft);
-}
-input[aria-invalid="true"],
-select[aria-invalid="true"],
-textarea[aria-invalid="true"] {
-  border-color: var(--danger);
-}
-input[type="checkbox"] {
-  accent-color: var(--ink);
-  width: 16px;
-  height: 16px;
-}
-label {
-  display: grid;
-  gap: 7px;
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 500;
-}
-::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-::-webkit-scrollbar-track {
-  background: var(--canvas);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--rule);
-}
-.panel {
-  min-width: 0;
-  border: 1px solid var(--rule-soft);
-  border-radius: 0;
-  background: var(--paper);
-}
-.panel-title {
-  font-family: var(--font-heading);
-  font-size: 22px;
-  line-height: 1.2;
-  font-weight: 500;
-  letter-spacing: -0.025em;
-}
-.page-title {
-  font-family: var(--font-heading);
-  font-size: clamp(32px, 3.2vw, 44px);
-  line-height: 1.12;
-  font-weight: 450;
-  letter-spacing: -0.035em;
-  text-wrap: balance;
-}
-.muted {
-  color: var(--muted);
-}
-.tabular {
-  font-variant-numeric: tabular-nums;
-}
-.section-label {
-  color: var(--muted);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-weight: 600;
-}
-.chart-empty {
-  min-height: 220px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 13px;
-  text-align: center;
-  padding: 24px;
-}
-.stat-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-block: 1px solid var(--ink);
-  margin-block: 28px;
-}
-.stat-cell {
-  min-width: 0;
-  padding: 23px 24px;
-}
-.stat-cell + .stat-cell {
-  border-left: 1px solid var(--rule-soft);
-}
-.stat-value {
-  font-family: var(--font-heading);
-  font-size: 42px;
-  font-weight: 450;
-  line-height: 1.2;
-  letter-spacing: -0.035em;
-}
-.wordmark {
-  font-family: var(--font-heading);
-  font-size: 31px;
-  font-weight: 550;
-  letter-spacing: -0.035em;
-  line-height: 1;
-}
-.wordmark-mobile {
-  font-family: var(--font-heading);
-  font-size: 23px;
-  font-weight: 550;
-  letter-spacing: -0.035em;
-}
-th {
-  position: relative;
-  font-weight: 500;
-  text-align: left;
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-td,
-th {
-  padding: 15px 18px;
-  border-bottom: 1px solid var(--rule-soft);
-}
-thead th {
-  border-bottom: 1px solid var(--rule);
-  background: var(--canvas);
-}
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-tbody tr:hover {
-  background: var(--soft);
-}
-.nav-button {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 0;
-  font-weight: 500;
-  color: var(--muted);
-  text-align: left;
-  transition:
-    color 140ms ease,
-    background-color 140ms ease;
-}
-.nav-button:hover {
-  background: var(--soft);
-  color: var(--ink);
-}
-.nav-button.active {
-  background: var(--ink);
-  color: var(--paper);
-}
-.recharts-default-tooltip {
-  background: var(--paper) !important;
-  border: 1px solid var(--rule) !important;
-  border-radius: 0 !important;
-  color: var(--ink);
-  font-size: 12px;
-}
-.recharts-tooltip-cursor {
-  stroke: var(--rule-soft);
-}
+
 @media (max-width: 767px) {
   .stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -299,6 +672,13 @@ tbody tr:hover {
   td,
   th {
     padding: 13px 12px;
+  }
+}
+/* Very narrow phones: tighten segmented controls so four options fit. */
+@media (max-width: 420px) {
+  .segment {
+    padding: 6px 8px;
+    font-size: 11px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

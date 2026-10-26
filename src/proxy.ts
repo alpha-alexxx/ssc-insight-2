@@ -1,6 +1,49 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextFetchEvent, NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/server";
-import { publicOrigin, publicUrl } from "@/lib/public-url";
+import { devAuthBypassActive } from "@/lib/auth/dev-bypass";
+import { accessLog } from "@/lib/access-log";
+import { publicOrigin } from "@/lib/public-url";
+import {
+  UNSAFE_METHODS,
+  bypassesMaintenance,
+  classifyPath,
+  maintenanceActive,
+  maintenanceRetryAfter,
+  newRequestId,
+  sameOrigin,
+} from "@/lib/middleware-utils";
+
+/**
+ * Edge-of-app proxy (Next.js 16 middleware, Node.js runtime).
+ *
+ * Runs before every page and API route (static assets are excluded in the
+ * matcher) and provides the cross-cutting concerns a real-world deployment
+ * needs:
+ *
+ *  1. Request correlation — every request gets an `x-request-id`, forwarded
+ *     downstream to route handlers and echoed on the response, so proxy
+ *     logs, route logs and audit events can be tied together.
+ *  2. Maintenance mode — MAINTENANCE_MODE=1 answers API calls with 503 and
+ *     sends browsers to /maintenance, while keeping /api/health, the auth
+ *     flow and sign-in reachable.
+ *  3. CSRF defense in depth — cross-origin state-changing API calls are
+ *     rejected at the edge (route handlers re-check when they read bodies).
+ *  4. Authentication — private pages go through the Neon Auth middleware;
+ *     signed-in visitors are bounced away from /sign-in.
+ *  5. Structured access logging — gate decisions are logged via waitUntil
+ *     so they never delay the response.
+ *
+ * Dev binding: `next dev --hostname 0.0.0.0` makes the middleware request
+ * URL and OAuth exchange resolve to 0.0.0.0; every request is re-written
+ * onto the public origin first (see withPublicUrl) so redirects and the
+ * auth flow keep working in local development.
+ *
+ * API routes keep their own session checks (proxy coverage must never be
+ * the only line of defense — Server Functions and direct handler calls can
+ * bypass the matcher).
+ */
+
+const LOGIN_URL = "/sign-in";
 
 /**
  * Next dev binds to 0.0.0.0, so the middleware's request URL and OAuth
@@ -46,19 +89,189 @@ function withPublicLocation(response: NextResponse, request: NextRequest) {
   return response;
 }
 
-// The page guard improves navigation; each API independently checks its session.
-export async function proxy(request: NextRequest) {
+/** JSON error envelope that matches the route layer's shape (src/lib/api.ts). */
+function jsonError(
+  status: number,
+  code: string,
+  message: string,
+  extraHeaders?: Record<string, string>,
+): NextResponse {
+  return NextResponse.json(
+    { error: { code, message } },
+    { status, headers: { "Cache-Control": "private, no-store", ...extraHeaders } },
+  );
+}
+
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const forwarded = withPublicUrl(request);
-  try {
-    const response = await auth().middleware({ loginUrl: "/sign-in" })(
-      forwarded,
+  const requestId = forwarded.headers.get("x-request-id") ?? newRequestId();
+  const started = Date.now();
+  const { pathname } = forwarded.nextUrl;
+  const method = forwarded.method;
+  const cls = classifyPath(pathname);
+
+  // Forward the correlation id to route handlers; echo it on the response.
+  const downstreamHeaders = new Headers(forwarded.headers);
+  downstreamHeaders.set("x-request-id", requestId);
+
+  const finish = (response: NextResponse, note?: string): NextResponse => {
+    response.headers.set("x-request-id", requestId);
+    const ms = Date.now() - started;
+    const evt = {
+      method,
+      path: pathname,
+      status: response.status,
+      ms,
+      rid: requestId,
+      where: "proxy" as const,
+      ...(note ? { note } : {}),
+      cls,
+    };
+    event.waitUntil(Promise.resolve(accessLog(evt)));
+    return response;
+  };
+
+  /** Terminal gate decision (redirect/maintenance/403) — stamps proxy
+   *  timing. Pass-through responses deliberately DON'T set Server-Timing:
+   *  Next applies proxy response headers after the route handler runs, so
+   *  it would clobber the handler's `app;dur` entry. */
+  const gate = (response: NextResponse, note: string): NextResponse => {
+    response.headers.set("Server-Timing", `proxy;dur=${Date.now() - started}`);
+    return finish(response, note);
+  };
+
+  const passThrough = (note?: string) =>
+    finish(
+      NextResponse.next({ request: { headers: downstreamHeaders } }),
+      note,
     );
-    return withPublicLocation(response, forwarded);
+
+  // ── 1. Maintenance gate ────────────────────────────────────────────────
+  if (maintenanceActive() && !bypassesMaintenance(pathname)) {
+    const retryAfter = String(maintenanceRetryAfter());
+    if (cls.area === "api") {
+      return gate(
+        jsonError(
+          503,
+          "MAINTENANCE_MODE",
+          "The tracker is briefly offline for scheduled maintenance. Your data is safe — try again shortly.",
+          { "Retry-After": retryAfter },
+        ),
+        "maintenance",
+      );
+    }
+    const target = new URL("/maintenance", forwarded.url);
+    target.searchParams.set("retryAfter", retryAfter);
+    return gate(NextResponse.redirect(target, 307), "maintenance");
+  }
+
+  // ── 2. CSRF defense in depth for state-changing API calls ─────────────
+  // Auth endpoints are excluded: the Neon Auth handler validates its own
+  // requests, and blocking it at the edge could break callback flows.
+  if (
+    cls.area === "api" &&
+    cls.route !== "auth" &&
+    cls.route !== "health" &&
+    UNSAFE_METHODS.has(method)
+  ) {
+    const origin = forwarded.headers.get("origin");
+    const host = forwarded.headers.get("host") ?? forwarded.nextUrl.host;
+    if (!sameOrigin(origin, host)) {
+      return gate(
+        jsonError(
+          403,
+          "CROSS_ORIGIN_BLOCKED",
+          "Cross-origin changes are not allowed",
+        ),
+        "csrf",
+      );
+    }
+  }
+
+  // ── 3. Local development bypass ───────────────────────────────────────
+  // Same contract as require-user.ts: the flag is only honored outside
+  // production. Route handlers still enforce their own auth, so API
+  // behavior matches production minus the network round-trips.
+  if (devAuthBypassActive()) return passThrough("dev-bypass");
+
+  // ── 4. Ungated endpoints ──────────────────────────────────────────────
+  // Health probes and the auth API own their complete request lifecycle.
+  if (cls.area === "api" && (cls.route === "health" || cls.route === "auth")) {
+    return passThrough();
+  }
+
+  // ── 5. Auth flow page: always through the Neon Auth middleware ────────
+  if (cls.route === "auth") {
+    try {
+      return finish(
+        withPublicLocation(
+          await auth().middleware({ loginUrl: LOGIN_URL })(forwarded),
+          forwarded,
+        ),
+      );
+    } catch {
+      return gate(
+        NextResponse.redirect(
+          new URL(`${LOGIN_URL}?error=unavailable`, forwarded.url),
+        ),
+        "auth-flow-unavailable",
+      );
+    }
+  }
+
+  // ── 6. Sign-in guest bounce ───────────────────────────────────────────
+  // Signed-in visitors should never see the sign-in page. Probe the session
+  // by invoking the auth middleware: a redirect response means "not signed
+  // in" (show the page), a pass-through means "signed in" (bounce to the
+  // workspace, carrying any refreshed session cookies along).
+  if (pathname === LOGIN_URL) {
+    try {
+      const probe = await auth().middleware({ loginUrl: LOGIN_URL })(forwarded);
+      const location = probe.headers.get("location");
+      if (location) {
+        const locationPath = new URL(location, forwarded.url).pathname;
+        if (locationPath === LOGIN_URL) {
+          return passThrough("sign-in:anonymous");
+        }
+        // Some other auth-flow redirect (e.g. token refresh) — forward it.
+        return finish(withPublicLocation(probe, forwarded), "sign-in:flow");
+      }
+      const bounce = NextResponse.redirect(new URL("/", forwarded.url));
+      for (const cookie of probe.cookies.getAll()) {
+        bounce.cookies.set(cookie);
+      }
+      return gate(bounce, "sign-in:authenticated");
+    } catch {
+      // Auth backend unreachable: fail open for a public marketing page.
+      return passThrough("sign-in:probe-failed");
+    }
+  }
+
+  // ── 7. Private pages: session guard ───────────────────────────────────
+  try {
+    return finish(
+      withPublicLocation(
+        await auth().middleware({ loginUrl: LOGIN_URL })(forwarded),
+        forwarded,
+      ),
+    );
   } catch {
-    return NextResponse.redirect(
-      publicUrl("/sign-in?error=unavailable", request),
+    return gate(
+      NextResponse.redirect(
+        new URL(`${LOGIN_URL}?error=unavailable`, forwarded.url),
+      ),
+      "auth-unavailable",
     );
   }
 }
 
-export const config = { matcher: ["/", "/auth/complete"] };
+/**
+ * Run on everything except Next.js internals and static assets.
+ * `_next/data` is intentionally NOT excluded: the proxy keeps covering it
+ * so a protected page can never be bypassed via its data route.
+ */
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|css|js|map|txt|xml|woff2?|ttf|otf|eot)$).*)",
+  ],
+};

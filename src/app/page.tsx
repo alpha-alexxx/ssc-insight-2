@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PrivateWorkspace } from "@/components/private-workspace";
+import { WorkspaceEntry } from "@/components/workspace-entry";
 import { requireUser } from "@/lib/auth/require-user";
 import { SessionError } from "@/lib/auth/session-policy";
 
@@ -14,5 +14,11 @@ export default async function Page() {
       redirect("/sign-in");
     redirect("/sign-in?error=unavailable");
   }
-  return <PrivateWorkspace key={user.id} userId={user.id} />;
+  return (
+    <WorkspaceEntry
+      key={user.id}
+      userId={user.id}
+      userName={user.name}
+    />
+  );
 }

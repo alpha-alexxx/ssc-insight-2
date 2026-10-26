@@ -5,7 +5,13 @@ import { authClient } from "@/lib/auth/client";
 import { Dashboard } from "./dashboard";
 import { Button } from "./ui/button";
 
-export function PrivateWorkspace({ userId }: { userId: string }) {
+export function PrivateWorkspace({
+  userId,
+  userName = "",
+}: {
+  userId: string;
+  userName?: string;
+}) {
   const router = useRouter();
   const { data: session, isPending, error, refetch } = authClient.useSession();
   const [blocked, setBlocked] = useState(false);
@@ -108,6 +114,7 @@ export function PrivateWorkspace({ userId }: { userId: string }) {
           key={userId}
           authEnabled
           userEmail={session.user.email ?? ""}
+          userName={userName || session.user.name || ""}
         />
       </div>
       {checking && (
