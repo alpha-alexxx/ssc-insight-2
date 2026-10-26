@@ -66,8 +66,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/login", destination: "/sign-in", permanent: true },
       { source: "/signin", destination: "/sign-in", permanent: true },
-      { source: "/dashboard", destination: "/", permanent: false },
-      { source: "/home", destination: "/", permanent: false },
+      { source: "/home", destination: "/dashboard", permanent: false },
     ];
   },
   async headers() {

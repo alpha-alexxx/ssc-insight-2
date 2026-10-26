@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRef } from "react";
 import { animated, useSprings, useTrail, useSpring } from "@react-spring/web";
 import {
@@ -14,8 +15,11 @@ import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./ui/button";
 
 /**
- * Animated landing page for SSC Insight.
+ * Animated public landing page for SSC Insight.
  *
+ * Every call to action links to the sign-in route (`signInHref`); signed-in
+ * visitors never see this page — the root route redirects them to the
+ * workspace.
  * Motion stack, by design:
  *  - @react-spring/web  → physics: hero trail entrance, floating icon loops,
  *    count-up numbers, magnetic CTA tilt
@@ -185,7 +189,7 @@ function CountUp({
   );
 }
 
-export function Landing({ onEnter, userName }: { onEnter: () => void; userName?: string }) {
+export function Landing({ signInHref = "/sign-in" }: { signInHref?: string }) {
   const reduced = useReducedMotion();
   const heroRef = useRef<HTMLElement>(null);
   // Scroll parallax on the hero art (motion) — drifts the whole floater field.
@@ -239,8 +243,10 @@ export function Landing({ onEnter, userName }: { onEnter: () => void; userName?:
           </a>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Button onClick={onEnter} size="sm" className="gap-2">
-              Open workspace <PlainIcon name="arrowRight" size={15} />
+            <Button asChild size="sm" className="gap-2">
+              <Link href={signInHref}>
+                Open workspace <PlainIcon name="arrowRight" size={15} />
+              </Link>
             </Button>
           </div>
         </div>
@@ -270,19 +276,9 @@ export function Landing({ onEnter, userName }: { onEnter: () => void; userName?:
                 SSC CGL Tier 2 · Mock tracker
               </p>
               <h1 className="page-title mt-5 text-balance">
-                {userName ? (
-                  <>
-                    Welcome back, {userName.split(" ")[0]}.
-                    <br />
-                    <span className="text-accent">Your preparation, in perspective.</span>
-                  </>
-                ) : (
-                  <>
-                    Every mock tells you something.
-                    <br />
-                    <span className="text-accent">Start listening.</span>
-                  </>
-                )}
+                Every mock tells you something.
+                <br />
+                <span className="text-accent">Start listening.</span>
               </h1>
               <p className="muted mx-auto mt-6 max-w-xl text-[15px] leading-relaxed">
                 Track your effort. Understand your progress. Make the next mock
@@ -290,17 +286,18 @@ export function Landing({ onEnter, userName }: { onEnter: () => void; userName?:
                 insights panel that finds the pattern before exam day does.
               </p>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
-                <animated.button
-                  style={ctaSpring}
-                  onPointerMove={handleCtaMove}
-                  onPointerLeave={handleCtaLeave}
-                  onClick={onEnter}
-                  className="inline-flex items-center gap-2.5 bg-accent px-7 py-3.5 text-paper text-[15px] font-medium hover:bg-accent-hover transition-colors"
-                >
-                  <DuotoneIcon name="history" size={17} tone="paper" />
-                  Open your workspace
-                  <PlainIcon name="arrowRight" size={16} />
-                </animated.button>
+                <Link href={signInHref} className="inline-flex">
+                  <animated.button
+                    style={ctaSpring}
+                    onPointerMove={handleCtaMove}
+                    onPointerLeave={handleCtaLeave}
+                    className="inline-flex items-center gap-2.5 bg-accent px-7 py-3.5 text-paper text-[15px] font-medium hover:bg-accent-hover transition-colors"
+                  >
+                    <DuotoneIcon name="history" size={17} tone="paper" />
+                    Open your workspace
+                    <PlainIcon name="arrowRight" size={16} />
+                  </animated.button>
+                </Link>
                 <a
                   href="#features"
                   className="inline-flex items-center gap-2 border border-rule px-6 py-3 text-sm font-medium hover:bg-soft transition-colors"
@@ -461,8 +458,10 @@ export function Landing({ onEnter, userName }: { onEnter: () => void; userName?:
               score you&apos;re chasing.
             </p>
             <div className="mt-9">
-              <Button onClick={onEnter} className="gap-2.5 px-7 py-3.5 text-[15px]">
-                Open your workspace <PlainIcon name="arrowRight" size={17} />
+              <Button asChild className="gap-2.5 px-7 py-3.5 text-[15px]">
+                <Link href={signInHref}>
+                  Open your workspace <PlainIcon name="arrowRight" size={17} />
+                </Link>
               </Button>
             </div>
           </motion.div>

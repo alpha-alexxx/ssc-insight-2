@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion, MotionConfig, useReducedMotion } from "motion/react";
 import { PlainIcon } from "./icon";
-import { AppHeader, AppSidebar, MobileNav, VIEW_META, type AppView } from "./app-shell";
+import { AppHeader, AppSidebar, MobileNav, VIEW_HREF, VIEW_META, type AppView } from "./app-shell";
 import { CompareView } from "./compare-view";
 import { DateRangeFilter } from "./date-range-filter";
 import { HistoryPanel } from "./history-panel";
@@ -42,15 +43,27 @@ import { Dialog } from "radix-ui";
 import { formatNumber as n } from "@/lib/domain";
 
 /**
- * Dashboard orchestrator (Phase 4/6 refactor of the former 1721-line file).
+ * Workspace shell — the persistent client orchestrator behind the real
+ * /dashboard, /add, /history, /compare and /settings routes. Lives in the
+ * (workspace) layout so its state (attempts, filters, compare selection,
+ * in-progress edit, AI chat) survives route navigation; the active view is
+ * derived from the pathname and navigation is router.push.
+ *
  * Owns workspace state and data flow; presentation lives in focused modules:
  * app-shell (sidebar/header/mobile nav), settings-panels, compare-view,
  * history-panel, mock-detail-dialog, performance-overview, ai-insights.
- * Behavior is preserved 1:1; the dead legacy notice block and native
- * confirm() are gone.
  */
 
-export function Dashboard({
+/** Route path → shell view. Unknown paths fall back to the dashboard. */
+const PATH_VIEW: Record<string, AppView> = {
+  "/dashboard": "dashboard",
+  "/add": "add",
+  "/history": "history",
+  "/compare": "compare",
+  "/settings": "settings",
+};
+
+export function WorkspaceShell({
   authEnabled = false,
   userEmail = "",
   userName = "",
@@ -63,7 +76,7 @@ export function Dashboard({
   // ErrorBoundary already wraps the whole tree in layout.tsx.
   return (
     <ToastProvider>
-      <DashboardInner
+      <WorkspaceShellInner
         authEnabled={authEnabled}
         userEmail={userEmail}
         userName={userName}
@@ -72,7 +85,7 @@ export function Dashboard({
   );
 }
 
-function DashboardInner({
+function WorkspaceShellInner({
   authEnabled = false,
   userEmail = "",
   userName = "",
@@ -83,7 +96,11 @@ function DashboardInner({
 }) {
   const toast = useToast();
   const reduced = useReducedMotion();
-  const [view, setView] = useState<AppView>("dashboard");
+  const router = useRouter();
+  const pathname = usePathname();
+  // The view follows the URL; the (workspace) layout keeps this component
+  // mounted across navigations so workspace state persists.
+  const view = PATH_VIEW[pathname] ?? "dashboard";
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -300,14 +317,18 @@ function DashboardInner({
     }
   }
 
+  /** Plain route change — keeps in-progress state (editing, selection). */
+  function go(next: AppView) {
+    router.push(VIEW_HREF[next]);
+  }
+  /** Workspace navigation — starts the destination view from scratch. */
   function navigate(next: AppView) {
-    setView(next);
     setEditing(undefined);
     if (next === "history") setFilters((f) => ({ ...f, type: "all" }));
+    go(next);
   }
   function add() {
-    setEditing(undefined);
-    setView("add");
+    navigate("add");
   }
   useKeyboardShortcuts({
     onAddMock: add,
@@ -597,19 +618,10 @@ function DashboardInner({
         >
           Skip to content
         </a>
-        <AppSidebar
-          view={view}
-          onNavigate={navigate}
-          userName={userName}
-          userEmail={userEmail}
-        />
+        <AppSidebar view={view} userName={userName} userEmail={userEmail} />
         <div className="lg:ml-[224px]">
-          <AppHeader
-            view={view}
-            onNavigate={navigate}
-            authEnabled={authEnabled}
-          />
-          <MobileNav view={view} onNavigate={navigate} />
+          <AppHeader view={view} authEnabled={authEnabled} />
+          <MobileNav view={view} />
           <main
             id="main-content"
             /* -1 lets the skip link move real focus here (Phase 12). */
@@ -832,14 +844,14 @@ function DashboardInner({
           onEdit={(a) => {
             setEditing(a);
             setDetail(null);
-            setView("add");
+            go("add");
           }}
           onCompare={(a) => {
             setSelected((ids) =>
               ids.includes(a.id) ? ids : ids.length < 4 ? [...ids, a.id] : ids,
             );
             setDetail(null);
-            setView("compare");
+            go("compare");
           }}
           onDelete={(a) => void remove(a)}
           busy={busy}

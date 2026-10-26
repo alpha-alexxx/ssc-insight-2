@@ -2,15 +2,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/client";
-import { Dashboard } from "./dashboard";
 import { Button } from "./ui/button";
 
+/**
+ * Session guard around the whole (workspace) route group. Renders its
+ * children (the workspace shell) only while the signed-in session is
+ * verified — re-checked on focus, visibility, pageshow and every 60s.
+ */
 export function PrivateWorkspace({
   userId,
-  userName = "",
+  children,
 }: {
   userId: string;
-  userName?: string;
+  children: React.ReactNode;
 }) {
   const router = useRouter();
   const { data: session, isPending, error, refetch } = authClient.useSession();
@@ -49,7 +53,6 @@ export function PrivateWorkspace({
       setChecking(false);
     }
   }, [userId, router, refetch]);
-
   useEffect(() => {
     const invalidate = () => {
       setBlocked(true);
@@ -109,14 +112,7 @@ export function PrivateWorkspace({
     );
   return (
     <>
-      <div hidden={checking}>
-        <Dashboard
-          key={userId}
-          authEnabled
-          userEmail={session.user.email ?? ""}
-          userName={userName || session.user.name || ""}
-        />
-      </div>
+      <div hidden={checking}>{children}</div>
       {checking && (
         <p role="status" className="p-8 muted">
           Checking your session…

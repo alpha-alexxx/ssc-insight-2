@@ -14,7 +14,7 @@ export default async function SignInPage() {
   } catch (error) {
     unavailable = !(error instanceof SessionError && error.status === 401);
   }
-  if (signedIn) redirect("/");
+  if (signedIn) redirect("/dashboard");
   return (
     <>
       {unavailable && (

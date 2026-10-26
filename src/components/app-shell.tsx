@@ -14,9 +14,20 @@ import { ThemeToggle } from "./theme-toggle";
  * - Header: breadcrumb context, theme toggle on every viewport (previously
  *   hidden on mobile), help entry, auth control.
  * - Mobile nav: icon+label pills with ≥40px touch targets.
+ *
+ * Views are real App Router routes now: navigation renders <Link>s, and the
+ * active view is derived from the pathname by the workspace shell.
  */
 
 export type AppView = "dashboard" | "history" | "compare" | "add" | "settings";
+
+export const VIEW_HREF: Record<AppView, `/${string}`> = {
+  dashboard: "/dashboard",
+  history: "/history",
+  compare: "/compare",
+  add: "/add",
+  settings: "/settings",
+};
 
 export const VIEW_META: Record<AppView, { label: string; icon: Parameters<typeof DuotoneIcon>[0]["name"] }> = {
   dashboard: { label: "Dashboard", icon: "dashboard" },
@@ -36,12 +47,10 @@ export function initials(name: string): string {
 
 export function AppSidebar({
   view,
-  onNavigate,
   userName,
   userEmail,
 }: {
   view: AppView;
-  onNavigate: (view: AppView) => void;
   userName: string;
   userEmail: string;
 }) {
@@ -67,11 +76,11 @@ export function AppSidebar({
               "compare",
             ] as const
           ).map((id) => (
-            <button
+            <Link
               key={id}
+              href={VIEW_HREF[id]}
               className={`nav-button ${view === id ? "active" : ""}`}
               aria-current={view === id ? "page" : undefined}
-              onClick={() => onNavigate(id)}
             >
               <DuotoneIcon
                 name={VIEW_META[id].icon}
@@ -86,14 +95,14 @@ export function AppSidebar({
                   className="ml-auto size-1.5 rounded-pill bg-accent"
                 />
               )}
-            </button>
+            </Link>
           ))}
         </nav>
         <p className="section-label px-3 mb-3 mt-10">Preferences</p>
-        <button
+        <Link
+          href={VIEW_HREF.settings}
           className={`nav-button ${view === "settings" ? "active" : ""}`}
           aria-current={view === "settings" ? "page" : undefined}
-          onClick={() => onNavigate("settings")}
         >
           <DuotoneIcon
             name="settings"
@@ -101,7 +110,7 @@ export function AppSidebar({
             tone={view === "settings" ? "paper" : "ink"}
           />
           Settings &amp; backup
-        </button>
+        </Link>
       </div>
       <div className="mt-auto mx-5 mb-5 p-4 rounded-control bg-canvas">
         <DuotoneIcon name="book" size={22} tone="accent" className="mb-3" />
@@ -130,11 +139,9 @@ export function AppSidebar({
 
 export function AppHeader({
   view,
-  onNavigate,
   authEnabled,
 }: {
   view: AppView;
-  onNavigate: (view: AppView) => void;
   authEnabled: boolean;
 }) {
   return (
@@ -156,27 +163,21 @@ export function AppHeader({
         </span>
         <span className="h-5 w-px bg-rule-soft hidden xl:block" />
         <ThemeToggle />
-        <button
+        <Link
+          href={VIEW_HREF.settings}
           title="Settings, backup and about"
           aria-label="Settings, backup and about"
-          onClick={() => onNavigate("settings")}
           className="muted hover:text-accent transition-colors"
         >
           <PlainIcon name="help" size={19} />
-        </button>
+        </Link>
         <AuthControl enabled={authEnabled} />
       </div>
     </header>
   );
 }
 
-export function MobileNav({
-  view,
-  onNavigate,
-}: {
-  view: AppView;
-  onNavigate: (view: AppView) => void;
-}) {
+export function MobileNav({ view }: { view: AppView }) {
   const items = [
     "dashboard",
     "history",
@@ -189,8 +190,8 @@ export function MobileNav({
       className="lg:hidden flex gap-1 px-3 py-2 bg-paper border-b overflow-x-auto"
     >
       {items.map((v) => (
-        <button
-          onClick={() => onNavigate(v)}
+        <Link
+          href={VIEW_HREF[v]}
           aria-current={view === v ? "page" : undefined}
           key={v}
           className={`flex items-center gap-1.5 min-h-11 px-3 whitespace-nowrap rounded-control text-xs transition-colors ${
@@ -199,7 +200,7 @@ export function MobileNav({
         >
           <DuotoneIcon name={VIEW_META[v].icon} size={15} tone={view === v ? "paper" : "muted"} />
           {VIEW_META[v].label}
-        </button>
+        </Link>
       ))}
     </nav>
   );

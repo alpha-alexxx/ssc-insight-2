@@ -221,12 +221,18 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
 
   // ── 6. Sign-in page: always reachable ─────────────────────────────────
   // The page itself verifies the session (requireUser) and bounces
-  // signed-in visitors to "/", so the proxy never needs to probe here.
-  // Neon Auth's middleware always ALLOWS the login path (it special-cases
-  // the loginUrl), so probing it can never distinguish anonymous from
-  // signed-in visitors — doing so previously bounced every /sign-in request
-  // to "/" while "/" redirected anonymous users back, an infinite loop.
+  // signed-in visitors to "/dashboard", so the proxy never needs to probe
+  // here. Neon Auth's middleware always ALLOWS the login path (it
+  // special-cases the loginUrl), so probing it can never distinguish
+  // anonymous from signed-in visitors — doing so previously bounced every
+  // /sign-in request to "/" while "/" redirected anonymous users back, an
+  // infinite loop.
   if (pathname === LOGIN_URL) return passThrough("sign-in");
+
+  // ── 6b. Public landing page ───────────────────────────────────────────
+  // Anonymous visitors browse the landing; signed-in visitors are sent to
+  // /dashboard by the page's own requireUser check.
+  if (pathname === "/") return passThrough("landing");
 
   // ── 7. Private pages: session guard ───────────────────────────────────
   try {
