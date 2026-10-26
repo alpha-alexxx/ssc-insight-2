@@ -1,5 +1,10 @@
 import type { Prisma } from "@/generated/prisma/client";
-import type { Attempt, AttemptInput, Filters } from "./domain";
+import type {
+  AnalyticsAttempt,
+  Attempt,
+  AttemptInput,
+  Filters,
+} from "./domain";
 
 export const attemptInclude = {
   subjects: { orderBy: { position: "asc" as const } },
@@ -8,6 +13,24 @@ export const attemptInclude = {
 type StoredAttempt = Prisma.MockAttemptGetPayload<{
   include: typeof attemptInclude;
 }>;
+
+type StoredAnalyticsAttempt = Prisma.MockAttemptGetPayload<{
+  include: typeof attemptInclude;
+  omit: { notes: true };
+}>;
+
+function mapSubjects(row: {
+  subjects: StoredAttempt["subjects"];
+}): Attempt["subjects"] {
+  return row.subjects.map((s) => ({
+    subjectId: s.subjectId,
+    questions: s.questions,
+    correct: s.correct,
+    incorrect: s.incorrect,
+    scoreOverride: s.scoreOverride,
+    timeSeconds: s.timeSeconds,
+  }));
+}
 
 /** Keep database dates and relations behind the existing JSON contract. */
 export function toAttempt(row: StoredAttempt): Attempt {
@@ -27,14 +50,31 @@ export function toAttempt(row: StoredAttempt): Attempt {
     schemaVersion: 1,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    subjects: row.subjects.map((s) => ({
-      subjectId: s.subjectId,
-      questions: s.questions,
-      correct: s.correct,
-      incorrect: s.incorrect,
-      scoreOverride: s.scoreOverride,
-      timeSeconds: s.timeSeconds,
-    })),
+    subjects: mapSubjects(row),
+  };
+}
+
+/**
+ * AI analytics never receive note text. The query omits the column at the
+ * database level; this mapper must not reconstruct it.
+ */
+export function toAnalyticsAttempt(row: StoredAnalyticsAttempt): AnalyticsAttempt {
+  return {
+    id: row.id,
+    name: row.name,
+    platform: row.platform,
+    completedAt: row.completedAt.toISOString(),
+    type: row.type,
+    scoreOverride: row.scoreOverride,
+    overallTimeSeconds: row.overallTimeSeconds,
+    rank: row.rank,
+    participants: row.participants,
+    percentile: row.percentile,
+    source: row.source,
+    schemaVersion: 1,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    subjects: mapSubjects(row),
   };
 }
 

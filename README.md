@@ -37,6 +37,8 @@ npm run dev
 
 Open http://localhost:3000. `neon deploy` reconciles the services in `neon.ts` and pulls their variables into `.env.local` (or `.env` if present). It does not deploy the Next.js application to Vercel. Linking is not required for a machine already configured with the environment variables.
 
+Use `http://localhost:3000` (or the machine's LAN address), not `http://0.0.0.0:3000`, in the browser. The dev server binds `0.0.0.0` for network access; OAuth callbacks and redirects preserve the browser's `Host` header and normalize the bind address to `localhost`.
+
 ### Environment variables
 
 Copy `.env.example` for the names, or use Neon's environment pull. Never commit real values.
@@ -48,8 +50,16 @@ Copy `.env.example` for the names, or use Neon's environment pull. Never commit 
 | `NEON_AUTH_BASE_URL` | Managed Auth URL ending in `/auth` |
 | `NEON_AUTH_COOKIE_SECRET` | Cryptographically random secret of at least 32 characters |
 | `GOOGLE_AUTH_ENABLED` | Set to `true` after configuring a production Google OAuth client; otherwise sign-in is unavailable |
+| `AI_BASE_URL` | Optional OpenAI-compatible base URL; defaults to `https://api.openai.com/v1` |
+| `AI_API_KEY` | Server-only provider key; blank disables AI |
+| `AI_MODEL` | Provider model id; required to enable AI |
+| `AI_JSON_MODE` | `true` by default; set `false` if the provider rejects `response_format` |
+| `AI_DAILY_REQUEST_LIMIT` | AI requests per user per IST day; default `30` |
+| `AI_DAILY_TOKEN_LIMIT` | Charged tokens per user per IST day; default `300000` |
+| `AI_MAX_OUTPUT_TOKENS` | Per-call output cap; default `1200` |
+| `AI_TIMEOUT_MS` | Provider timeout below the 60-second route limit; default `45000` |
 
-Keep every variable server-side; none needs a `NEXT_PUBLIC_` prefix. The client talks to the same-origin `/api/auth` proxy. Missing or unavailable Auth configuration fails closed; private records are never returned anonymously. Build and client generation do not connect to the database or require live secrets.
+Keep every variable server-side; none needs a `NEXT_PUBLIC_` prefix. The client talks to the same-origin `/api/auth` proxy. Missing or unavailable Auth configuration fails closed; private records are never returned anonymously. Build and client generation do not connect to the database or require live secrets. AI is optional: when `AI_API_KEY` or `AI_MODEL` is blank, the coach is hidden, AI-assisted paste is disabled, and the rest of the tracker works normally.
 
 ### Migrations
 
@@ -72,13 +82,15 @@ Use the Neon Console to enter the client secret directly, or run the local maske
 
 The helper targets the selected production project/branch, sends the credentials over stdin, and does not save or print the secret. Confirm `neon neon-auth oauth-provider list` reports `google standard` with your client ID. Then set `GOOGLE_AUTH_ENABLED=true` and rebuild/redeploy.
 
+The public `/sign-in` route is also the product landing page. It performs an authoritative server-side `requireUser()` check with cookie caching disabled and redirects an already verified account to `/`; the client Google control only starts OAuth or offers a fallback workspace link after its own session hook resolves.
+
 The app uses the pinned `@neondatabase/auth` Next.js SDK for Google redirects, signed session cookies, and sign-out. The dashboard and OAuth completion route use session middleware, with an independent server session guard on the page and every data API. Missing sessions receive `401 UNAUTHENTICATED`; verification outages receive `503 AUTH_UNAVAILABLE`. The server obtains ownership exclusively from the verified session. Foreign record IDs return the same 404 as nonexistent IDs. Personalized responses and downloads use `Cache-Control: private, no-store`. Sign-out, session failures, and account changes unmount private dashboard state.
 
 ## Vercel
 
 Use the existing `sscinsight` project in `alphaalexxxs-projects`. Configure runtime database and Auth variables in its Production environment, marking the database URL and cookie secret as sensitive. Migrations use the direct URL locally or in controlled release jobs; the production runtime only needs the pooled URL.
 
-Redeploy after environment changes. Do not upload personal Firebase CLI credentials or local Google service-account files. `.gitignore` and `.vercelignore` exclude local credentials, environment files, generated output, and temporary review data. Preserve previous deployment/configuration for rollback.
+Redeploy after environment changes. Configure the optional `AI_*` variables in the same environment if the coach should be enabled; the API key is server-only. Do not upload personal Firebase CLI credentials or local Google service-account files. `.gitignore` and `.vercelignore` exclude local credentials, environment files, generated output, and temporary review data. Preserve previous deployment/configuration for rollback.
 
 ## Tracker behavior
 
@@ -89,10 +101,25 @@ Redeploy after environment changes. Do not upload personal Firebase CLI credenti
 - Paste Report extracts supported fields locally and always opens an editable review form.
 - Dashboard tabs are analytical scopes, not database type filters: Full Mocks projects saved full mocks; Subject Wise projects every subject result from full, sectional, and subject mocks; Sectional Wise projects explicit sectionals plus Section I/II derived from each full mock; All Mocks projects each saved attempt exactly once. Date, platform, and search filters apply to every scope.
 - A full mock is never counted again as four subject rows or two section rows in All Mocks. Derived sections sum their child results and do not inherit the parent score override, rank, percentile, or overall time.
-- Where you stand is one global subject radar built from all mock types. Make every attempt count shows Correct/Incorrect/Unattempted stacks for the selected scope. Subject Wise and Sectional Wise use one separate card per subject/section; Full Mocks keeps one ring card and All Mocks keeps rings grouped by mock type. Each ring center shows a genuine saved exam percentile when one exists, otherwise score percentage (marks ÷ maximum); parent percentiles are never borrowed for subjects or derived sections. Subject deep dive is available on every tab except Subject Wise.
+- Where you stand is one global subject radar built from all mock types. Make every attempt count uses responsive outcome cards for every scope: one aggregate Full Mocks card, one card per populated subject or section, and parent attempts grouped by mock type for All Mocks. Each card shows attempts/questions, a score-centered answer-distribution ring, Correct/Incorrect/Unattempted counts and shares, aggregate marks/max, accuracy, and only genuinely reported percentile data; it never copies parent percentiles into subjects or derived sections. Subject deep dive is available on every tab except Subject Wise.
 - One target score out of 390 is configured under Settings and applied as a percentage reference on every scope.
 - Accuracy is total correct divided by total attempted. Full averages exclude Computer. Unknown metrics display a dash; negative marks remain visible.
 - Compare two to four mocks.
+
+## AI coach and assisted entry
+
+AI is optional and **read-only**. It never saves, edits, deletes, or schedules a mock; the existing form remains the only write path.
+
+- **Coach card** (dashboard): a manual **Generate insight** action returns a structured read of the saved data: headline, summary, strengths, focus areas, next actions, and caveats. It never runs automatically.
+- **Chat drawer**: follow-up questions stream one answer at a time. History lives only in the mounted dashboard, so it disappears on reload, sign-out, account change, or session failure. There is no sessionStorage or localStorage copy.
+- **AI-assisted paste**: in Log a mock → Paste report, **Arrange with AI** sends up to 20,000 pasted characters to the server and opens an editable extraction review. Reported values, safely derived SSC counts, missing fields, and contradictions are shown before anything is copied. The user can correct mock details, every subject row, time, rank, participants, and percentile; required blockers must be resolved before **Use reviewed values** copies the draft into the normal form. Nothing is saved until the user clicks Save. The deterministic **Review extracted result** path still works without AI and accepts longer reports.
+- **Provider**: any OpenAI-compatible Chat Completions endpoint configured by the environment variables above. The endpoint must accept `model`, `messages`, and `max_tokens`; streaming is preferred but a non-streaming JSON response is also accepted. The app uses native `fetch`, sends JSON mode when `AI_JSON_MODE=true`, retries once without it if the provider rejects `response_format`, and allows one JSON-repair call for coach/extraction output. A localhost `AI_BASE_URL` works for local development but is not reachable from Vercel.
+- **Data sent to the provider**: aggregate analytics, the subject/section profile, target progress, and the latest 20 full mocks (date, platform, scores, rank/percentile, time, subject counts). **Notes, email, user ID, auth data, and per-attempt detail outside those latest 20 full mocks are never sent.** The pasted report text is sent only for extraction and is treated as untrusted data.
+- **Usage limit**: every coach, chat, and extraction request creates a row in `AiUsage` for the current IST day. Request and token caps are checked before context work; over-limit responses are `429 AI_QUOTA_EXCEEDED` with a reset time. Usage rows contain feature, model, token counts, status, and safe error codes — never prompts, responses, notes, or report text.
+- **Privacy**: selecting a provider means its operator can see the aggregate context described above. Configure only a provider you trust. AI keys stay server-side and are never returned to the browser.
+- **Failure behavior**: missing config → AI hidden; provider timeout/error/invalid JSON → a readable error, with deterministic parsing and manual entry still available. AI responses and usage are `Cache-Control: private, no-store`.
+
+The AI schema migration is `prisma/migrations/20261025000000_ai_usage`. Apply it explicitly on a QA branch before deploying the matching app revision.
 
 ## Backup and account transfer
 
@@ -116,6 +143,10 @@ Routes retain `{data}` / `{error: {code, message}}` response envelopes, validati
 | `/api/analytics` | GET | Scope projection (`view=full\|subject\|sectional\|all`), radar profile, target snapshots |
 | `/api/settings` | GET, PUT | Private target score out of 390 |
 | `/api/backup` | GET, POST | GET v2 JSON backup or read-only CSV; POST merge/replace preview and atomic commit |
+| `/api/ai/status` | GET | AI enabled flag, model, and today's request/token usage |
+| `/api/ai/coach` | POST | Structured coach insight from aggregate context |
+| `/api/ai/chat` | POST | Streamed NDJSON coach chat (`start`, `delta`, `done`, `error`) |
+| `/api/ai/extract` | POST | Form-shaped draft from one pasted report; never writes |
 | `/api/auth/*` | SDK methods | Same-origin Neon Auth proxy |
 
 List/analytics filters: `type`, `subject`, `platform`, `from`, `to`, `search`. `type` and `subject` filter Mock history and Compare; dashboard scopes ignore them. Literal substring search escapes PostgreSQL wildcard characters. Date ranges are inclusive IST dates. Domain calculations run on the server; filters run through Prisma.

@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -868,9 +868,11 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
 export function PerformanceOverview({
   analytics,
   target,
+  coach,
 }: {
   analytics: Analytics | null;
   target: number | null;
+  coach?: ReactNode;
 }) {
   if (!analytics) return <EmptyChart>Loading your preparation…</EmptyChart>;
   const { scope, summary } = analytics;
@@ -931,6 +933,7 @@ export function PerformanceOverview({
           </div>
         ))}
       </div>
+      {coach}
       <div className="grid xl:grid-cols-[1.65fr_1fr] gap-6 mb-6">
         <Panel title={copy.trend} description={copy.trendDescription}>
           <ScopeTrend analytics={analytics} targetScore={target} />

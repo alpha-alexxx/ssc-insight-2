@@ -1,4 +1,5 @@
 import {
+  type AnalyticsAttempt,
   type Attempt,
   type DashboardScope,
   type Filters,
@@ -20,7 +21,7 @@ const istDateKey = (date: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(
     new Date(date),
   );
-export function filterAttempts(attempts: Attempt[], f: Filters) {
+export function filterAttempts(attempts: AnalyticsAttempt[], f: Filters) {
   return attempts.filter(
     (a) =>
       (!f.type || f.type === "all" || a.type === f.type) &&
@@ -131,7 +132,7 @@ const comparePoints = (a: PerformancePoint, b: PerformancePoint) =>
   a.sourceAttemptId.localeCompare(b.sourceAttemptId) ||
   a.entityId.localeCompare(b.entityId);
 function parentPoint(
-  attempt: Attempt,
+  attempt: AnalyticsAttempt,
   entityId: string,
   seriesId: string,
   seriesLabel: string,
@@ -164,7 +165,7 @@ function parentPoint(
   };
 }
 function derivedSectionPoint(
-  attempt: Attempt,
+  attempt: AnalyticsAttempt,
   sectionId: SectionId,
 ): PerformancePoint | null {
   const section = SECTIONS[sectionId];
@@ -208,7 +209,7 @@ function derivedSectionPoint(
     percentile: null,
   };
 }
-function explicitSectionPoint(attempt: Attempt): PerformancePoint | null {
+function explicitSectionPoint(attempt: AnalyticsAttempt): PerformancePoint | null {
   const sectionId =
     sectionForSubjects(attempt.subjects) ??
     (attempt.subjects.some((s) => s.subjectId === "quant")
@@ -216,7 +217,7 @@ function explicitSectionPoint(attempt: Attempt): PerformancePoint | null {
       : "section2");
   return parentPoint(attempt, sectionId, sectionId, SECTIONS[sectionId].name);
 }
-function subjectPoints(attempt: Attempt): PerformancePoint[] {
+function subjectPoints(attempt: AnalyticsAttempt): PerformancePoint[] {
   return attempt.subjects.map((subject) => {
     const stats = subjectStats(subject);
     return {
@@ -251,7 +252,7 @@ function subjectPoints(attempt: Attempt): PerformancePoint[] {
 }
 
 export function projectPerformance(
-  attempts: Attempt[],
+  attempts: AnalyticsAttempt[],
   scope: DashboardScope,
 ): PerformancePoint[] {
   const points = attempts.flatMap((attempt) => {
@@ -400,7 +401,7 @@ function stacksFor(
   });
 }
 export function buildWhereYouStand(
-  attempts: Attempt[],
+  attempts: AnalyticsAttempt[],
 ): WhereYouStandRow[] {
   return subjectIds.map((subjectId) => {
     const rows = attempts.flatMap((attempt) =>
@@ -418,7 +419,7 @@ export function buildWhereYouStand(
   });
 }
 function deepDiveFor(
-  attempts: Attempt[],
+  attempts: AnalyticsAttempt[],
   scope: Exclude<DashboardScope, "subject">,
 ): DeepDiveSubject[] {
   const includeComputer = scope !== "sectional";
@@ -490,7 +491,7 @@ function targetSnapshots(points: PerformancePoint[]): TargetSnapshot[] {
       pointCount: rows.length,
     }));
 }
-export function analyze(allAttempts: Attempt[], scope: DashboardScope = "all") {
+export function analyze(allAttempts: AnalyticsAttempt[], scope: DashboardScope = "all") {
   const points = projectPerformance(allAttempts, scope);
   const sourceAttemptIds = [...new Set(points.map((p) => p.sourceAttemptId))];
   const correct = sum(points.map((p) => p.correct));

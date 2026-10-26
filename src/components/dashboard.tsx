@@ -2,6 +2,16 @@
 import { Panel, EmptyChart } from "./dashboard-panels";
 import { PerformanceOverview } from "./performance-overview";
 import { AuthControl } from "./auth-control";
+import { AiCoachCard } from "./ai-coach-card";
+import { AiChatDrawer } from "./ai-chat-drawer";
+import { NdjsonDecoder, parseChatEvent } from "@/lib/ai/ndjson";
+import type {
+  AiStatus,
+  ChatMessage,
+  CoachMeta,
+  CoachResponse,
+} from "@/lib/ai/client-types";
+import type { CoachInsight } from "@/lib/ai/schemas";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, MotionConfig } from "motion/react";
@@ -68,6 +78,9 @@ const typeName = (type: string) =>
     : type === "sectional"
       ? "Sectional"
       : "Subject";
+const newId = () =>
+  globalThis.crypto?.randomUUID?.() ??
+  `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 export function Dashboard({
   authEnabled = false,
   userEmail = "",
@@ -97,6 +110,16 @@ export function Dashboard({
   const [applyTarget, setApplyTarget] = useState(false);
   const [safetyDownloaded, setSafetyDownloaded] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [coachInsight, setCoachInsight] = useState<CoachInsight | null>(null);
+  const [coachMeta, setCoachMeta] = useState<CoachMeta | null>(null);
+  const [coachBusy, setCoachBusy] = useState(false);
+  const [coachError, setCoachError] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatStreaming, setChatStreaming] = useState(false);
+  const [chatError, setChatError] = useState("");
+  const chatAbort = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const previewId = useRef(0);
   const requestId = useRef(0);
@@ -143,6 +166,132 @@ export function Dashboard({
     const timer = setTimeout(() => void refresh(), 150);
     return () => clearTimeout(timer);
   }, [refresh]);
+  const refreshAiStatus = useCallback(async () => {
+    try {
+      setAiStatus(await api<AiStatus>("/api/ai/status"));
+    } catch {
+      // AI is optional; a status failure must never block the dashboard.
+    }
+  }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => void refreshAiStatus(), 0);
+    return () => clearTimeout(timer);
+  }, [refreshAiStatus]);
+  useEffect(
+    () => () => {
+      chatAbort.current?.abort();
+    },
+    [],
+  );
+  function clearCoach() {
+    setCoachInsight(null);
+    setCoachMeta(null);
+  }
+  async function generateCoach() {
+    setCoachBusy(true);
+    setCoachError("");
+    try {
+      const result = await api<CoachResponse>("/api/ai/coach", {
+        method: "POST",
+        body: "{}",
+      });
+      setCoachInsight(result.insight);
+      setCoachMeta(result.meta);
+    } catch (e) {
+      setCoachError(
+        e instanceof Error ? e.message : "Could not generate an insight",
+      );
+    } finally {
+      setCoachBusy(false);
+      void refreshAiStatus();
+    }
+  }
+  async function sendChat(text: string) {
+    if (chatStreaming) return;
+    const userMessage: ChatMessage = {
+      id: newId(),
+      role: "user",
+      content: text,
+    };
+    const assistantId = newId();
+    const history = [...chatMessages, userMessage]
+      .map((message) => ({ role: message.role, content: message.content }))
+      .filter((message) => message.content.trim())
+      .slice(-8);
+    while (history.length && history[0].role === "assistant") history.shift();
+    setChatMessages((current) => [
+      ...current,
+      userMessage,
+      { id: assistantId, role: "assistant", content: "" },
+    ]);
+    setChatStreaming(true);
+    setChatError("");
+    const abort = new AbortController();
+    chatAbort.current = abort;
+    try {
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history }),
+        signal: abort.signal,
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        if (response.status === 401)
+          window.dispatchEvent(new Event("ssc:session-ended"));
+        if (body?.error?.code === "AUTH_UNAVAILABLE")
+          window.dispatchEvent(new Event("ssc:auth-unavailable"));
+        throw new Error(
+          body?.error?.message ?? "The coach could not answer. Try again.",
+        );
+      }
+      if (!response.body) throw new Error("The coach returned an empty answer.");
+      const reader = response.body.getReader();
+      const decoder = new NdjsonDecoder();
+      let finished = false;
+      const handle = (line: string) => {
+        const event = parseChatEvent(line);
+        if (!event) return;
+        if (event.type === "delta") {
+          setChatMessages((current) =>
+            current.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: message.content + event.text }
+                : message,
+            ),
+          );
+        } else if (event.type === "error") {
+          setChatError(event.message);
+          finished = true;
+        } else if (event.type === "done") {
+          finished = true;
+        }
+      };
+      while (!finished) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of decoder.push(value)) {
+          handle(line);
+          if (finished) break;
+        }
+      }
+      for (const line of decoder.flush()) {
+        handle(line);
+        if (finished) break;
+      }
+      await reader.cancel().catch(() => undefined);
+    } catch (e) {
+      if (!abort.signal.aborted)
+        setChatError(
+          e instanceof Error ? e.message : "The coach could not answer.",
+        );
+    } finally {
+      setChatStreaming(false);
+      if (chatAbort.current === abort) chatAbort.current = null;
+      void refreshAiStatus();
+    }
+  }
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(""), 4500);
@@ -172,6 +321,7 @@ export function Dashboard({
       await api(`/api/mock-attempts/${a.id}`, { method: "DELETE", body: "{}" });
       setDetail(null);
       setSelected((ids) => ids.filter((id) => id !== a.id));
+      clearCoach();
       setNotice("Mock deleted");
       await refresh();
     } catch (e) {
@@ -355,6 +505,7 @@ export function Dashboard({
             ? "target cleared"
             : `target set to ${n(result.target.targetScore)} / 390`,
         );
+      clearCoach();
       setNotice(parts.length ? parts.join(" · ") : "Backup imported");
       resetImport();
       await refresh();
@@ -540,6 +691,7 @@ export function Dashboard({
                 attempt={editing}
                 onClose={() => navigate("dashboard")}
                 onSaved={() => {
+                  clearCoach();
                   navigate("dashboard");
                   setNotice("Mock saved. Your progress is up to date.");
                   void refresh();
@@ -632,6 +784,7 @@ export function Dashboard({
                               }),
                             });
                             setTarget(targetInput ? Number(targetInput) : null);
+                            clearCoach();
                             setNotice("Target updated");
                           } catch (e) {
                             setNotice(
@@ -983,8 +1136,16 @@ export function Dashboard({
                   </div>
                 ) : (
                   <>
-                    <div className="flex flex-wrap items-center gap-3 mb-6">
-                      <div className="flex rounded-none border border-rule p-1 bg-paper gap-1">
+                    <div className="mb-5 flex flex-wrap items-center gap-3">
+                      <div
+                        className="flex max-w-full shrink-0 gap-0 overflow-x-auto border border-rule bg-paper p-1"
+                        role="group"
+                        aria-label={
+                          view === "dashboard"
+                            ? "Dashboard analysis scope"
+                            : "Mock type filter"
+                        }
+                      >
                         {[
                           { id: "full", label: "Full mocks" },
                           { id: "subject", label: "Subject wise" },
@@ -999,7 +1160,7 @@ export function Dashboard({
                             <button
                               key={t.id}
                               aria-pressed={active}
-                              className={`px-3 py-1.5 rounded-none text-xs transition-colors ${active ? "bg-ink text-paper" : "muted hover:bg-soft"}`}
+                              className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 text-xs transition-colors ${active ? "bg-ink text-paper" : "muted hover:bg-soft hover:text-ink"}`}
                               onClick={() =>
                                 view === "dashboard"
                                   ? setScope(t.id as DashboardScope)
@@ -1093,7 +1254,28 @@ export function Dashboard({
                       </p>
                     )}
                     {view === "dashboard" && (
-                      <PerformanceOverview analytics={analytics} target={target} />
+                      <div aria-busy={loading}>
+                        <PerformanceOverview
+                          analytics={analytics}
+                          target={target}
+                          coach={
+                            aiStatus?.enabled ? (
+                              <AiCoachCard
+                                status={aiStatus}
+                                insight={coachInsight}
+                                meta={coachMeta}
+                                busy={coachBusy}
+                                error={coachError}
+                                onGenerate={() => void generateCoach()}
+                                onOpenChat={() => {
+                                  setChatError("");
+                                  setChatOpen(true);
+                                }}
+                              />
+                            ) : undefined
+                          }
+                        />
+                      </div>
                     )}
                     {view === "compare" ? (
                       <>
@@ -1661,6 +1843,23 @@ export function Dashboard({
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
+        <AiChatDrawer
+          open={chatOpen}
+          onOpenChange={(open) => {
+            if (!open) chatAbort.current?.abort();
+            setChatOpen(open);
+          }}
+          messages={chatMessages}
+          streaming={chatStreaming}
+          error={chatError}
+          onSend={(text) => void sendChat(text)}
+          onStop={() => chatAbort.current?.abort()}
+          onClear={() => {
+            chatAbort.current?.abort();
+            setChatMessages([]);
+            setChatError("");
+          }}
+        />
       </div>
     </MotionConfig>
   );

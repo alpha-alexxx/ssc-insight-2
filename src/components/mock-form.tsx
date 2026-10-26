@@ -1,11 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   ClipboardPaste,
   Save,
   AlertCircle,
   Check,
+  RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -34,6 +36,13 @@ import {
 } from "@/lib/mock-entry";
 import { DurationInput } from "./duration-input";
 import { parseReport } from "@/lib/report-parser";
+import type { AiStatus, ExtractResponse } from "@/lib/ai/client-types";
+import {
+  extractionToAttempt,
+  MAX_EXTRACT_CHARS,
+  type ExtractionDraft,
+} from "@/lib/ai/extraction";
+import { ExtractionReview } from "./extraction-review";
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
@@ -99,6 +108,38 @@ export function MockForm({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [duplicateReviewed, setDuplicateReviewed] = useState(false);
+  const [additionalOpen, setAdditionalOpen] = useState(() =>
+    Boolean(
+      attempt ||
+        values.rank != null ||
+        values.participants != null ||
+        values.percentile != null ||
+        values.notes,
+    ),
+  );
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [aiStatusChecked, setAiStatusChecked] = useState(false);
+  const [aiDraft, setAiDraft] = useState<ExtractionDraft | null>(null);
+  const [aiReviewing, setAiReviewing] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState("");
+  useEffect(() => {
+    if (mode !== "paste" || aiStatusChecked) return;
+    let cancelled = false;
+    void api<AiStatus>("/api/ai/status")
+      .then((status) => {
+        if (!cancelled) setAiStatus(status);
+      })
+      .catch(() => {
+        // The deterministic parser remains available without AI status.
+      })
+      .finally(() => {
+        if (!cancelled) setAiStatusChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, aiStatusChecked]);
   const set = <K extends keyof AttemptInput>(
     key: K,
     value: AttemptInput[K],
@@ -170,88 +211,278 @@ export function MockForm({
       setBusy(false);
     }
   }
-  function importPaste() {
-    setImportVersion((v) => v + 1);
-    const parsed = parseReport(paste);
-    if (parsed.values.platform) {
-      const selection = platformSelection(parsed.values.platform);
-      setPlatformChoice(selection);
-      if (selection !== "other") parsed.values.platform = selection;
+  function applyExtracted(draft: {
+    values: Partial<AttemptInput>;
+    warnings: string[];
+    date?: string;
+  }) {
+    const incoming: Partial<AttemptInput> = { ...draft.values };
+    for (const key of Object.keys(incoming) as (keyof AttemptInput)[]) {
+      if (incoming[key] === undefined) delete incoming[key];
     }
-    setValues((v) => ({
-      ...v,
-      ...parsed.values,
-      subjects: parsed.values.subjects?.length
-        ? parsed.values.subjects
-        : v.subjects,
-    }));
-    setWarnings(parsed.warnings);
+    const incomingSubjects = incoming.subjects;
+    const type = incomingSubjects?.length
+      ? (incoming.type ?? values.type)
+      : values.type;
+    let subjects = values.subjects;
+    if (incomingSubjects?.length) {
+      const section = sectionForSubjects(incomingSubjects);
+      const ids: SubjectId[] =
+        type === "full"
+          ? [
+              ...MAIN_SUBJECT_IDS,
+              ...(incomingSubjects.some((s) => s.subjectId === "computer")
+                ? (["computer"] as const)
+                : []),
+            ]
+          : type === "sectional"
+            ? section
+              ? [...SECTIONS[section].subjectIds]
+              : incomingSubjects.map((s) => s.subjectId)
+            : [incomingSubjects[0].subjectId];
+      subjects = ids.map((id) => {
+        const base =
+          values.subjects.find((s) => s.subjectId === id) ?? blankSubject(id);
+        const found = incomingSubjects.find((s) => s.subjectId === id);
+        if (!found) return base;
+        return {
+          ...base,
+          ...found,
+          subjectId: id,
+          questions:
+            type === "full" ? SUBJECTS[id].questions : found.questions,
+        };
+      });
+    }
+    const platform = incoming.platform;
+    let nextPlatform = incoming.platform ?? values.platform;
+    let nextChoice = platformChoice;
+    if (platform !== undefined) {
+      nextChoice = platformSelection(platform);
+      nextPlatform = nextChoice === "other" ? platform : nextChoice;
+    }
+    setValues({
+      ...values,
+      ...incoming,
+      type,
+      subjects,
+      platform: nextPlatform,
+    });
+    setPlatformChoice(nextChoice);
+    if (draft.date) setDate(draft.date);
+    setWarnings(draft.warnings);
+    setImportVersion((v) => v + 1);
     setMode("form");
+    setDuplicateReviewed(false);
     setError("");
   }
+  function importPaste() {
+    applyExtracted(parseReport(paste));
+  }
+  async function importWithAi() {
+    setAiBusy(true);
+    setAiError("");
+    setAiDraft(null);
+    try {
+      const result = await api<ExtractResponse>("/api/ai/extract", {
+        method: "POST",
+        body: JSON.stringify({ text: paste }),
+      });
+      setAiDraft(result.draft);
+      setAiReviewing(true);
+    } catch (e) {
+      setAiError(
+        e instanceof Error ? e.message : "Could not arrange this report",
+      );
+    } finally {
+      setAiBusy(false);
+    }
+  }
+  function applyAiDraft() {
+    if (!aiDraft) return;
+    try {
+      const reviewed = extractionToAttempt(aiDraft, values.notes);
+      setValues(reviewed.values);
+      setDate(reviewed.date);
+      setPlatformChoice(platformSelection(reviewed.values.platform));
+      setWarnings(reviewed.warnings);
+      setImportVersion((version) => version + 1);
+      setMode("form");
+      setDuplicateReviewed(false);
+      setError("");
+      setAiDraft(null);
+      setAiReviewing(false);
+      setAiError("");
+    } catch (cause) {
+      setAiError(
+        cause instanceof Error
+          ? cause.message
+          : "Resolve the highlighted fields before continuing.",
+      );
+    }
+  }
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="mx-auto max-w-6xl">
       <button
-        className="flex items-center gap-2 muted mb-6 hover:text-accent"
+        className="mb-4 flex items-center gap-2 text-sm muted hover:text-accent"
         onClick={onClose}
       >
         <ArrowLeft size={16} /> Back to dashboard
       </button>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-7">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-rule pb-4">
         <div>
           <h1 className="page-title">{attempt ? "Edit mock" : "Log a mock"}</h1>
-          <p className="muted mt-1">
-            Small steps. A clearer picture of your preparation.
+          <p className="mt-1 text-sm muted">
+            Record the result now; refine the details before saving.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="inline-flex border border-rule bg-paper p-1" role="group" aria-label="Entry method">
           <Button
-            variant={mode === "form" ? "default" : "outline"}
+            size="sm"
+            variant="ghost"
+            className={mode === "form" ? "bg-ink text-paper hover:bg-ink hover:text-paper" : ""}
             aria-pressed={mode === "form"}
             onClick={() => setMode("form")}
           >
-            Manual entry
+            Manual
           </Button>
           <Button
-            variant={mode === "paste" ? "default" : "outline"}
+            size="sm"
+            variant="ghost"
+            className={mode === "paste" ? "bg-ink text-paper hover:bg-ink hover:text-paper" : ""}
             aria-pressed={mode === "paste"}
             onClick={() => setMode("paste")}
           >
-            <ClipboardPaste size={15} /> Paste report
+            <ClipboardPaste size={14} /> Paste report
           </Button>
         </div>
       </div>
       {mode === "paste" ? (
-        <section className="panel p-6">
-          <h2 className="panel-title mb-2">Bring your result with you</h2>
-          <p className="muted mb-5">
-            Paste the text from your platform’s result page, including the
-            sectional summary. You’ll review everything before saving.
-          </p>
-          <label>
-            Result report
-            <textarea
-              rows={16}
-              placeholder="Your Score… Sectional Summary…"
-              value={paste}
-              onChange={(e) => setPaste(e.target.value)}
-              maxLength={100000}
+        <section className="panel p-4 sm:p-5">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="panel-title">
+                {aiDraft && aiReviewing ? "Review AI draft" : "Paste a scorecard"}
+              </h2>
+              <p className="mt-1 text-sm muted">
+                {aiDraft && aiReviewing
+                  ? "Check the extracted values before copying them into the form."
+                  : "Paste the report text, then choose a standard or AI-assisted import."}
+              </p>
+            </div>
+            <ol className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted" aria-label="Import progress">
+              <li className={!aiReviewing ? "text-ink" : ""}>1 Paste</li>
+              <li aria-hidden="true">/</li>
+              <li className={aiReviewing ? "text-ink" : ""}>2 Review</li>
+              <li aria-hidden="true">/</li>
+              <li>3 Save</li>
+            </ol>
+          </div>
+          {aiDraft && aiReviewing ? (
+            <ExtractionReview
+              draft={aiDraft}
+              onChange={setAiDraft}
+              onUse={applyAiDraft}
+              onBack={() => setAiReviewing(false)}
+              onDiscard={() => {
+                setAiDraft(null);
+                setAiReviewing(false);
+                setAiError("");
+              }}
             />
-          </label>
-          <Button
-            className="mt-5"
-            disabled={!paste.trim()}
-            onClick={importPaste}
-          >
-            Review extracted result <Check size={15} />
-          </Button>
+          ) : (
+            <>
+              <label>
+                Result report
+                <textarea
+                  rows={10}
+                  placeholder="Your Score… Sectional Summary…"
+                  value={paste}
+                  disabled={aiBusy}
+                  onChange={(e) => {
+                    setPaste(e.target.value);
+                    setAiDraft(null);
+                    setAiReviewing(false);
+                    setAiError("");
+                  }}
+                  maxLength={100000}
+                />
+              </label>
+              <div className="mt-2 flex flex-wrap justify-between gap-2 text-[11px] text-muted">
+                <span>
+                  AI can arrange up to {MAX_EXTRACT_CHARS.toLocaleString("en-IN")} characters. The manual parser accepts longer reports.
+                </span>
+                <span className={paste.length > MAX_EXTRACT_CHARS ? "text-warning" : ""}>
+                  {paste.length.toLocaleString("en-IN")} / {MAX_EXTRACT_CHARS.toLocaleString("en-IN")} for AI
+                </span>
+              </div>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <Button disabled={!paste.trim() || aiBusy} onClick={importPaste}>
+                  Import with standard parser <Check size={15} />
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={
+                    !paste.trim() ||
+                    paste.length > MAX_EXTRACT_CHARS ||
+                    aiBusy ||
+                    !aiStatus?.enabled
+                  }
+                  title={
+                    aiStatus && !aiStatus.enabled
+                      ? "AI is not configured on this server."
+                      : paste.length > MAX_EXTRACT_CHARS
+                        ? `AI accepts up to ${MAX_EXTRACT_CHARS.toLocaleString("en-IN")} characters.`
+                        : undefined
+                  }
+                  onClick={() => void importWithAi()}
+                >
+                  {aiBusy ? (
+                    <RefreshCw size={15} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={15} />
+                  )}
+                  {aiBusy ? "Arranging…" : "Arrange with AI"}
+                </Button>
+                {aiDraft && (
+                  <Button variant="outline" onClick={() => setAiReviewing(true)}>
+                    Continue AI review
+                  </Button>
+                )}
+              </div>
+              {!aiStatusChecked && (
+                <p className="mt-3 text-xs muted">Checking AI availability…</p>
+              )}
+              {aiStatusChecked && !aiStatus && (
+                <p className="mt-3 text-xs text-warning">
+                  AI status is unavailable. The standard parser still works.
+                </p>
+              )}
+              {aiStatus && !aiStatus.enabled && (
+                <p className="mt-3 text-xs muted">
+                  AI is not configured on this server. Automatic review and manual entry still work.
+                </p>
+              )}
+              <p className="mt-3 text-[11px] text-muted">
+                AI maps the pasted report into an editable draft but never saves. You will review every field before copying it to the form.
+              </p>
+              {aiError && (
+                <p
+                  role="alert"
+                  className="mt-4 border border-warning bg-warning-soft px-4 py-3 text-xs text-warning"
+                >
+                  {aiError}
+                </p>
+              )}
+            </>
+          )}
         </section>
       ) : (
-        <form onSubmit={save} className="space-y-6">
+        <form onSubmit={save} className="space-y-4">
           {warnings.length > 0 && (
             <div
               role="status"
-              className="rounded-none bg-warning-soft p-4 text-warning text-sm"
+              className="border border-warning bg-warning-soft p-3 text-sm text-warning"
             >
               <strong>Review your report</strong>
               {warnings.map((w, i) => (
@@ -261,9 +492,9 @@ export function MockForm({
               ))}
             </div>
           )}
-          <section className="panel p-6">
+          <section className="panel p-4 sm:p-5">
             <h2 className="panel-title mb-5">Mock details</h2>
-            <div className="grid sm:grid-cols-2 gap-5">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label>
                 Mock name
                 <input
@@ -402,128 +633,116 @@ export function MockForm({
               </div>
             )}
           </section>
-          <section className="panel p-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-6">
+          <section className="panel p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="panel-title">Subject results</h2>
-              <p className="text-xs muted">
-                +3 correct · −1 incorrect · 0 unattempted
-              </p>
+              <p className="text-xs muted">+3 correct · −1 incorrect</p>
             </div>
-            <div
-              aria-live="polite"
-              aria-atomic="true"
-              className="mb-6 flex flex-wrap gap-x-8 gap-y-3 border-y border-rule-soft py-4 tabular"
-            >
-              <p className="text-sm">
-                Test score{" "}
-                <strong className="ml-2">
-                  {formatNumber(stats.score)} / {stats.maxScore}
-                </strong>
-              </p>
-              <p className="text-sm">
-                Overall time{" "}
-                <strong className="ml-2">
-                  {formatTime(computedValues.overallTimeSeconds).padStart(
-                    8,
-                    "0",
-                  )}
-                </strong>
-              </p>
+            <div className="hidden grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(4.75rem,.65fr))_minmax(12rem,1.2fr)] gap-3 border-y border-rule-soft bg-canvas px-3 py-2 text-[10px] uppercase tracking-wide text-muted lg:grid">
+              <span>Subject</span>
+              <span>Questions</span>
+              <span>Correct</span>
+              <span>Incorrect</span>
+              <span>Score</span>
+              <span>Time</span>
             </div>
-            <div className="space-y-7">
+            <div className="divide-y divide-rule-soft border-b border-rule-soft">
               {values.subjects.map((s, i) => {
                 const sectionHeading =
                   values.type === "full"
                     ? fullMockSectionHeading(s.subjectId)
                     : null;
                 return (
-                <div key={s.subjectId}>
-                  {sectionHeading && (
-                    <p className="mb-4 border-b border-rule-soft pb-2 text-sm font-medium">
-                      {sectionHeading}
-                    </p>
-                  )}
-                  <h3 className="font-medium text-sm mb-3">
-                    {SUBJECTS[s.subjectId].name}
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <label>
-                      Questions
-                      <input
-                        type="number"
-                        min={1}
-                        max={500}
-                        required
-                        readOnly={values.type === "full"}
-                        value={s.questions}
-                        onChange={(e) =>
-                          updateSubject(i, {
-                            questions: Number(e.target.value),
-                          })
+                  <div key={s.subjectId} className="py-3">
+                    {sectionHeading && (
+                      <p className="mb-2 text-[10px] uppercase tracking-wide text-muted">
+                        {sectionHeading}
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 items-end gap-3 lg:grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(4.75rem,.65fr))_minmax(12rem,1.2fr)]">
+                      <div className="col-span-2 self-center lg:col-span-1">
+                        <h3 className="text-sm font-medium">
+                          {SUBJECTS[s.subjectId].name}
+                        </h3>
+                        <p className="mt-1 text-[11px] tabular muted">
+                          {s.correct + s.incorrect} attempted · {s.questions - s.correct - s.incorrect} skipped
+                        </p>
+                      </div>
+                      <label>
+                        <span className="lg:sr-only">Questions</span>
+                        <input
+                          aria-label={`${SUBJECTS[s.subjectId].short} questions`}
+                          type="number"
+                          min={1}
+                          max={500}
+                          required
+                          readOnly={values.type === "full"}
+                          value={s.questions}
+                          onChange={(e) =>
+                            updateSubject(i, { questions: Number(e.target.value) })
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span className="lg:sr-only">Correct</span>
+                        <input
+                          aria-label={`${SUBJECTS[s.subjectId].short} correct`}
+                          type="number"
+                          min={0}
+                          max={s.questions}
+                          required
+                          value={s.correct}
+                          onChange={(e) =>
+                            updateSubject(i, { correct: Number(e.target.value) })
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span className="lg:sr-only">Incorrect</span>
+                        <input
+                          aria-label={`${SUBJECTS[s.subjectId].short} incorrect`}
+                          type="number"
+                          min={0}
+                          max={s.questions}
+                          required
+                          value={s.incorrect}
+                          onChange={(e) =>
+                            updateSubject(i, { incorrect: Number(e.target.value) })
+                          }
+                        />
+                      </label>
+                      <div className="self-end">
+                        <span className="mb-[7px] block text-xs font-medium text-muted lg:sr-only">Score</span>
+                        <output className="flex h-10 items-center border border-rule-soft bg-canvas px-3 text-sm font-medium tabular">
+                          {formatNumber(s.correct * 3 - s.incorrect)}
+                        </output>
+                      </div>
+                      <DurationInput
+                        key={`${s.subjectId}-${importVersion}`}
+                        subjectName={SUBJECTS[s.subjectId].short}
+                        value={s.timeSeconds}
+                        onChange={(seconds) =>
+                          updateSubject(i, { timeSeconds: seconds })
                         }
                       />
-                    </label>
-                    <label>
-                      Correct
-                      <input
-                        type="number"
-                        min={0}
-                        max={s.questions}
-                        required
-                        value={s.correct}
-                        onChange={(e) =>
-                          updateSubject(i, { correct: Number(e.target.value) })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Incorrect
-                      <input
-                        type="number"
-                        min={0}
-                        max={s.questions}
-                        required
-                        value={s.incorrect}
-                        onChange={(e) =>
-                          updateSubject(i, {
-                            incorrect: Number(e.target.value),
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Score
-                      <input
-                        type="number"
-                        readOnly
-                        value={s.correct * 3 - s.incorrect}
-                      />
-                    </label>
-                    <DurationInput
-                      key={`${s.subjectId}-${importVersion}`}
-                      subjectName={SUBJECTS[s.subjectId].short}
-                      value={s.timeSeconds}
-                      onChange={(seconds) =>
-                        updateSubject(i, { timeSeconds: seconds })
-                      }
-                    />
+                    </div>
                   </div>
-                  <p className="text-xs muted mt-3">
-                    {s.correct + s.incorrect} attempted ·{" "}
-                    {s.questions - s.correct - s.incorrect} unattempted ·{" "}
-                    {formatNumber(s.correct * 3 - s.incorrect)} calculated marks
-                  </p>
-                </div>
                 );
               })}
             </div>
           </section>
-          <section className="panel p-6">
-            <h2 className="panel-title mb-5">
-              Additional results{" "}
-              <span className="font-normal muted">· optional</span>
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <details
+            className="panel group"
+            open={additionalOpen}
+            onToggle={(event) => setAdditionalOpen(event.currentTarget.open)}
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:px-5">
+              <span className="panel-title">Additional results</span>
+              <span className="text-xs muted group-open:hidden">Optional · expand</span>
+              <span className="hidden text-xs muted group-open:inline">Collapse</span>
+            </summary>
+            <div className="border-t border-rule-soft p-4 sm:p-5">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
               {(["rank", "participants", "percentile"] as const).map((key) => (
                 <label key={key}>
                   {
@@ -546,18 +765,8 @@ export function MockForm({
                   />
                 </label>
               ))}
-              <label>
-                Overall time (hh:mm:ss)
-                <input
-                  readOnly
-                  value={formatTime(computedValues.overallTimeSeconds).padStart(
-                    8,
-                    "0",
-                  )}
-                />
-              </label>
             </div>
-            <label className="mt-5">
+            <label className="mt-4">
               Notes
               <textarea
                 rows={3}
@@ -567,18 +776,28 @@ export function MockForm({
                 onChange={(e) => set("notes", e.target.value)}
               />
             </label>
-          </section>
-          <div className="panel p-5 flex flex-wrap items-center justify-between gap-5">
-            <div className="tabular">
+            </div>
+          </details>
+          {error && (
+            <p
+              role="alert"
+              className="flex gap-2 border border-danger bg-danger-soft p-3 text-sm text-danger whitespace-pre-wrap break-words"
+            >
+              <AlertCircle size={18} className="shrink-0" />
+              {error}
+            </p>
+          )}
+          <div className="panel sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-4 border-ink bg-paper/95 p-4 backdrop-blur-sm">
+            <div className="tabular" aria-live="polite" aria-atomic="true">
               <strong className="text-xl">
                 {formatNumber(stats.score)}{" "}
                 <span className="text-sm font-normal muted">
                   / {stats.maxScore}
                 </span>
               </strong>
-              <p className="text-xs muted mt-1">
+              <p className="mt-1 text-xs muted">
                 {stats.attempted} attempted · {formatNumber(stats.accuracy, 2)}
-                {stats.accuracy == null ? "" : "%"} accuracy
+                {stats.accuracy == null ? "" : "%"} accuracy · {formatTime(computedValues.overallTimeSeconds)} total
               </p>
               {computer && (
                 <p className="text-xs muted mt-2">
@@ -594,19 +813,16 @@ export function MockForm({
               </Button>
               <Button type="submit" disabled={busy}>
                 <Save size={16} />
-                {busy ? "Saving…" : "Save mock"}
+                {busy
+                  ? "Saving…"
+                  : duplicateReviewed
+                    ? "Save repeat mock"
+                    : attempt
+                      ? "Update mock"
+                      : "Save mock"}
               </Button>
             </div>
           </div>
-          {error && (
-            <p
-              role="alert"
-              className="flex gap-2 bg-danger-soft text-danger rounded-none p-4 whitespace-pre-wrap break-words"
-            >
-              <AlertCircle size={18} className="shrink-0" />
-              {error}
-            </p>
-          )}
         </form>
       )}
     </div>

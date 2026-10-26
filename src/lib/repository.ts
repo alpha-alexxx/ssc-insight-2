@@ -6,6 +6,7 @@ import {
   attemptData,
   attemptInclude,
   attemptWhere,
+  toAnalyticsAttempt,
   toAttempt,
 } from "./attempt-persistence";
 import {
@@ -27,6 +28,20 @@ export async function listAttempts(userId: string, filters: Filters = {}) {
     orderBy: [{ completedAt: "desc" }, { id: "asc" }],
   });
   return rows.map(toAttempt);
+}
+
+/**
+ * AI context data. Notes are omitted in SQL so private note text is never
+ * loaded into server memory or placed in a prompt.
+ */
+export async function listAttemptsForAi(userId: string) {
+  const rows = await database().mockAttempt.findMany({
+    where: { userId },
+    include: attemptInclude,
+    omit: { notes: true },
+    orderBy: [{ completedAt: "desc" }, { id: "asc" }],
+  });
+  return rows.map(toAnalyticsAttempt);
 }
 
 export async function getAttempt(userId: string, id: string) {

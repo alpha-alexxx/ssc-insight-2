@@ -1,0 +1,105 @@
+import { apiError, ok, readBody } from "@/lib/api";
+import { aiConfig } from "@/lib/ai/config";
+import { AiError, aiProviderError } from "@/lib/ai/errors";
+import {
+  CONTEXT_TOKEN_ESTIMATE,
+  reservationTokens,
+} from "@/lib/ai/quota";
+import { coachMessages } from "@/lib/ai/prompts";
+import { createAiProvider } from "@/lib/ai/provider";
+import { coachInsightSchema, parseModelJson } from "@/lib/ai/schemas";
+import { aiLimits, loadAiContext } from "@/lib/ai/server";
+import {
+  releaseSafely,
+  reserveAiUsage,
+  settleSafely,
+} from "@/lib/ai/usage";
+import { requireUser } from "@/lib/auth/require-user";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+export async function POST(request: Request) {
+  try {
+    const { id: userId } = await requireUser();
+    const config = aiConfig();
+    // The body is intentionally unused: context and ownership are server-side.
+    await readBody(request, 8 * 1024);
+
+    const limits = aiLimits(config);
+    const reservation = await reserveAiUsage(userId, {
+      feature: "coach",
+      model: config.model,
+      limits,
+      reservedTokens: reservationTokens({
+        promptText: "performance coach insight",
+        contextTokens: CONTEXT_TOKEN_ESTIMATE + 1_500,
+        maxOutputTokens: config.maxOutputTokens,
+        providerCalls: 2,
+      }),
+    });
+
+    let context;
+    try {
+      context = await loadAiContext(userId);
+    } catch (error) {
+      await releaseSafely(reservation.id, userId, "CONTEXT_UNAVAILABLE");
+      throw error;
+    }
+
+    let result;
+    try {
+      result = await createAiProvider(config).completeJson({
+        messages: coachMessages(context),
+        maxOutputTokens: config.maxOutputTokens,
+        signal: request.signal,
+        parse: (raw) => parseModelJson(raw, coachInsightSchema),
+      });
+    } catch (error) {
+      const code = error instanceof AiError ? error.code : "AI_PROVIDER_ERROR";
+      await settleSafely({
+        id: reservation.id,
+        userId,
+        status: code === "AI_ABORTED" ? "aborted" : "error",
+        inputTokens: 0,
+        outputTokens: 0,
+        // A call may have started and been billed; never undercharge it.
+        tokensCharged: reservation.reservedTokens,
+        providerCalls: 2,
+        errorCode: code,
+        contextVersion: context.contextVersion,
+      });
+      if (error instanceof AiError) throw error;
+      console.error("AI coach failed", {
+        name: error instanceof Error ? error.name : "UnknownError",
+      });
+      throw aiProviderError();
+    }
+
+    await settleSafely({
+      id: reservation.id,
+      userId,
+      status: "success",
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      tokensCharged: result.usage.totalTokens,
+      providerCalls: result.providerCalls,
+      contextVersion: context.contextVersion,
+    });
+
+    return ok({
+      insight: result.value,
+      meta: {
+        contextVersion: context.contextVersion,
+        dataAsOf: context.dataAsOf,
+        coverage: context.coverage,
+      },
+      usage: {
+        ...result.usage,
+        providerCalls: result.providerCalls,
+      },
+    });
+  } catch (error) {
+    return apiError(error);
+  }
+}

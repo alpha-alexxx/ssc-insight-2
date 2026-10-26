@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { AiError } from "./ai/errors";
 import { SessionError } from "./auth/session-policy";
 export const privateHeaders = { "Cache-Control": "private, no-store" };
 
@@ -21,6 +22,16 @@ export function apiError(error: unknown) {
       { error: { code: error.code, message: error.message } },
       { status: error.status, headers: privateHeaders },
     );
+  // AI failures must not fall through to the database mapping below.
+  if (error instanceof AiError) {
+    const headers = new Headers(privateHeaders);
+    if (error.retryAfterSeconds)
+      headers.set("Retry-After", String(error.retryAfterSeconds));
+    return privateJson(
+      { error: { code: error.code, message: error.message } },
+      { status: error.status, headers },
+    );
+  }
   if (error instanceof ZodError)
     return privateJson(
       {

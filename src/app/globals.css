@@ -116,6 +116,11 @@ textarea::placeholder {
 input[readonly] {
   background: var(--soft);
 }
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
 input[type="checkbox"] {
   accent-color: var(--ink);
   width: 16px;

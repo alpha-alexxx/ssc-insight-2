@@ -34,6 +34,23 @@ enum ImportSource {
   @@schema("ssc_insight")
 }
 
+enum AiFeature {
+  coach
+  chat
+  extract
+
+  @@schema("ssc_insight")
+}
+
+enum AiUsageStatus {
+  pending
+  success
+  error
+  aborted
+
+  @@schema("ssc_insight")
+}
+
 model MockAttempt {
   id                 String          @id @default(uuid())
   userId             String
@@ -80,5 +97,28 @@ model TrackerSettings {
   userId      String @id
   targetScore Float?
 
+  @@schema("ssc_insight")
+}
+
+// AI usage is an app-owned audit/quota ledger. It contains no prompts,
+// responses, or attempt content, and is never included in JSON backups.
+model AiUsage {
+  id             String        @id @default(uuid())
+  userId         String
+  day            String        @db.VarChar(10)
+  feature        AiFeature
+  model          String        @db.VarChar(120)
+  status         AiUsageStatus @default(pending)
+  providerCalls  Int           @default(0)
+  inputTokens    Int           @default(0)
+  outputTokens   Int           @default(0)
+  tokensCharged  Int
+  contextVersion String?       @db.VarChar(64)
+  errorCode      String?       @db.VarChar(64)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  settledAt      DateTime?     @db.Timestamptz(3)
+
+  @@index([userId, day])
+  @@index([userId, status, createdAt])
   @@schema("ssc_insight")
 }

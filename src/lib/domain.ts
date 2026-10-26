@@ -171,6 +171,9 @@ export type Attempt = AttemptInput & {
   updatedAt: string;
   schemaVersion: 1;
 };
+// Analytics must never require notes. The AI context fetches attempts with
+// Prisma's `omit` so note text never enters server memory in the first place.
+export type AnalyticsAttempt = Omit<Attempt, "notes">;
 export type Filters = {
   type?: string;
   subject?: string;
@@ -192,7 +195,7 @@ export function subjectStats(s: SubjectResult) {
     accuracy: attempted ? (s.correct / attempted) * 100 : null,
   };
 }
-export function totals(a: AttemptInput) {
+export function totals(a: Omit<AttemptInput, "notes">) {
   const scoringSubjects =
     a.type === "full"
       ? a.subjects.filter((s) => s.subjectId !== "computer")
