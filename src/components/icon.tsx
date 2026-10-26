@@ -55,6 +55,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { SVGProps } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Unified icon system — Phase 8 of the UI overhaul.
@@ -204,6 +205,12 @@ export type IconTone = "ink" | "accent" | "paper" | "muted" | "mono";
 /**
  * Renders a single Duo glyph with token-tinted layers, or `undefined` when
  * the name has no Duo mapping (caller decides the Lucide treatment).
+ *
+ * @duo-icons/react uses kebab-case SVG attributes ("fill-rule") which React 19's
+ * dev-mode DOM checking flags. This wrapper renders the glyph inside a <span>,
+ * then a mount effect patches kebab-case attributes to their camelCase equivalents
+ * on the raw SVG children so the console stays clean. Icons render correctly
+ * either way.
  */
 function DuoGlyph({
   name,
@@ -229,12 +236,28 @@ function DuoGlyph({
           : tone === "mono"
             ? "icon-mono"
             : "";
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    // Patch kebab-case SVG attributes caused by @duo-icons/react's JSX
+    // using "fill-rule" instead of "fillRule". Runs once on mount.
+    const els = ref.current.querySelectorAll<SVGElement>("[fill-rule]");
+    for (const el of els) {
+      const val = el.getAttribute("fill-rule");
+      if (val) {
+        el.setAttribute("fillRule", val);
+        el.removeAttribute("fill-rule");
+      }
+    }
+  }, []);
   return (
-    <Glyph
-      size={size}
-      className={`icon-duo shrink-0 ${toneClass} ${className}`}
-      aria-hidden="true"
-    />
+    <span ref={ref} className="contents" aria-hidden="true">
+      <Glyph
+        size={size}
+        className={`icon-duo shrink-0 ${toneClass} ${className}`}
+        aria-hidden="true"
+      />
+    </span>
   );
 }
 
