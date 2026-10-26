@@ -4,11 +4,8 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  Cell,
   Line,
   LineChart,
-  Pie,
-  PieChart,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
@@ -38,19 +35,19 @@ import {
   targetColor,
 } from "@/lib/chart-theme";
 import { Panel, EmptyChart } from "./dashboard-panels";
+import { AttemptOutcomeCard } from "./attempt-outcome-card";
+import outcomeStyles from "./attempt-outcome-card.module.css";
 import {
   type DashboardScope,
   type SectionId,
   type SubjectId,
   FULL_MOCK_MAX_SCORE,
-  SECTIONS,
   SUBJECTS,
   formatNumber as n,
   formatTime,
 } from "@/lib/domain";
 import {
   type Analytics,
-  type AnswerStack,
   type WhereYouStandRow,
   targetPercentage,
 } from "@/lib/analytics";
@@ -70,31 +67,27 @@ const typeLabel = (type: string) =>
         : "Mock";
 const scopeCopy: Record<
   DashboardScope,
-  { trend: string; trendDescription: string; radial: string }
+  { trend: string; trendDescription: string }
 > = {
   full: {
     trend: "Full mock performance",
     trendDescription:
       "Every full mock, as a percentage of the 390-mark paper. Dates and platform filters apply.",
-    radial: "What every full mock contained",
   },
   subject: {
     trend: "Subject performance",
     trendDescription:
       "Every subject result from full, sectional and subject mocks, shown together.",
-    radial: "Correct, incorrect and unattempted by subject",
   },
   sectional: {
     trend: "Sectional performance",
     trendDescription:
       "Section I and Section II from sectional mocks and full mocks, shown together.",
-    radial: "Correct, incorrect and unattempted by section",
   },
   all: {
     trend: "All mock performance",
     trendDescription:
       "Every saved mock exactly once, scored as a percentage so different papers stay comparable.",
-    radial: "Correct, incorrect and unattempted by mock type",
   },
 };
 const seriesColor = (scope: DashboardScope, id: string) =>
@@ -461,343 +454,30 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
     </div>
   );
 }
-const outcomeConfig: ChartConfig = {
-  correct: { label: "Correct", color: "var(--chart-correct)" },
-  incorrect: { label: "Incorrect", color: "var(--chart-incorrect)" },
-  unattempted: { label: "Unattempted", color: "var(--chart-skipped)" },
-};
-const outcomeKeys = ["correct", "incorrect", "unattempted"] as const;
-function centerValue(stack: AnswerStack) {
-  return stack.centerMetric === "percentile"
-    ? stack.percentile
-    : stack.scorePercentage;
-}
-function centerLabel(stack: AnswerStack) {
-  if (stack.centerMetric === "percentile")
-    return stack.percentileCount > 1 ? "avg percentile" : "percentile";
-  return "score";
-}
-function OutcomeTooltip({
-  active,
-  stack,
-}: {
-  active?: boolean;
-  stack: AnswerStack;
-}) {
-  if (!active) return null;
-  const values = {
-    correct: stack.correct,
-    incorrect: stack.incorrect,
-    unattempted: stack.unattempted,
-  };
-  const percentages = {
-    correct: stack.correctPercentage,
-    incorrect: stack.incorrectPercentage,
-    unattempted: stack.unattemptedPercentage,
-  };
-  return (
-    <div className="grid min-w-[9rem] gap-1.5 border border-rule bg-paper px-3 py-2 text-xs">
-      {outcomeKeys.map((key) => (
-        <div key={key} className="flex justify-between gap-5 whitespace-nowrap">
-          <span className="flex items-center gap-1.5 text-muted">
-            <i
-              className="size-2"
-              style={{ background: outcomeConfig[key].color as string }}
-              aria-hidden="true"
-            />
-            {outcomeConfig[key].label}
-          </span>
-          <span className="tabular font-medium text-ink">
-            {n(percentages[key])}% · {values[key]} Q
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-function AttemptRing({
-  stack,
-  large,
-  showCaption = true,
-}: {
-  stack: AnswerStack;
-  large?: boolean;
-  showCaption?: boolean;
-}) {
-  const raw = {
-    correct: stack.correct,
-    incorrect: stack.incorrect,
-    unattempted: stack.unattempted,
-  };
-  const data = outcomeKeys.map((key) => ({
-    key,
-    name: outcomeConfig[key].label as string,
-    value: raw[key],
-  }));
-  const value = centerValue(stack);
-  const label = centerLabel(stack);
-  return (
-    <figure
-      className={large ? "mx-auto w-full max-w-[220px]" : "min-w-0"}
-      aria-label={`${stack.label}: ${stack.correct} correct, ${stack.incorrect} incorrect, ${stack.unattempted} unattempted. Center: ${label} ${value == null ? "not available" : `${n(value)} percent`}.`}
-    >
-      <div className="relative">
-        <ChartContainer
-          config={outcomeConfig}
-          className={large ? "!aspect-square h-[180px] w-full" : "!aspect-square h-[112px] w-full"}
-        >
-          {/* Recharts 3's stacked RadialBar drops the third segment here, so
-              use the same ring geometry with explicit Pie cells. */}
-          <PieChart accessibilityLayer>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              startAngle={90}
-              endAngle={-270}
-              innerRadius={large ? 58 : 34}
-              outerRadius={large ? 82 : 52}
-              stroke="var(--paper)"
-              strokeWidth={2}
-              isAnimationActive={false}
-            >
-              {data.map((entry) => (
-                <Cell
-                  key={entry.key}
-                  fill={outcomeConfig[entry.key].color as string}
-                />
-              ))}
-            </Pie>
-            <ChartTooltip
-              cursor={false}
-              content={<OutcomeTooltip stack={stack} />}
-            />
-          </PieChart>
-        </ChartContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <strong className={large ? "text-2xl" : "text-sm"}>
-            {n(value)}
-            {value == null ? "" : "%"}
-          </strong>
-          <span className="text-[9px] muted">{label}</span>
-        </div>
-      </div>
-      {showCaption && (
-        <figcaption className="mt-1 text-center text-[10px] muted">
-          <span className="block truncate text-ink">{stack.label}</span>
-          {stack.count} attempt{stack.count === 1 ? "" : "s"} · {stack.total}{" "}
-          questions
-        </figcaption>
-      )}
-    </figure>
-  );
-}
-const attemptColumns = [
-  "Group",
-  "Correct",
-  "Incorrect",
-  "Unattempted",
-  "Accuracy",
-  "Exam percentile",
-  "Score %",
-];
-function attemptRow(stack: AnswerStack): React.ReactNode[] {
-  return [
-    stack.label,
-    `${stack.correct} (${n(stack.correctPercentage)}%)`,
-    `${stack.incorrect} (${n(stack.incorrectPercentage)}%)`,
-    `${stack.unattempted} (${n(stack.unattemptedPercentage)}%)`,
-    stack.accuracy == null ? "—" : `${n(stack.accuracy)}%`,
-    stack.percentile == null
-      ? "—"
-      : `${n(stack.percentile, 2)}% (${stack.percentileCount})`,
-    `${n(stack.scorePercentage)}%`,
-  ];
-}
-function percentileNote(
-  stack: AnswerStack,
-  scope: "subject" | "sectional" | "full" | "all",
-) {
-  const noun =
-    scope === "subject"
-      ? "standalone subject result"
-      : scope === "sectional"
-        ? "explicit sectional result"
-        : "saved result";
-  if (stack.percentile != null) {
-    const plural = stack.percentileCount === 1 ? "" : "s";
-    const remainder =
-      stack.percentileCount < stack.count
-        ? ` (${stack.count} results in this card)`
-        : "";
-    return `Avg percentile from ${stack.percentileCount} ${noun}${plural}${remainder}.`;
-  }
-  if (scope === "subject")
-    return "No standalone subject percentile recorded · showing score % (marks ÷ maximum).";
-  if (scope === "sectional")
-    return "No explicit sectional percentile recorded · showing score % (marks ÷ maximum).";
-  return "No exam percentile recorded · showing score % (marks ÷ maximum).";
-}
-function OutcomeBreakdown({ stack }: { stack: AnswerStack }) {
-  const values = {
-    correct: stack.correct,
-    incorrect: stack.incorrect,
-    unattempted: stack.unattempted,
-  };
-  const percentages = {
-    correct: stack.correctPercentage,
-    incorrect: stack.incorrectPercentage,
-    unattempted: stack.unattemptedPercentage,
-  };
-  return (
-    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-      {outcomeKeys.map((key) => (
-        <div key={key}>
-          <p className="text-sm font-semibold tabular">{values[key]}</p>
-          <p className="mt-1 flex items-center justify-center gap-1 text-[10px] muted">
-            <i
-              className="size-2"
-              style={{ background: outcomeConfig[key].color as string }}
-              aria-hidden="true"
-            />
-            {outcomeConfig[key].label}
-          </p>
-          <p className="mt-0.5 text-[9px] muted tabular">
-            {n(percentages[key])}%
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-}
-function AttemptCard({
-  stack,
-  scope,
-}: {
-  stack: AnswerStack;
-  scope: "subject" | "sectional";
-}) {
-  const section =
-    scope === "sectional" ? SECTIONS[stack.id as SectionId] : undefined;
-  return (
-    <Panel
-      title={stack.label}
-      description={`${section ? `${section.description} · ` : ""}${stack.count} attempt${stack.count === 1 ? "" : "s"} · ${stack.total} questions`}
-    >
-      <div className="px-5 pb-5 pt-1">
-        <AttemptRing stack={stack} large showCaption={false} />
-        <OutcomeBreakdown stack={stack} />
-        <p className="mt-3 text-[11px] muted">
-          <strong className="tabular text-ink">
-            {n(stack.score)} / {stack.maxScore}
-          </strong>{" "}
-          marks <span className="mx-1">·</span>{" "}
-          <strong className="tabular text-ink">
-            {n(stack.scorePercentage)}%
-          </strong>{" "}
-          score
-        </p>
-        <p className="mt-1.5 text-[10px] muted leading-relaxed">
-          {n(stack.accuracy)}% accuracy · {percentileNote(stack, scope)}
-        </p>
-      </div>
-    </Panel>
-  );
-}
 function AttemptCards({ analytics }: { analytics: Analytics }) {
-  const scope = analytics.scope;
-  if (scope !== "subject" && scope !== "sectional") return null;
   const stacks = analytics.radial;
-  if (!stacks.length)
-    return (
-      <Panel
-        title="Make every attempt count"
-        description={scopeCopy[scope].radial}
-        className="mb-6"
-      >
-        <EmptyChart>
-          {scope === "subject"
-            ? "No subject results in this view yet."
-            : "No sectional results in this view yet."}
-        </EmptyChart>
-      </Panel>
-    );
   return (
     <section aria-labelledby="attempt-count-heading" className="mb-6">
-      <div className="mb-3">
+      <div className="mb-3 border-b border-rule pb-3">
         <h2 id="attempt-count-heading" className="panel-title">
           Make every attempt count
         </h2>
-        <p className="muted text-xs mt-1.5">{scopeCopy[scope].radial}.</p>
-        <p className="text-[10px] muted mt-1.5 leading-relaxed">
-          Center shows the average saved exam percentile where one was
-          reported; otherwise score % (marks ÷ maximum). Percentiles count only
-          saved results that reported one; a full mock’s percentile is never
-          reused for its subjects or sections.
-        </p>
       </div>
-      <div
-        className={
-          scope === "subject"
-            ? "grid gap-6 md:grid-cols-2 xl:grid-cols-3"
-            : "grid gap-6 md:grid-cols-2"
-        }
-      >
-        {stacks.map((stack) => (
-          <AttemptCard key={stack.id} stack={stack} scope={scope} />
-        ))}
-      </div>
-      <div className="mt-3 border-t border-rule-soft pt-1">
-        <ViewData columns={attemptColumns} rows={stacks.map(attemptRow)} />
-      </div>
+      {stacks.length ? (
+        <div className={outcomeStyles.grid}>
+          {stacks.map((stack) => (
+            <AttemptOutcomeCard key={stack.id} stack={stack} scope={analytics.scope} />
+          ))}
+        </div>
+      ) : (
+        <div className="max-w-[20rem] border border-rule-soft bg-paper p-5 text-sm muted">
+          No results in this analytical scope yet.
+        </div>
+      )}
     </section>
   );
 }
-function AttemptBreakdown({
-  analytics,
-}: {
-  analytics: Analytics;
-}) {
-  const stacks = analytics.radial;
-  if (!stacks.length) return <EmptyChart />;
-  const single = stacks.length === 1;
-  return (
-    <div className="px-4 pb-4">
-      <div
-        className={
-          single
-            ? "py-2"
-            : "grid grid-cols-2 gap-x-2 gap-y-4 sm:grid-cols-3"
-        }
-      >
-        {stacks.map((stack) => (
-          <AttemptRing
-            key={stack.id}
-            stack={stack}
-            large={single}
-          />
-        ))}
-      </div>
-      <div className="mt-3 flex flex-wrap justify-center gap-4 text-[10px] muted">
-        {outcomeKeys.map((key) => (
-          <span key={key} className="flex items-center gap-1.5">
-            <i
-              className="size-2"
-              style={{ background: outcomeConfig[key].color as string }}
-              aria-hidden="true"
-            />
-            {outcomeConfig[key].label}
-          </span>
-        ))}
-      </div>
-      <p className="mt-2 text-center text-[10px] muted">
-        Center shows the average saved exam percentile where reported;
-        otherwise score % (marks ÷ maximum).
-      </p>
-      <ViewData columns={attemptColumns} rows={stacks.map(attemptRow)} />
-    </div>
-  );
-}
+
 function TargetPanel({
   analytics,
   target,
@@ -1262,30 +942,14 @@ export function PerformanceOverview({
           <WhereYouStand rows={analytics.whereYouStand} />
         </Panel>
       </div>
-      {scope === "subject" || scope === "sectional" ? (
-        <>
-          <AttemptCards analytics={analytics} />
-          <Panel
-            title="My target"
-            description="One target, the same reference on every dashboard tab."
-            className="mb-6"
-          >
-            <TargetPanel analytics={analytics} target={target} />
-          </Panel>
-        </>
-      ) : (
-        <div className="grid xl:grid-cols-[1fr_1.65fr] gap-6 mb-6">
-          <Panel title="Make every attempt count" description={copy.radial}>
-            <AttemptBreakdown analytics={analytics} />
-          </Panel>
-          <Panel
-            title="My target"
-            description="One target, the same reference on every dashboard tab."
-          >
-            <TargetPanel analytics={analytics} target={target} />
-          </Panel>
-        </div>
-      )}
+      <AttemptCards analytics={analytics} />
+      <Panel
+        title="My target"
+        description="One target, the same reference on every dashboard tab."
+        className="mb-6"
+      >
+        <TargetPanel analytics={analytics} target={target} />
+      </Panel>
       {scope !== "subject" && (
         <Panel
           title="Subject deep dive"
