@@ -1,73 +1,38 @@
 "use client";
-import { useSyncExternalStore, useCallback } from "react";
+import { useCallback } from "react";
+import { useTheme } from "next-themes";
 import { PlainIcon } from "./icon";
 
 /**
  * Theme toggle for the SSC Insight warm-paper / warm-charcoal palette.
  *
- * - Persists choice to localStorage("ssc.theme")
- * - Falls back to system prefers-color-scheme on first visit
- * - Sets <html data-theme="light|dark"> so globals.css can react
- * - Inline script in layout.tsx applies the persisted choice before paint
- *   to avoid a flash of the wrong theme
+ * Wired to next-themes (the shadcn/ui dark-mode mechanism): the provider in
+ * layout.tsx owns persistence (localStorage "ssc.theme") and applies the
+ * resolved theme to <html class> before paint, so this component only reads
+ * and writes through useTheme — no manual DOM attributes or external store.
  *
- * Uses useSyncExternalStore (the canonical React 19 pattern for external
- * state) so we never call setState inside an effect — the rule we'd otherwise
- * trip over. The "external store" here is the data-theme attribute on <html>.
+ * Both icons render and CSS picks the visible one via the `dark:` variant
+ * (globals.css maps it to the `.dark` class). No mounted-gate, no hydration
+ * mismatch, and the correct icon is in the first painted frame. Like the
+ * shadcn docs' simple toggle, the label is static for the same reason.
  */
-
-type Theme = "light" | "dark";
-
-function subscribe(callback: () => void) {
-  // The inline script + our own apply() writes data-theme; we also listen
-  // for system theme changes when the user hasn't chosen explicitly.
-  const media = window.matchMedia("(prefers-color-scheme: dark)");
-  const onChange = () => {
-    // Only react to system changes when the user hasn't explicitly chosen.
-    if (!localStorage.getItem("ssc.theme")) callback();
-  };
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
-}
-
-function getSnapshot(): Theme {
-  const attr = document.documentElement.getAttribute("data-theme");
-  if (attr === "dark" || attr === "light") return attr;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
-function getServerSnapshot(): Theme {
-  return "light";
-}
-
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-
-  const apply = useCallback((next: Theme) => {
-    document.documentElement.setAttribute("data-theme", next);
-    try {
-      localStorage.setItem("ssc.theme", next);
-    } catch {
-      // localStorage may be blocked (private mode); theme still applies for
-      // this session via the attribute, just doesn't persist.
-    }
-  }, []);
+  const { resolvedTheme, setTheme } = useTheme();
 
   const toggle = useCallback(() => {
-    apply(theme === "dark" ? "light" : "dark");
-  }, [theme, apply]);
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
+  }, [resolvedTheme, setTheme]);
 
   return (
     <button
       type="button"
       onClick={toggle}
-      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-      title={theme === "dark" ? "Light theme" : "Dark theme"}
+      aria-label="Toggle theme"
+      title="Toggle theme"
       className={`muted hover:text-accent transition-colors inline-flex items-center justify-center size-8 ${className}`}
     >
-      <PlainIcon name={theme === "dark" ? "sun" : "moon"} size={17} tone="ink" />
+      <PlainIcon name="moon" size={17} tone="ink" className="dark:hidden" />
+      <PlainIcon name="sun" size={17} tone="ink" className="hidden dark:block" />
     </button>
   );
 }

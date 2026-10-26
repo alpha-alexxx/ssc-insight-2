@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* shadcn/ui dark-mode convention: the `dark:` variant follows the `.dark`
+   class on <html> (set by next-themes), not prefers-color-scheme. */
+@custom-variant dark (&:is(.dark *));
+
 /* ============================================================
    SSC Insight — design tokens (warm editorial paper)
    Phase 3 of the UI overhaul: tokenized radius, elevation,
@@ -61,49 +65,10 @@
   --dur-view: 240ms;
 }
 
-/* Dark mode: warm charcoal variant of the paper aesthetic. Triggered by
-   `prefers-color-scheme: dark` UNLESS the user has explicitly chosen light
-   via [data-theme="light"] on <html>. The user can also force dark with
-   [data-theme="dark"]. The toggle is in the header. */
-:root[data-theme="dark"],
-:root:not([data-theme="light"]) {
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-    --canvas: #1a1815;
-    --paper: #221f1b;
-    --ink: #ede6d6;
-    --muted: #9a9489;
-    --rule: #5a5550;
-    --rule-soft: #38342f;
-    --soft: #2a2722;
-    --accent: #d97048;
-    --accent-hover: #c75d35;
-    --accent-soft: #2e2017;
-    --positive: #93a25c;
-    --positive-soft: #1d2316;
-    --warning: #c79a3a;
-    --warning-soft: #221b0c;
-    --danger: #d8655a;
-    --danger-hover: #c64f43;
-    --danger-soft: #2a1714;
-    --chart-score: #d97048;
-    --chart-average: #93a25c;
-    --chart-time: #7fa3a7;
-    --chart-quant: #d97048;
-    --chart-reasoning: #5a9be8;
-    --chart-english: #4dd49f;
-    --chart-ga: #ffc340;
-    --chart-computer: #aaa094;
-    --chart-section-1: #d97048;
-    --chart-section-2: #5a9be8;
-    --chart-target: #9a9489;
-    --chart-correct: #93a25c;
-    --chart-incorrect: #d97048;
-    --chart-skipped: #38342f;
-  }
-}
-/* Explicit dark via [data-theme="dark"] overrides the media query. */
-:root[data-theme="dark"] {
+/* Dark mode: warm charcoal variant of the paper aesthetic. next-themes
+   (layout.tsx) resolves light / dark / system and sets the `.dark` class on
+   <html> before paint; these overrides replace the :root values above. */
+.dark {
   color-scheme: dark;
   --canvas: #1a1815;
   --paper: #221f1b;
@@ -136,9 +101,6 @@
   --chart-correct: #93a25c;
   --chart-incorrect: #d97048;
   --chart-skipped: #38342f;
-}
-:root[data-theme="light"] {
-  color-scheme: light;
 }
 
 @theme inline {
