@@ -1,38 +1,59 @@
-import { requireUser } from "@/lib/auth/require-user";
 import { z } from "zod";
 import { attemptSchema } from "@/lib/domain";
-import { apiError, ok, readBody } from "@/lib/api";
+import { readBody, RequestError } from "@/lib/api";
 import { deleteAttempt, getAttempt, updateAttempt } from "@/lib/repository";
-type Context = { params: Promise<{ id: string }> };
+import { defineRoute } from "@/lib/route-handler";
+import { audit } from "@/lib/audit";
+
 const idSchema = z.uuid();
 export const runtime = "nodejs";
-export async function GET(_request: Request, context: Context) {
-  try {
-    const { id: userId } = await requireUser();
-    return ok(
-      await getAttempt(userId, idSchema.parse((await context.params).id)),
-    );
-  } catch (error) {
-    return apiError(error);
-  }
-}
-export async function PUT(request: Request, context: Context) {
-  try {
-    const { id: userId } = await requireUser();
-    const id = idSchema.parse((await context.params).id);
+
+export const GET = defineRoute<{ id: string }>(
+  { kind: "read" },
+  async ({ params, user }) => {
+    const attempt = await getAttempt(user.id, idSchema.parse(params.id));
+    return { data: attempt, cache: { maxAgeSec: 0, swrSec: 2 } };
+  },
+);
+
+export const PUT = defineRoute<{ id: string }>(
+  {
+    kind: "write",
+    onError: (error, userId, startedAt) => {
+      audit("mock.update", userId, {
+        outcome: error instanceof RequestError && error.status === 429 ? "denied" : "error",
+        ms: Date.now() - startedAt,
+      });
+    },
+  },
+  async ({ request, params, user, startedAt }) => {
+    const id = idSchema.parse(params.id);
     const input = attemptSchema.parse(await readBody(request));
-    return ok(await updateAttempt(userId, id, input));
-  } catch (error) {
-    return apiError(error);
-  }
-}
-export async function DELETE(request: Request, context: Context) {
-  try {
-    const { id: userId } = await requireUser();
-    const id = idSchema.parse((await context.params).id);
-    await readBody(request);
-    return ok(await deleteAttempt(userId, id));
-  } catch (error) {
-    return apiError(error);
-  }
-}
+    const attempt = await updateAttempt(user.id, id, input);
+    audit("mock.update", user.id, {
+      sid: id,
+      ms: Date.now() - startedAt,
+      meta: { type: attempt.type },
+    });
+    return { data: attempt };
+  },
+);
+
+export const DELETE = defineRoute<{ id: string }>(
+  {
+    kind: "write",
+    onError: (error, userId, startedAt) => {
+      audit("mock.delete", userId, {
+        outcome: error instanceof RequestError && error.status === 429 ? "denied" : "error",
+        ms: Date.now() - startedAt,
+      });
+    },
+  },
+  async ({ request, params, user, startedAt }) => {
+    const id = idSchema.parse(params.id);
+    await readBody(request); // CSRF/size checks happen while draining the body
+    const result = await deleteAttempt(user.id, id);
+    audit("mock.delete", user.id, { sid: id, ms: Date.now() - startedAt });
+    return { data: result };
+  },
+);

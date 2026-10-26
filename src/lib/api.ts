@@ -16,6 +16,27 @@ function privateJson(
 export function ok(data: unknown, status = 200) {
   return privateJson({ data }, { status, headers: privateHeaders });
 }
+
+/**
+ * Same as ok() but allows the response to be served stale-while-revalidate.
+ *
+ * Data is private (per-user) so the response is always marked private. The
+ * browser may reuse a cached copy for up to `maxAgeSec`, and serve a stale
+ * copy while revalidating for up to `swrSec` more. Use only for GET responses
+ * whose underlying data changes at most every few seconds.
+ */
+export function okCached(
+  data: unknown,
+  opts: { maxAgeSec: number; swrSec: number },
+  status = 200,
+) {
+  const headers = new Headers(privateHeaders);
+  headers.set(
+    "Cache-Control",
+    `private, max-age=${opts.maxAgeSec}, stale-while-revalidate=${opts.swrSec}`,
+  );
+  return NextResponse.json({ data }, { status, headers });
+}
 export function apiError(error: unknown) {
   if (error instanceof SessionError)
     return privateJson(

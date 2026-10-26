@@ -1,24 +1,46 @@
-import { requireUser } from "@/lib/auth/require-user";
 import { attemptSchema } from "@/lib/domain";
-import { apiError, ok, readBody } from "@/lib/api";
-import { createAttempt, filtersFrom, listAttempts } from "@/lib/repository";
+import { readBody, RequestError } from "@/lib/api";
+import {
+  createAttempt,
+  LIST_ATTEMPTS_MAX,
+  listAttempts,
+} from "@/lib/repository";
+import { defineRoute } from "@/lib/route-handler";
+import { audit } from "@/lib/audit";
+
 export const runtime = "nodejs";
-export async function GET(request: Request) {
-  try {
-    const { id: userId } = await requireUser();
-    return ok(await listAttempts(userId, filtersFrom(request.url)));
-  } catch (error) {
-    return apiError(error);
+
+export const GET = defineRoute({ kind: "read" }, async ({ user }) => {
+  const items = await listAttempts(user.id);
+  const headers: Record<string, string> = {};
+  if (items.length >= LIST_ATTEMPTS_MAX) {
+    headers["X-List-Truncated"] = "true";
+    headers["X-List-Max"] = String(LIST_ATTEMPTS_MAX);
   }
-}
-export async function POST(request: Request) {
-  try {
-    const { id: userId } = await requireUser();
-    return ok(
-      await createAttempt(userId, attemptSchema.parse(await readBody(request))),
-      201,
-    );
-  } catch (error) {
-    return apiError(error);
-  }
-}
+  return { data: items, cache: { maxAgeSec: 0, swrSec: 2 }, headers };
+});
+
+export const POST = defineRoute(
+  {
+    kind: "write",
+    onError: (error, userId, startedAt) => {
+      audit("mock.create", userId, {
+        outcome:
+          error instanceof RequestError && error.status === 429
+            ? "denied"
+            : "error",
+        ms: Date.now() - startedAt,
+      });
+    },
+  },
+  async ({ request, user, startedAt }) => {
+    const input = attemptSchema.parse(await readBody(request));
+    const attempt = await createAttempt(user.id, input);
+    audit("mock.create", user.id, {
+      sid: attempt.id,
+      ms: Date.now() - startedAt,
+      meta: { type: attempt.type, platform: attempt.platform },
+    });
+    return { data: attempt, status: 201 };
+  },
+);

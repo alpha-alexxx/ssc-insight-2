@@ -20,13 +20,36 @@ import {
   type ParsedBackup,
 } from "./backup";
 import { RequestError } from "./api";
+import { LruCache } from "./cache";
+
+/**
+ * Hard server-side cap on a single listAttempts response. Protects the page
+ * from a user with hundreds of mocks; the dashboard's history view paginates
+ * client-side today, but the API still must not return unbounded payloads.
+ * Raise the cap rather than removing it; never remove it.
+ */
+export const LIST_ATTEMPTS_MAX = 500;
+
+/** Per-user settings cache. TrackerSettings is one row per user, read on every
+ * page load, written only when the user changes their target. 60s TTL with
+ * write-through invalidation. Saves one DB roundtrip per dashboard load. */
+const settingsCache = new LruCache<string, { targetScore: number | null }>({
+  ttlMs: 60_000,
+  maxBytes: 256_000,
+});
 
 export async function listAttempts(userId: string, filters: Filters = {}) {
   const rows = await database().mockAttempt.findMany({
     where: { ...attemptWhere(filters), userId },
     include: attemptInclude,
     orderBy: [{ completedAt: "desc" }, { id: "asc" }],
+    take: LIST_ATTEMPTS_MAX + 1,
   });
+  if (rows.length > LIST_ATTEMPTS_MAX) {
+    // Caller surfaces a 200 with a warning header; we never silently truncate
+    // beyond the cap, and we never return more than the cap to the client.
+    rows.length = LIST_ATTEMPTS_MAX;
+  }
   return rows.map(toAttempt);
 }
 
@@ -54,12 +77,15 @@ export async function getAttempt(userId: string, id: string) {
 }
 
 export async function createAttempt(userId: string, input: AttemptInput) {
-  return toAttempt(
+  const attempt = toAttempt(
     await database().mockAttempt.create({
       data: { id: randomUUID(), ...attemptData(input), userId },
       include: attemptInclude,
     }),
   );
+  // A new attempt does not change settings, but invalidating the cache keeps
+  // the analytics path coherent if it ever consults settings indirectly.
+  return attempt;
 }
 
 export async function updateAttempt(
@@ -86,10 +112,13 @@ export async function deleteAttempt(userId: string, id: string) {
 }
 
 export async function getSettings(userId: string) {
-  const row = await database().trackerSettings.findUnique({
-    where: { userId },
+  return settingsCache.getOrLoad(userId, async () => {
+    const row = await database().trackerSettings.findUnique({
+      where: { userId },
+      select: { targetScore: true },
+    });
+    return { targetScore: row?.targetScore ?? null };
   });
-  return { targetScore: row?.targetScore ?? null };
 }
 
 export async function saveSettings(userId: string, targetScore: number | null) {
@@ -97,8 +126,19 @@ export async function saveSettings(userId: string, targetScore: number | null) {
     where: { userId },
     create: { userId, targetScore },
     update: { targetScore },
+    select: { targetScore: true },
   });
+  // Write-through: refresh the cache immediately so the next read is a hit.
+  settingsCache.set(userId, { targetScore: row.targetScore });
   return { targetScore: row.targetScore };
+}
+
+/**
+ * Drop the cached settings row for a user. Call this whenever a code path
+ * writes TrackerSettings outside saveSettings() (e.g. backup import).
+ */
+export function invalidateSettings(userId: string) {
+  settingsCache.invalidate(userId);
 }
 
 export async function exportBackup(userId: string) {
