@@ -26,3 +26,6 @@ src/generated/prisma/
 .uv-cache/
 graphify-out/cache/
 graphify-out/.graphify_*
+
+# local Windows ACL-repair backups and reports
+.acl-recovery/

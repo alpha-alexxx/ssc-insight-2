@@ -1,0 +1,5 @@
+# Files the graphify pipeline must not treat as source material.
+# .gitignore already covers node_modules/, .next/, .graphify-venv/ and .uv-cache/.
+
+graphify-out/
+tools/graphify/
