@@ -1,6 +1,25 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ClipboardPaste, Copy, ListTodo, Send, Sparkles, Square, Trash2 } from "lucide-react";
+import {
+  BarChart3,
+  BookOpen,
+  Calendar,
+  Check,
+  ClipboardPaste,
+  Copy,
+  FileText,
+  Lightbulb,
+  ListTodo,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Send,
+  Sparkles,
+  Square,
+  TrendingUp,
+  Trash2,
+  Zap,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import { PlainIcon } from "./icon";
 import {
@@ -27,11 +46,13 @@ import type {
   ChatMessage,
 } from "@/lib/ai/client-types";
 
-const SUGGESTIONS = [
-  "What should I focus on this week?",
-  "Why did my last full mock score change?",
-  "Which subject has the weakest accuracy?",
-  "Add a task: revise profit & loss errors tomorrow",
+const QUICK_QUESTIONS = [
+  { text: "What should I focus on this week?", icon: BarChart3, color: "bg-accent-soft text-accent" },
+  { text: "Why did my last full mock score change?", icon: TrendingUp, color: "bg-danger-soft text-danger" },
+  { text: "Which subject has the weakest accuracy?", icon: Calendar, color: "bg-warning-soft text-warning" },
+  { text: "Suggest a study plan based on my weak topics", icon: BookOpen, color: "bg-positive-soft text-positive" },
+  { text: "Compare my last 5 mocks performance", icon: ListTodo, color: "bg-[var(--chart-reasoning)]/15 text-[var(--chart-reasoning)]" },
+  { text: "Important topics to revise next?", icon: Lightbulb, color: "bg-warning-soft text-warning" },
 ];
 
 /** What the sheet needs beyond chat state. The create handler performs the
@@ -115,64 +136,94 @@ export function AiChatSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full gap-0 sm:max-w-[520px]"
+        className="w-full gap-0 sm:max-w-[520px] flex flex-col"
         overlayClassName="bg-ink/20"
         aria-describedby="ai-sheet-description"
       >
-        <SheetHeader className="border-b border-rule-soft px-4 pb-3 pt-4">
+        {/* Header */}
+        <div className="border-b border-rule-soft px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <SheetTitle className="font-serif text-[22px] leading-tight">
-                AI workspace
-              </SheetTitle>
-              <SheetDescription id="ai-sheet-description" className="mt-1">
-                Read-only coach answers, reviewed todo proposals, and
-                paste-to-draft extraction. The panel never saves by itself.
-              </SheetDescription>
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft">
+                <Sparkles size={20} className="text-accent" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-serif text-[22px] font-medium leading-tight text-ink">
+                  Ask your <span className="text-accent">coach</span>
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  Get insights from your mock data and personalized guidance.
+                </p>
+              </div>
             </div>
+            {contextLabel && (
+              <div className="flex shrink-0 items-center gap-2 rounded-control border border-rule-soft bg-canvas px-3 py-1.5">
+                <Calendar size={14} className="text-muted" />
+                <div className="text-right">
+                  <p className="text-[11px] font-medium leading-tight text-ink">{contextLabel}</p>
+                  <p className="text-[10px] text-muted">Session-only chat</p>
+                </div>
+              </div>
+            )}
           </div>
-          <div
-            role="group"
-            aria-label="AI panel mode"
-            className="segment-group mt-3"
-          >
+          <p className="mt-2 text-[10px] leading-relaxed text-muted">
+            Read-only answers from your aggregates and latest 20 full mocks. Notes, email, and identity are never sent.
+          </p>
+        </div>
+
+        {/* Tab navigation */}
+        <div className="border-b border-rule-soft px-5 py-3">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               aria-pressed={tab === "chat"}
-              className="segment"
               onClick={() => setTab("chat")}
+              className={`flex flex-col items-center gap-1.5 rounded-control border px-3 py-3 text-center transition-colors ${
+                tab === "chat"
+                  ? "border-ink bg-ink text-paper"
+                  : "border-rule-soft bg-paper text-muted hover:border-rule hover:text-ink"
+              }`}
             >
-              <Sparkles size={13} className="mr-1 inline" /> Coach chat
+              <MessageSquare size={18} />
+              <span className="text-[11px] font-medium leading-tight">Coach</span>
+              <span className={`text-[9px] leading-tight ${tab === "chat" ? "text-paper/70" : "text-muted"}`}>
+                Get insights & guidance
+              </span>
             </button>
             <button
               type="button"
               aria-pressed={tab === "todos"}
-              className="segment"
               onClick={switchToTodos}
+              className={`flex flex-col items-center gap-1.5 rounded-control border px-3 py-3 text-center transition-colors ${
+                tab === "todos"
+                  ? "border-ink bg-ink text-paper"
+                  : "border-rule-soft bg-paper text-muted hover:border-rule hover:text-ink"
+              }`}
             >
-              <ListTodo size={13} className="mr-1 inline" /> Plan todos
+              <FileText size={18} />
+              <span className="text-[11px] font-medium leading-tight">Plan todos</span>
+              <span className={`text-[9px] leading-tight ${tab === "todos" ? "text-paper/70" : "text-muted"}`}>
+                Create & manage plan
+              </span>
             </button>
             <button
               type="button"
               aria-pressed={tab === "log"}
-              className="segment"
               onClick={() => setTab("log")}
+              className={`flex flex-col items-center gap-1.5 rounded-control border px-3 py-3 text-center transition-colors ${
+                tab === "log"
+                  ? "border-ink bg-ink text-paper"
+                  : "border-rule-soft bg-paper text-muted hover:border-rule hover:text-ink"
+              }`}
             >
-              <ClipboardPaste size={13} className="mr-1 inline" /> Log a mock
+              <Plus size={18} />
+              <span className="text-[11px] font-medium leading-tight">Add mock</span>
+              <span className={`text-[9px] leading-tight ${tab === "log" ? "text-paper/70" : "text-muted"}`}>
+                Manually add a result
+              </span>
             </button>
           </div>
-          {tab === "chat" && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
-              {contextLabel && (
-                <span className="inline-flex items-center gap-1 rounded-pill border border-rule-soft bg-canvas px-2 py-0.5">
-                  <PlainIcon name="calendar" size={10} />
-                  {contextLabel}
-                </span>
-              )}
-              <span>Session-only chat</span>
-            </div>
-          )}
-        </SheetHeader>
+        </div>
 
         {tab === "chat" && (
           <CoachChatTab
@@ -190,7 +241,7 @@ export function AiChatSheet({
           />
         )}
         {tab === "todos" && (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             <TodoAiComposer compact />
           </div>
         )}
@@ -237,7 +288,6 @@ function CoachChatTab({
   onTaskAdded?: () => void;
 }) {
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<"coach" | "todos">("coach");
   const endRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -262,17 +312,21 @@ function CoachChatTab({
     setInput("");
   }
 
+  const charCount = input.length;
+  const maxChars = 1000;
+
   return (
     <>
+      {/* Quick questions or message log */}
       <div
         ref={logRef}
         role="log"
         aria-live="polite"
         aria-busy={streaming}
-        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4"
       >
         {!messages.length && !configured && (
-          <div className="rounded-control border border-rule bg-canvas p-3.5">
+          <div className="rounded-control border border-rule bg-canvas p-4">
             <p className="text-xs leading-relaxed text-muted">
               Add a provider and API key to start asking questions. Your key is
               encrypted before storage and never returned to this page.
@@ -288,43 +342,79 @@ function CoachChatTab({
         )}
 
         {!messages.length && configured && (
-          <div className="rounded-control border border-rule-soft bg-canvas p-3.5">
-            <p className="text-xs leading-relaxed text-muted">
-              Ask about a score, a subject, or what to study next. Ask
-              &ldquo;add a task&hellip;&rdquo; to get a confirmation card
-              &mdash; tasks are added only after you approve them.
-            </p>
-            <div className="mt-3 flex flex-col items-start gap-1.5">
-              {SUGGESTIONS.map((suggestion) => (
+          <div className="flex flex-col gap-4">
+            {/* Quick questions header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-control bg-accent-soft">
+                  <Zap size={14} className="text-accent" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-ink">Quick questions</p>
+                  <p className="text-[10px] text-muted">Click a question below or type your own.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-[10px] text-muted hover:text-accent"
+              >
+                <RefreshCw size={11} />
+                More questions
+              </button>
+            </div>
+
+            {/* Quick questions grid */}
+            <div className="grid grid-cols-2 gap-2.5">
+              {QUICK_QUESTIONS.map((q) => (
                 <button
-                  key={suggestion}
+                  key={q.text}
                   type="button"
-                  onClick={() => submit(suggestion)}
-                  className="w-full rounded-control border border-rule-soft bg-paper px-2.5 py-2 text-left text-[11px] leading-snug transition-colors hover:border-accent hover:text-accent"
+                  onClick={() => submit(q.text)}
+                  className="group flex items-start gap-2.5 rounded-control border border-rule-soft bg-paper p-3 text-left transition-all hover:border-accent hover:shadow-sm"
                 >
-                  {suggestion}
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-control ${q.color}`}>
+                    <q.icon size={15} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium leading-snug text-ink group-hover:text-accent">
+                      {q.text}
+                    </p>
+                  </div>
+                  <svg
+                    className="mt-1 h-3 w-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {messages.map((message) => (
-          <ChatBubble
-            key={message.id}
-            message={message}
-            streaming={streaming}
-            taskApi={taskApi}
-            onTaskAdded={onTaskAdded}
-          />
-        ))}
-        <div ref={endRef} />
+        {messages.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {messages.map((message) => (
+              <ChatBubble
+                key={message.id}
+                message={message}
+                streaming={streaming}
+                taskApi={taskApi}
+                onTaskAdded={onTaskAdded}
+              />
+            ))}
+            <div ref={endRef} />
+          </div>
+        )}
       </div>
 
       {error && (
         <div
           role="alert"
-          className="flex flex-wrap items-center justify-between gap-2 border-t border-warning bg-warning-soft px-4 py-2.5 text-[11px] text-warning"
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-warning bg-warning-soft px-5 py-2.5 text-[11px] text-warning"
         >
           <span className="min-w-0">{error}</span>
           {!streaming && (
@@ -345,10 +435,11 @@ function CoachChatTab({
         </div>
       )}
 
+      {/* Composer */}
       <form
         className={
           configured
-            ? "border-t border-rule-soft bg-paper px-3 py-3"
+            ? "border-t border-rule-soft bg-paper px-5 py-4"
             : "hidden"
         }
         onSubmit={(event) => {
@@ -356,50 +447,51 @@ function CoachChatTab({
           submit(input);
         }}
       >
-        <label htmlFor="ai-chat-input" className="sr-only">
-          Ask the coach a question
-        </label>
-        <textarea
-          ref={inputRef}
-          id="ai-chat-input"
-          rows={2}
-          maxLength={4_000}
-          value={input}
-          disabled={streaming}
-          placeholder="Ask about a mock, a weak subject, or say “add a task…”"
-          className="max-h-32 resize-none text-[13px]"
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit(input);
-            }
-          }}
-        />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onClear}
-            disabled={!messages.length && !error}
-          >
-            <Trash2 size={13} /> Clear
-          </Button>
-          {streaming ? (
-            <Button type="button" variant="outline" size="sm" onClick={onStop}>
-              <Square size={13} /> Stop
-            </Button>
-          ) : (
-            <Button type="submit" size="sm" disabled={!input.trim()}>
-              Send <Send size={13} />
-            </Button>
-          )}
+        <div className="rounded-control border border-rule-soft bg-canvas p-3">
+          <div className="flex items-start gap-2">
+            <MessageSquare size={16} className="mt-0.5 shrink-0 text-muted" />
+            <textarea
+              ref={inputRef}
+              id="ai-chat-input"
+              rows={2}
+              maxLength={maxChars}
+              value={input}
+              disabled={streaming}
+              placeholder="Ask about a mock, a weak subject, or what to do next..."
+              className="max-h-24 flex-1 resize-none border-0 bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted focus:outline-none focus:ring-0"
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  submit(input);
+                }
+              }}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between">
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded-control border border-rule-soft bg-paper px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:border-rule hover:text-ink"
+            >
+              <ClipboardPaste size={12} />
+              Attach (optional)
+            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] tabular text-muted">
+                {charCount}/{maxChars}
+              </span>
+              {streaming ? (
+                <Button type="button" variant="outline" size="sm" onClick={onStop}>
+                  <Square size={13} /> Stop
+                </Button>
+              ) : (
+                <Button type="submit" size="sm" disabled={!input.trim()}>
+                  Send <Send size={13} />
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
-        <p className="mt-2 text-[10px] leading-relaxed text-muted">
-          Closing the panel keeps this conversation for the session. Do not
-          paste sensitive personal information.
-        </p>
       </form>
     </>
   );
@@ -439,7 +531,7 @@ function ChatBubble({
 
   if (message.role === "user") {
     return (
-      <div className="ml-auto max-w-[88%] rounded-control bg-ink px-3 py-2 text-[13px] leading-relaxed text-paper">
+      <div className="ml-auto max-w-[88%] rounded-control bg-ink px-3.5 py-2.5 text-[13px] leading-relaxed text-paper">
         {message.content}
       </div>
     );
@@ -447,7 +539,7 @@ function ChatBubble({
 
   const waiting = !message.content;
   return (
-    <div className="max-w-[96%] border-l-2 border-accent bg-canvas px-3 py-2 text-[13px] leading-relaxed">
+    <div className="max-w-[96%] rounded-control border-l-2 border-accent bg-canvas px-3.5 py-2.5 text-[13px] leading-relaxed">
       {waiting ? (
         <span className="inline-flex items-center gap-1.5 text-muted">
           {streaming ? (
@@ -477,7 +569,7 @@ function ChatBubble({
           type="button"
           onClick={() => void copy()}
           aria-label={copied ? "Copied" : "Copy answer"}
-          className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-muted transition-colors hover:text-accent"
+          className="mt-2 inline-flex items-center gap-1 text-[10px] text-muted transition-colors hover:text-accent"
         >
           {copied ? <Check size={11} /> : <Copy size={11} />}
           {copied ? "Copied" : "Copy"}
@@ -668,7 +760,7 @@ function TaskSuggestionCard({
     <div
       role="group"
       aria-label="Task suggestion from the coach"
-      className="mt-2 rounded-control border border-dashed border-accent/50 bg-paper p-3"
+      className="mt-2.5 rounded-control border border-dashed border-accent/50 bg-paper p-3"
     >
       <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-accent">
         <Sparkles size={11} /> Suggested task
@@ -851,7 +943,7 @@ function LogMockTab({
 
   if (reviewing && draft) {
     return (
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <ExtractionReview
           draft={draft}
           onChange={setDraft}
@@ -868,8 +960,8 @@ function LogMockTab({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-      <div className="rounded-control border border-rule-soft bg-canvas p-3.5">
+    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div className="rounded-control border border-rule-soft bg-canvas p-4">
         <p className="text-xs leading-relaxed text-muted">
           Paste the scorecard here, review the arranged draft, and continue to
           the mock form. The form stays the only place that saves — this panel
@@ -950,7 +1042,7 @@ function LogMockTab({
 
       {/* Keep provider setup reachable from this tab when AI is off. */}
       {!aiEnabled && !configured && (
-        <div className="mt-4 rounded-control border border-rule bg-canvas p-3.5">
+        <div className="mt-4 rounded-control border border-rule bg-canvas p-4">
           <AiSettingsForm
             variant="panel"
             showHeading={false}
