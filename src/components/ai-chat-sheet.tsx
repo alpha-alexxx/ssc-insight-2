@@ -4,9 +4,11 @@ import {
   BarChart3,
   BookOpen,
   Calendar,
+  ChevronRight,
   Check,
   ClipboardPaste,
   Copy,
+  Info,
   Lightbulb,
   ListTodo,
   MessageSquare,
@@ -47,32 +49,26 @@ const QUICK_QUESTIONS = [
   {
     text: "What should I focus on this week?",
     icon: BarChart3,
-    color: "bg-accent-soft text-accent",
   },
   {
     text: "Why did my last full mock score change?",
     icon: TrendingUp,
-    color: "bg-danger-soft text-danger",
   },
   {
     text: "Which subject has the weakest accuracy?",
     icon: Calendar,
-    color: "bg-warning-soft text-warning",
   },
   {
     text: "Suggest a study plan based on my weak topics",
     icon: BookOpen,
-    color: "bg-positive-soft text-positive",
   },
   {
     text: "Compare my last 5 mocks performance",
     icon: ListTodo,
-    color: "bg-[var(--chart-reasoning)]/15 text-[var(--chart-reasoning)]",
   },
   {
     text: "Important topics to revise next?",
     icon: Lightbulb,
-    color: "bg-warning-soft text-warning",
   },
 ];
 
@@ -165,16 +161,17 @@ export function AiChatSheet({
         overlayClassName="bg-ink/20"
         aria-describedby="ai-sheet-description"
       >
-        <SheetHeader className="shrink-0 border-b border-rule-soft px-4 py-3 pr-14 sm:px-5 sm:pr-14">
-          <SheetTitle className="flex items-center gap-2 font-serif text-xl font-medium">
-            <Sparkles size={17} className="text-accent" /> Your study coach
+        <SheetHeader className="shrink-0 gap-2 border-b border-rule-soft px-5 py-5 pr-14">
+          <SheetTitle className="flex items-center gap-2.5 font-serif text-[22px] font-medium">
+            <Sparkles size={24} className="shrink-0 text-accent" /> Your study
+            coach
           </SheetTitle>
           <SheetDescription id="ai-sheet-description">
             {contextLabel ?? "Your workspace"} · Session-only conversation
           </SheetDescription>
         </SheetHeader>
         <div
-          className="flex shrink-0 gap-1 border-b border-rule-soft px-3 py-2"
+          className="flex shrink-0 gap-2 border-b border-rule-soft px-4 py-3"
           role="tablist"
           aria-label="AI mode"
         >
@@ -217,13 +214,13 @@ export function AiChatSheet({
                 }
               }}
               className={cn(
-                "flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-control px-2 text-xs transition-colors",
+                "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-control px-2 text-[13px] transition-colors",
                 tab === item.id
                   ? "bg-ink text-paper"
                   : "text-muted hover:bg-soft hover:text-ink",
               )}
             >
-              <item.icon size={14} />
+              <item.icon size={17} className="shrink-0" />
               {item.label}
             </button>
           ))}
@@ -251,7 +248,7 @@ export function AiChatSheet({
             />
           )}
           {tab === "todos" && (
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
               <TodoAiComposer compact />
             </div>
           )}
@@ -366,9 +363,9 @@ function CoachChatTab({
         )}
 
         {!messages.length && configured && (
-          <div className="flex flex-col gap-4 py-3">
+          <div className="flex flex-col gap-6 py-1">
             <div>
-              <h3 className="font-serif text-xl">
+              <h3 className="font-serif text-2xl font-medium leading-tight">
                 What would help you study today?
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -376,16 +373,22 @@ function CoachChatTab({
                 your aggregates and latest 20 full mocks.
               </p>
             </div>
-            <div className="flex flex-col divide-y divide-rule-soft border-y border-rule-soft">
+            <div className="flex flex-col gap-2.5">
               {QUICK_QUESTIONS.map((question) => (
                 <button
                   key={question.text}
                   type="button"
                   onClick={() => submit(question.text)}
-                  className="flex items-center gap-3 py-3 text-left text-sm text-ink hover:text-accent"
+                  className="group flex min-h-16 items-center gap-3 rounded-card border border-rule-soft bg-paper px-3 py-3 text-left text-sm leading-snug text-ink transition-colors hover:border-accent hover:bg-accent-soft"
                 >
-                  <question.icon size={15} className="shrink-0 text-muted" />
-                  {question.text}
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-accent-soft text-accent">
+                    <question.icon size={19} />
+                  </span>
+                  <span className="min-w-0 flex-1">{question.text}</span>
+                  <ChevronRight
+                    size={17}
+                    className="shrink-0 text-muted group-hover:text-accent"
+                  />
                 </button>
               ))}
             </div>
@@ -441,22 +444,20 @@ function CoachChatTab({
       {/* Composer */}
       <form
         className={
-          configured
-            ? "ai-composer shrink-0 border-t border-rule-soft bg-paper px-4 py-3 sm:px-5"
-            : "hidden"
+          configured ? "ai-composer shrink-0 bg-paper px-5 pb-5 pt-3" : "hidden"
         }
         onSubmit={(event) => {
           event.preventDefault();
           submit(input);
         }}
       >
-        <div className="rounded-control border border-rule-soft bg-canvas p-3">
+        <div className="rounded-card border border-rule-soft bg-paper p-3.5">
           <div className="flex items-start gap-2">
             <MessageSquare size={16} className="mt-0.5 shrink-0 text-muted" />
             <textarea
               ref={inputRef}
               id="ai-chat-input"
-              rows={2}
+              rows={3}
               maxLength={maxChars}
               value={input}
               aria-label="Message your study coach"
@@ -475,7 +476,7 @@ function CoachChatTab({
               }}
             />
           </div>
-          <div className="mt-2 flex items-center justify-between">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -988,30 +989,43 @@ function LogMockTab({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-      <div className="rounded-control border border-rule-soft bg-canvas p-4">
-        <p className="text-xs leading-relaxed text-muted">
-          Paste the scorecard here, review the arranged draft, and continue to
-          the mock form. The form stays the only place that saves — this panel
-          only prepares the values.
-        </p>
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+      <h3 className="font-serif text-2xl font-medium leading-tight">
+        Log a mock test
+      </h3>
+      <p className="mt-3 text-sm leading-relaxed text-muted">
+        Paste the scorecard here, review the arranged draft, and continue to the
+        mock form. The form stays the only place that saves — this panel only
+        prepares the values.
+      </p>
+      <div className="mt-5 flex items-start gap-3 rounded-card bg-positive-soft p-4">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-paper text-positive">
+          <ClipboardPaste size={23} />
+        </span>
+        <div className="min-w-0">
+          <h4 className="text-sm font-medium">Paste your scorecard</h4>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            Copy the result text from your scorecard. Review the extracted
+            subject details before continuing.
+          </p>
+        </div>
       </div>
       <label
         htmlFor="ai-log-mock-paste"
-        className="mt-3 block text-xs font-medium"
+        className="mt-5 block text-sm font-medium"
       >
         Scorecard text
       </label>
       <textarea
         id="ai-log-mock-paste"
-        rows={8}
+        rows={10}
         maxLength={MAX_EXTRACT_CHARS}
         value={paste}
         onChange={(event) => setPaste(event.target.value)}
         placeholder="Paste the full scorecard section…"
-        className="mt-1 max-h-56 resize-y text-[12px]"
+        className="mt-2 min-h-48 max-h-80 resize-y rounded-card text-sm leading-relaxed"
       />
-      <div className="mt-1 flex items-center justify-between text-[10px] text-muted">
+      <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted">
         <span>
           {paste.length.toLocaleString("en-IN")} /{" "}
           {MAX_EXTRACT_CHARS.toLocaleString("en-IN")} characters
@@ -1035,11 +1049,10 @@ function LogMockTab({
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         {aiEnabled ? (
           <Button
             type="button"
-            size="sm"
             onClick={() => void importWithAi()}
             disabled={!paste.trim() || busy}
           >
@@ -1048,7 +1061,6 @@ function LogMockTab({
         ) : (
           <Button
             type="button"
-            size="sm"
             onClick={importStandard}
             disabled={!paste.trim()}
           >
@@ -1056,10 +1068,13 @@ function LogMockTab({
           </Button>
         )}
       </div>
-      <p className="mt-2 text-[10px] leading-relaxed text-muted">
-        {aiEnabled
-          ? "AI parsing returns an editable draft with cross-checks; you review every field before continuing."
-          : "Standard parsing works without AI. AI-assisted parsing appears once a provider is set up in Settings → AI provider."}
+      <p className="mt-4 flex items-start gap-2 rounded-card bg-soft p-4 text-xs leading-relaxed text-muted">
+        <Info size={17} className="mt-0.5 shrink-0" />
+        <span>
+          {aiEnabled
+            ? "AI parsing returns an editable draft with cross-checks; you review every field before continuing."
+            : "Standard parsing works without AI. AI-assisted parsing appears once a provider is set up in Settings → AI provider."}
+        </span>
       </p>
 
       {!statusChecked && (

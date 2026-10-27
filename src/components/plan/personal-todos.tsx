@@ -3,12 +3,16 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   CalendarClock,
+  ChevronRight,
+  Info,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   RotateCcw,
   Pencil,
   X,
+  Zap,
 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { Button } from "../ui/button";
@@ -20,7 +24,12 @@ import {
   SheetDescription,
 } from "../ui/sheet";
 import { api } from "@/lib/api-client";
-import { istTodayIso, linkHost, safeHttpUrlCore } from "@/lib/plan/view-model";
+import {
+  addIsoDays,
+  istTodayIso,
+  linkHost,
+  safeHttpUrlCore,
+} from "@/lib/plan/view-model";
 import { cn } from "@/lib/utils";
 import { shortDate as dateLabel } from "@/lib/format";
 import { useOverlayViewport, useOverlayFocus } from "../use-overlay-viewport";
@@ -1436,9 +1445,34 @@ export function TodoAiComposer({
   }
   return (
     <section
-      className={cn("space-y-4", !compact && "panel p-4")}
+      className={cn("flex flex-col gap-5", !compact && "panel p-4")}
       aria-label="AI todo assistant"
     >
+      {compact && (
+        <>
+          <div>
+            <h3 className="font-serif text-2xl font-medium leading-tight">
+              Plan your study todos
+            </h3>
+            <p className="mt-3 text-sm leading-relaxed text-muted">
+              Create revision todos, add new tasks, or reschedule unfinished
+              work based on your plan and progress.
+            </p>
+          </div>
+          <div className="flex items-start gap-3 rounded-card bg-accent-soft p-4">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-paper text-accent">
+              <CalendarClock size={23} />
+            </span>
+            <div className="min-w-0">
+              <h4 className="text-sm font-medium">Set your plan</h4>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                Choose dates and tell the coach what you want to plan. Review
+                the proposed todos before applying changes.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
       {!compact && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1460,7 +1494,7 @@ export function TodoAiComposer({
       {open && (
         <>
           <form
-            className="space-y-3"
+            className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               void generate();
@@ -1471,16 +1505,26 @@ export function TodoAiComposer({
               <textarea
                 required
                 maxLength={4000}
-                rows={3}
+                rows={compact ? 5 : 3}
+                className={
+                  compact
+                    ? "mt-2 resize-y rounded-card text-sm leading-relaxed"
+                    : undefined
+                }
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Create revision todos for my weaker subjects, or reschedule unfinished work…"
                 disabled={busy}
               />
+              {compact && (
+                <span className="mt-1 block text-right text-xs font-normal tabular-nums text-muted">
+                  {prompt.length.toLocaleString("en-IN")} / 4,000
+                </span>
+              )}
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label>
-                Date
+                Start date
                 <input
                   type="date"
                   value={date}
@@ -1489,7 +1533,7 @@ export function TodoAiComposer({
                 />
               </label>
               <label>
-                Through date (optional)
+                End date (optional)
                 <input
                   type="date"
                   min={date || undefined}
@@ -1499,22 +1543,87 @@ export function TodoAiComposer({
                 />
               </label>
             </div>
+            {compact && (
+              <div className="rounded-card bg-soft p-4">
+                <div className="flex items-start gap-2.5">
+                  <Zap size={19} className="mt-0.5 shrink-0 text-accent" />
+                  <div>
+                    <h4 className="text-sm font-medium">Quick options</h4>
+                    <p className="mt-1 text-xs text-muted">
+                      Use a template to get started faster.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setDate(istTodayIso());
+                      setEndDate(addIsoDays(istTodayIso(), 6));
+                      setPrompt(
+                        "Plan my study todos for the next 7 days based on my progress and unfinished work.",
+                      );
+                    }}
+                  >
+                    Next 7 days
+                  </Button>
+                  {[
+                    [
+                      "Revision plan",
+                      "Create revision todos based on my study plan and recent mock performance.",
+                    ],
+                    [
+                      "Weak topics",
+                      "Create practice and revision todos for my weaker subjects and topics.",
+                    ],
+                    [
+                      "Finish backlog",
+                      "Review my unfinished todos and propose a manageable rescheduling plan.",
+                    ],
+                  ].map(([label, value]) => (
+                    <Button
+                      key={label}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => setPrompt(value)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
             <p className="text-xs leading-relaxed text-muted">
               Choose the dates explicitly. AI can use your mock performance,
               study plan, and personal todo notes and subtasks. This context is
               sent to your configured provider; credentials and account identity
               are excluded.
             </p>
-            <Button disabled={busy || !prompt.trim()}>
+            <Button
+              className={
+                compact ? "relative min-h-11 w-full justify-center gap-2 px-10" : undefined
+              }
+              disabled={busy || !prompt.trim()}
+            >
+              {compact && <Sparkles size={18} />}
               {busy
                 ? "Working…"
                 : draft
                   ? "Generate new draft"
                   : "Prepare draft"}
+              {compact && <ChevronRight size={17} className="absolute right-3" />}
             </Button>
-            <p className="text-xs text-muted">
-              Generating does not save anything. Manual todo entry works without
-              AI.
+            <p className="flex items-start gap-2 text-xs leading-relaxed text-muted">
+              {compact && <Info size={16} className="mt-0.5 shrink-0" />}
+              <span>
+                Generating does not save anything. Manual todo entry works
+                without AI.
+              </span>
             </p>
           </form>
           {draft?.needsDates && (

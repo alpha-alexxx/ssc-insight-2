@@ -324,9 +324,9 @@
     "semantic_hash": ""
   },
   "src/components/ai-chat-sheet.tsx": {
-    "mtime": 1793123112.49279,
-    "seen": 1793123127.8132095,
-    "ast_hash": "50041272d8b01b773a7c1272771d8bf0",
+    "mtime": 1793125402.350376,
+    "seen": 1793125456.371972,
+    "ast_hash": "51fd3d96805e05a1b9170870dab64b7c",
     "semantic_hash": ""
   },
   "src/components/ai-coach-card.tsx": {
@@ -1230,9 +1230,9 @@
     "semantic_hash": ""
   },
   "src/components/plan/personal-todos.tsx": {
-    "mtime": 1793122829.7059047,
-    "seen": 1793122879.021005,
-    "ast_hash": "bfcbe58403d4a32853dd4264670cff9d",
+    "mtime": 1793125373.7979307,
+    "seen": 1793125456.3878844,
+    "ast_hash": "930cb099a9ad050150e98e60911ac711",
     "semantic_hash": ""
   },
   "src/components/plan/planner-tabs.tsx": {
