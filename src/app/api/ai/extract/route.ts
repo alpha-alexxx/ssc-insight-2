@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { apiError, ok, readBody } from "@/lib/api";
-import { aiConfig } from "@/lib/ai/config";
-import { AiError, aiProviderError } from "@/lib/ai/errors";
+import { aiNotConfigured, AiError, aiProviderError } from "@/lib/ai/errors";
 import { parseExtraction } from "@/lib/ai/extraction";
 import {
   MAX_EXTRACT_CHARS,
@@ -10,6 +9,7 @@ import {
 } from "@/lib/ai/prompts";
 import { reservationTokens } from "@/lib/ai/quota";
 import { createAiProvider } from "@/lib/ai/provider";
+import { resolveAiConfig } from "@/lib/ai/resolve";
 import { aiLimits } from "@/lib/ai/server";
 import {
   reserveAiUsage,
@@ -25,7 +25,9 @@ const bodySchema = z.object({ text: z.string().min(1) });
 export async function POST(request: Request) {
   try {
     const { id: userId } = await requireUser();
-    const config = aiConfig();
+    const resolved = await resolveAiConfig(userId);
+    if (!resolved) throw aiNotConfigured();
+    const config = resolved.config;
     // Allow the textarea's full report to reach the AI-specific 20k check
     // instead of failing first on the generic transport limit.
     const body = bodySchema.parse(await readBody(request, 128 * 1024));

@@ -14,6 +14,32 @@ export type AiStatus = {
   enabled: boolean;
   model: string | null;
   usage: AiUsageSummary | null;
+  /** Where the active configuration came from. */
+  source?: "user" | "env" | null;
+  /** False when the server has no AI_CREDENTIAL_SECRET, so keys cannot be saved. */
+  storageAvailable?: boolean;
+  credential?: AiCredentialSummary | null;
+};
+
+/**
+ * Client-safe view of a stored credential. Deliberately has NO apiKey field:
+ * the key is write-only and the server returns only a 4-character hint.
+ */
+export type AiCredentialSummary = {
+  configured: boolean;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  keyHint: string | null;
+  jsonMode: boolean;
+  allowHttp: boolean;
+  allowPrivate: boolean;
+  updatedAt: string | null;
+};
+
+export type AiSettingsResponse = {
+  storageAvailable: boolean;
+  credential: AiCredentialSummary | null;
 };
 
 export type CoachMeta = {

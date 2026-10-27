@@ -862,9 +862,11 @@ function WorkspaceShellInner({
           streaming={ai.chat.streaming}
           error={ai.chat.error}
           contextLabel={aiContextLabel}
+          configured={!!ai.aiStatus?.enabled}
           onSend={(text) => void ai.chat.send(text, aiScreenContext)}
           onStop={ai.chat.stop}
           onClear={ai.chat.clear}
+          onAiConfigured={() => void ai.refreshAiStatus()}
         />
       </div>
     </MotionConfig>

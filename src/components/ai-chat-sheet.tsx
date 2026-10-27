@@ -10,7 +10,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "./ui/sheet";
-import type { ChatMessage } from "@/lib/ai/client-types";
+import { AiSettingsForm } from "./ai-settings-form";
+import type { AiCredentialSummary, ChatMessage } from "@/lib/ai/client-types";
 
 const SUGGESTIONS = [
   "What should I focus on this week?",
@@ -31,9 +32,11 @@ export function AiChatSheet({
   streaming,
   error,
   contextLabel,
+  configured = true,
   onSend,
   onStop,
   onClear,
+  onAiConfigured,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,9 +44,13 @@ export function AiChatSheet({
   streaming: boolean;
   error: string;
   contextLabel?: string;
+  /** False when no AI provider is configured; shows the setup form instead. */
+  configured?: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
   onClear: () => void;
+  /** Notifies the shell so AI status can be refetched after setup. */
+  onAiConfigured?: (credential: AiCredentialSummary | null) => void;
 }) {
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -112,7 +119,23 @@ export function AiChatSheet({
           aria-busy={streaming}
           className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
         >
-          {!messages.length && (
+          {!messages.length && !configured && (
+            <div className="rounded-control border border-rule bg-canvas p-3.5">
+              <p className="text-xs leading-relaxed text-muted">
+                Add a provider and API key to start asking questions. Your key is
+                encrypted before storage and never returned to this page.
+              </p>
+              <div className="mt-3">
+                <AiSettingsForm
+                  variant="panel"
+                  showHeading={false}
+                  onChanged={onAiConfigured}
+                />
+              </div>
+            </div>
+          )}
+
+          {!messages.length && configured && (
             <div className="rounded-control border border-rule-soft bg-canvas p-3.5">
               <p className="text-xs leading-relaxed text-muted">
                 Ask about a score, a subject, or what to study next. Every
@@ -185,7 +208,11 @@ export function AiChatSheet({
         )}
 
         <form
-          className="border-t border-rule-soft bg-paper px-3 py-3"
+          className={
+            configured
+              ? "border-t border-rule-soft bg-paper px-3 py-3"
+              : "hidden"
+          }
           onSubmit={(event) => {
             event.preventDefault();
             submit(input);

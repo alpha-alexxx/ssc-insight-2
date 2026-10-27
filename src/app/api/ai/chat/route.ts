@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { apiError, readBody } from "@/lib/api";
-import { aiConfig } from "@/lib/ai/config";
-import { AiError, aiProviderError } from "@/lib/ai/errors";
+import { aiNotConfigured, AiError, aiProviderError } from "@/lib/ai/errors";
 import { encodeNdjson } from "@/lib/ai/ndjson";
 import { chatMessages } from "@/lib/ai/prompts";
 import {
@@ -9,6 +8,7 @@ import {
   reservationTokens,
 } from "@/lib/ai/quota";
 import { createAiProvider } from "@/lib/ai/provider";
+import { resolveAiConfig } from "@/lib/ai/resolve";
 import { aiLimits, loadAiContext } from "@/lib/ai/server";
 import {
   releaseSafely,
@@ -55,7 +55,9 @@ const bodySchema = z
 export async function POST(request: Request) {
   try {
     const { id: userId } = await requireUser();
-    const config = aiConfig();
+    const resolved = await resolveAiConfig(userId);
+    if (!resolved) throw aiNotConfigured();
+    const config = resolved.config;
     const body = bodySchema.parse(await readBody(request, 64 * 1024));
     const historyChars = body.messages.reduce(
       (total, message) => total + message.content.length,

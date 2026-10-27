@@ -1,12 +1,12 @@
 import { apiError, ok, readBody } from "@/lib/api";
-import { aiConfig } from "@/lib/ai/config";
-import { AiError, aiProviderError } from "@/lib/ai/errors";
+import { aiNotConfigured, AiError, aiProviderError } from "@/lib/ai/errors";
 import {
   CONTEXT_TOKEN_ESTIMATE,
   reservationTokens,
 } from "@/lib/ai/quota";
 import { coachMessages } from "@/lib/ai/prompts";
 import { createAiProvider } from "@/lib/ai/provider";
+import { resolveAiConfig } from "@/lib/ai/resolve";
 import { coachInsightSchema, parseModelJson } from "@/lib/ai/schemas";
 import { aiLimits, loadAiContext } from "@/lib/ai/server";
 import {
@@ -22,7 +22,9 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   try {
     const { id: userId } = await requireUser();
-    const config = aiConfig();
+    const resolved = await resolveAiConfig(userId);
+    if (!resolved) throw aiNotConfigured();
+    const config = resolved.config;
     // The body is intentionally unused: context and ownership are server-side.
     await readBody(request, 8 * 1024);
 

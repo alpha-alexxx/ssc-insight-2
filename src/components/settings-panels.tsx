@@ -4,6 +4,7 @@ import { PlainIcon, DuotoneIcon } from "./icon";
 import { Button } from "./ui/button";
 import { Panel } from "./dashboard-panels";
 import { AppearancePanel } from "./appearance-panel";
+import { AiSettingsForm } from "./ai-settings-form";
 import { cn } from "@/lib/utils";
 import {
   type BackupPreview,
@@ -69,7 +70,7 @@ export function SettingsPanels({
   onOpenReplace,
 }: SettingsPanelsProps) {
   const [section, setSection] = useState<
-    "study" | "appearance" | "data" | "about"
+    "study" | "appearance" | "ai" | "data" | "about"
   >("study");
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -100,6 +101,7 @@ export function SettingsPanels({
   const sections = [
     { id: "study" as const, label: "Study target" },
     { id: "appearance" as const, label: "Appearance" },
+    { id: "ai" as const, label: "AI provider" },
     { id: "data" as const, label: "Data & backup" },
     { id: "about" as const, label: "About & account" },
   ];
@@ -209,6 +211,15 @@ export function SettingsPanels({
           id="settings-appearance"
         >
           <AppearancePanel />
+        </div>
+
+        <div
+          className={section === "ai" ? "block" : "block lg:hidden"}
+          id="settings-ai"
+        >
+          <Panel dense icon="sparkles" title="AI provider">
+            <AiSettingsForm showHeading={false} />
+          </Panel>
         </div>
 
         <div
