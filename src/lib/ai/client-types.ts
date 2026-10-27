@@ -42,6 +42,10 @@ export type AiSettingsResponse = {
   credential: AiCredentialSummary | null;
 };
 
+export type AiModelsResponse = {
+  models: { id: string; name: string }[];
+};
+
 export type CoachMeta = {
   contextVersion: string;
   dataAsOf: string | null;
