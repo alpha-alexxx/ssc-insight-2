@@ -218,7 +218,9 @@ export function SettingsPanels({
           id="settings-ai"
         >
           <Panel dense icon="sparkles" title="AI provider">
-            <AiSettingsForm showHeading={false} />
+            <div className="px-4 pb-5 pt-2 sm:px-5">
+              <AiSettingsForm showHeading={false} />
+            </div>
           </Panel>
         </div>
 
