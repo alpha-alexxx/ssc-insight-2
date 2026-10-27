@@ -1,5 +1,6 @@
 "use client";
-import type { ReactNode } from "react";
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
 import { Panel } from "./dashboard-panels";
 import { PlainIcon } from "./icon";
 import { Button } from "./ui/button";
@@ -9,24 +10,24 @@ import { AttemptRecordCard } from "./attempt-outcome-card";
 import { PerformanceOverview } from "./performance-overview";
 import { PlanErrorCard } from "./plan/plan-shared";
 import {
-  PlanProgressPanel,
-  RevisionQueuePanel,
+  StudyPipelinePanel,
   TodayFocusPanel,
-  UpcomingTestsPanel,
   type PlanWithToday,
 } from "./plan/dashboard-plan-sections";
+import { WeekStrip, WeekStripSkeleton } from "./plan/week-strip";
 import type { usePlanData } from "./use-plan-data";
 import type { Analytics } from "@/lib/analytics";
 import type { Attempt } from "@/lib/domain";
 import { PersonalTodos } from "./plan/personal-todos";
-import { CalendarView } from "./plan/calendar-view";
 import { istTodayIso } from "@/lib/plan/view-model";
+import { cn } from "@/lib/utils";
 
 /**
- * Dashboard composition. The overview answers "where am I?", the primary
- * column answers "what do I do next?", and the secondary column keeps plan
- * progress, revision, personal tasks and the coach in view. Performance
- * analysis stays below as a distinct, scope-aware section.
+ * Dashboard composition. The metric strip answers "where am I?", Today's Plan
+ * pairs the study day with the personal task column side by side (tabbed
+ * below lg), the week strip replaces the full calendar, and the pipeline
+ * column keeps progress, revision and the coach in view. Performance analysis
+ * stays below as a distinct, scope-aware section.
  */
 export function DashboardView({
   planApi,
@@ -40,8 +41,6 @@ export function DashboardView({
   onAdd,
   onViewAll,
   onOpenDay,
-  onAddMock,
-  studyAttempts,
 }: {
   planApi: ReturnType<typeof usePlanData>;
   analytics: Analytics | null;
@@ -54,11 +53,15 @@ export function DashboardView({
   onAdd: () => void;
   onViewAll: () => void;
   onOpenDay: (date: string) => void;
-  onAddMock: (date: string) => void;
-  studyAttempts: Attempt[];
 }) {
   const plan = planApi.plan as PlanWithToday | null;
   const today = plan?.today ?? istTodayIso();
+  const [mobilePane, setMobilePane] = useState<"study" | "personal">("study");
+  const personalOverdue =
+    planApi.personalTasks?.filter(
+      (task) =>
+        task.status !== "completed" && task.dueDate && task.dueDate < today,
+    ).length ?? null;
 
   return (
     <div aria-busy={loading}>
@@ -67,6 +70,7 @@ export function DashboardView({
         analytics={analytics}
         target={target}
         loading={loading}
+        personalOverdue={personalOverdue}
       />
 
       <section
@@ -76,55 +80,95 @@ export function DashboardView({
         <h2 id="today-plan-heading" className="mb-4 font-serif text-2xl">
           Today&apos;s Plan
         </h2>
-        {planApi.error && !plan ? (
-          <PlanErrorCard
-            message={planApi.error}
-            onRetry={() => void planApi.refresh()}
-          />
-        ) : !plan ? (
-          <DashboardSkeleton />
-        ) : (
-          <TodayFocusPanel
-            plan={plan}
-            today={today}
-            planApi={planApi}
-            onOpenDay={onOpenDay}
-          />
-        )}
-        <div className="mt-4">
-          <PersonalTodos compact initialDate={today} />
+        <div
+          role="group"
+          aria-label="Switch between the study plan and personal tasks"
+          className="segment-group mb-3 lg:hidden"
+        >
+          <button
+            type="button"
+            className="segment"
+            aria-pressed={mobilePane === "study"}
+            onClick={() => setMobilePane("study")}
+          >
+            Study
+          </button>
+          <button
+            type="button"
+            className="segment"
+            aria-pressed={mobilePane === "personal"}
+            onClick={() => setMobilePane("personal")}
+          >
+            Personal
+          </button>
+        </div>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <div
+            className={cn(
+              "min-w-0",
+              mobilePane !== "study" && "hidden lg:block",
+            )}
+          >
+            {planApi.error && !plan ? (
+              <PlanErrorCard
+                message={planApi.error}
+                onRetry={() => void planApi.refresh()}
+              />
+            ) : !plan ? (
+              <div className="flex flex-col gap-4">
+                <Skeleton className="h-52 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+            ) : (
+              <TodayFocusPanel
+                plan={plan}
+                today={today}
+                planApi={planApi}
+                onOpenDay={onOpenDay}
+              />
+            )}
+          </div>
+          <div
+            className={cn(
+              "min-w-0",
+              mobilePane !== "personal" && "hidden lg:block",
+            )}
+          >
+            <PersonalTodos compact dashboardColumn initialDate={today} />
+          </div>
         </div>
       </section>
+
       <section
         className="mt-6 border-t border-rule pt-4"
-        aria-labelledby="study-calendar-heading"
+        aria-labelledby="this-week-heading"
       >
-        <div className="mb-4">
-          <h2 id="study-calendar-heading" className="font-serif text-2xl">
-            Study Calendar
-          </h2>
-          <p className="mt-1 text-xs text-muted">
-            Your structured study schedule and mock tests.
-          </p>
-        </div>
-        <CalendarView
-          planApi={planApi}
-          attempts={studyAttempts}
-          onAddMock={onAddMock}
-          onOpenAttempt={onOpenAttempt}
-        />
-      </section>
-      {plan && (
-        <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
-          <div className="flex min-w-0 flex-col gap-4">
-            <PlanProgressPanel plan={plan} today={today} />
-            <UpcomingTestsPanel
-              plan={plan}
-              today={today}
-              onOpenDay={onOpenDay}
-            />
-            <RevisionQueuePanel plan={plan} today={today} />
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="this-week-heading" className="font-serif text-2xl">
+              This week
+            </h2>
+            <p className="mt-1 text-xs text-muted">
+              Three days around today. Pick a day to open its plan.
+            </p>
           </div>
+          <Link
+            href="/calendar"
+            className="text-[10px] font-medium text-accent hover:text-accent-hover"
+          >
+            Full calendar
+          </Link>
+        </div>
+        {plan ? (
+          <WeekStrip plan={plan} today={today} onOpenDay={onOpenDay} />
+        ) : (
+          <WeekStripSkeleton />
+        )}
+      </section>
+
+      {plan && (
+        <div className="mt-6 grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+          <StudyPipelinePanel plan={plan} today={today} onOpenDay={onOpenDay} />
           <div className="flex min-w-0 flex-col gap-4">
             <RecentAttemptsPanel
               attempts={attempts}
@@ -212,21 +256,5 @@ function RecentAttemptsPanel({
         )}
       </div>
     </Panel>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,1fr)]">
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-52 w-full" />
-        <Skeleton className="h-56 w-full" />
-      </div>
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-44 w-full" />
-        <Skeleton className="h-36 w-full" />
-        <Skeleton className="h-32 w-full" />
-      </div>
-    </div>
   );
 }

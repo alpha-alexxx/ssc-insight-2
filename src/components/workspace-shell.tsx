@@ -712,8 +712,6 @@ function WorkspaceShellInner({
                       />
                     ) : view === "dashboard" ? (
                       <DashboardView
-                        studyAttempts={allAttempts}
-                        onAddMock={addMockForDate}
                         planApi={planApi}
                         analytics={analytics}
                         attempts={dashboardAttempts}

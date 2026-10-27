@@ -5,27 +5,28 @@ import { formatNumber as n } from "@/lib/domain";
 import { shortDate } from "@/lib/format";
 import {
   dayAssignmentStats,
-  isMockType,
   planProgressStats,
-  upcomingMocks,
   type PlanPayload,
 } from "@/lib/plan/view-model";
 
 /**
- * Four real-data overview metrics. Values come only from the merged plan and
- * the current analytics scope; a missing plan/result is rendered as a
- * placeholder rather than a fabricated zero.
+ * Four real-data overview metrics. Values come only from the merged plan,
+ * personal tasks, and the current analytics scope; a missing plan/result is
+ * rendered as a placeholder rather than a fabricated zero.
  */
 export function DashboardOverview({
   plan,
   analytics,
   target,
   loading,
+  personalOverdue,
 }: {
   plan: (PlanPayload & { today: string }) | null;
   analytics: Analytics | null;
   target: number | null;
   loading: boolean;
+  /** Count of unfinished personal tasks past their due date; null when unknown. */
+  personalOverdue: number | null;
 }) {
   if (loading && !plan) {
     return (
@@ -45,11 +46,6 @@ export function DashboardOverview({
   const todayPlan = plan?.days.find((day) => day.date === today);
   const todayStats = todayPlan ? dayAssignmentStats(todayPlan) : null;
   const stats = plan ? planProgressStats(plan.days) : null;
-  const upcoming = plan
-    ? upcomingMocks(plan.days, today, 1_000).filter(({ task }) =>
-        isMockType(task.type),
-      ).length
-    : 0;
   const latest = analytics?.trend.points.at(-1) ?? null;
 
   const metrics = [
@@ -76,14 +72,15 @@ export function DashboardOverview({
         : "Plan unavailable",
     },
     {
-      key: "upcoming",
-      label: "Upcoming mocks",
-      value: plan ? n(upcoming) : "—",
-      hint: plan
-        ? upcoming
-          ? "Full-length live/paid mocks remaining"
-          : "No outstanding mock tests"
-        : "Plan unavailable",
+      key: "overdue",
+      label: "Personal overdue",
+      value: personalOverdue == null ? "—" : n(personalOverdue),
+      hint:
+        personalOverdue == null
+          ? "Personal tasks unavailable"
+          : personalOverdue
+            ? "Personal tasks past due · see My Tasks"
+            : "Nothing overdue in My Tasks",
     },
     {
       key: "latest",

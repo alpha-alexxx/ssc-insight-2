@@ -156,7 +156,41 @@ export function TodayFocusPanel({
   );
 }
 
-export function PlanProgressPanel({
+/**
+ * The three study panels merged into one dashboard card: plan progress,
+ * upcoming tests, and the revision queue as labelled sections.
+ */
+export function StudyPipelinePanel({
+  plan,
+  today,
+  onOpenDay,
+}: {
+  plan: PlanWithToday;
+  today: string;
+  onOpenDay: (date: string) => void;
+}) {
+  return (
+    <Panel
+      dense
+      icon="trend"
+      title="Study pipeline"
+      description="Progress, upcoming tests, and revision in one place."
+      className="min-w-0"
+    >
+      <div className="px-4 pb-4">
+        <PipelineProgressSection plan={plan} today={today} />
+        <PipelineUpcomingSection
+          plan={plan}
+          today={today}
+          onOpenDay={onOpenDay}
+        />
+        <PipelineRevisionSection plan={plan} today={today} />
+      </div>
+    </Panel>
+  );
+}
+
+function PipelineProgressSection({
   plan,
   today,
 }: {
@@ -167,13 +201,13 @@ export function PlanProgressPanel({
   const todayPlan = plan.days.find((day) => day.date === today);
   const focus = nextRecommendedAction(plan.days, today);
   return (
-    <Panel
-      dense
-      icon="trend"
-      title="Study progress"
-      description={`${stats.completedAssignments} of ${stats.totalAssignments} assignments complete.`}
-    >
-      <div className="px-4 pb-4">
+    <section aria-label="Plan progress">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+          Progress
+        </h3>
+      </div>
+      <div>
         <div
           className="h-1.5 overflow-hidden rounded-pill bg-soft"
           role="progressbar"
@@ -243,11 +277,11 @@ export function PlanProgressPanel({
           )}
         </div>
       </div>
-    </Panel>
+    </section>
   );
 }
 
-export function UpcomingTestsPanel({
+function PipelineUpcomingSection({
   plan,
   today,
   onOpenDay,
@@ -258,21 +292,22 @@ export function UpcomingTestsPanel({
 }) {
   const upcoming = upcomingMocks(plan.days, today, 5);
   return (
-    <Panel
-      dense
-      icon="calendar"
-      title="Upcoming tests"
-      description="Scheduled work from the plan."
-      action={
+    <section
+      aria-label="Upcoming tests"
+      className="mt-3 border-t border-rule-soft pt-3"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+          Upcoming tests
+        </h3>
         <Link
           href="/calendar"
           className="text-[10px] font-medium text-accent hover:text-accent-hover"
         >
           Calendar
         </Link>
-      }
-    >
-      <div className="px-4 pb-3.5">
+      </div>
+      <div>
         {upcoming.length === 0 ? (
           <p className="py-2 text-xs text-muted">
             No scheduled tests left in the plan.
@@ -311,11 +346,11 @@ export function UpcomingTestsPanel({
           </ul>
         )}
       </div>
-    </Panel>
+    </section>
   );
 }
 
-export function RevisionQueuePanel({
+function PipelineRevisionSection({
   plan,
   today,
 }: {
@@ -324,13 +359,16 @@ export function RevisionQueuePanel({
 }) {
   const revision = revisionQueue(plan.days, today);
   return (
-    <Panel
-      dense
-      icon="refresh"
-      title="Revision queue"
-      description="Rev-1 same day · Rev-2 weekly · Rev-3 final."
+    <section
+      aria-label="Revision queue"
+      className="mt-3 border-t border-rule-soft pt-3"
     >
-      <div className="px-4 pb-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+          Revision queue
+        </h3>
+      </div>
+      <div>
         <div className="grid grid-cols-3 gap-2">
           {(
             [
@@ -373,7 +411,7 @@ export function RevisionQueuePanel({
           Completion is manual; attempting a test never marks revision done.
         </p>
       </div>
-    </Panel>
+    </section>
   );
 }
 

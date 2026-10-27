@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { shortDate as dateLabel } from "@/lib/format";
 import { useOverlayViewport, useOverlayFocus } from "../use-overlay-viewport";
+import { Panel } from "../dashboard-panels";
 import { PersonalCalendar } from "./personal-calendar";
 import { useTodoQuery, mutateTodoRequest } from "../use-todos-data";
 
@@ -83,9 +84,12 @@ export function PersonalTodos({
   onChanged,
   aiAction,
   compact = false,
+  dashboardColumn = false,
 }: {
   initialDate?: string;
   compact?: boolean;
+  /** Renders as a single self-contained Panel for the dashboard column. */
+  dashboardColumn?: boolean;
   onChanged?: () => void;
   aiAction?: React.ReactNode;
 }) {
@@ -116,7 +120,7 @@ export function PersonalTodos({
     date,
     search,
     page: String(page),
-    limit: compact ? "10" : "50",
+    limit: compact ? (dashboardColumn ? "20" : "10") : "50",
     completion,
     priority,
     group: groupFilter,
@@ -175,25 +179,24 @@ export function PersonalTodos({
     bucket.push(task);
     buckets.set(key, bucket);
   }
-  return (
-    <section
-      aria-label="Personal todo planner"
-      className="personal-workspace flex min-w-0 flex-col gap-4"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-serif text-xl">
-            {compact ? "Personal Tasks" : "Your personal workspace"}
-          </h2>
-          <p className="mt-1 text-xs text-muted">
-            Choose a date, make a little progress. Your study schedule stays
-            separate.
-          </p>
+  const body = (
+    <>
+      {!dashboardColumn && (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-serif text-xl">
+              {compact ? "Personal Tasks" : "Your personal workspace"}
+            </h2>
+            <p className="mt-1 text-xs text-muted">
+              Choose a date, make a little progress. Your study schedule stays
+              separate.
+            </p>
+          </div>
+          <Button type="button" size="sm" onClick={() => setCreating(true)}>
+            <Plus size={14} /> Add task
+          </Button>
         </div>
-        <Button type="button" size="sm" onClick={() => setCreating(true)}>
-          <Plus size={14} /> Add task
-        </Button>
-      </div>
+      )}
       {!compact && (
         <dl className="grid grid-cols-3 divide-x divide-rule-soft border-y border-rule-soft py-3">
           {[
@@ -210,14 +213,25 @@ export function PersonalTodos({
           ))}
         </dl>
       )}
-      <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <aside className="min-w-0 border-b border-rule-soft pb-4 lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:border-l lg:pb-0 lg:pl-5">
+      <div
+        className={cn(
+          "grid min-w-0 items-start gap-5",
+          !dashboardColumn && "lg:grid-cols-[minmax(0,1fr)_300px]",
+        )}
+      >
+        <aside
+          className={cn(
+            "min-w-0 border-b border-rule-soft pb-4",
+            !dashboardColumn &&
+              "lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:border-l lg:pb-0 lg:pl-5",
+          )}
+        >
           <PersonalCalendar
             selected={date}
             onSelect={selectDate}
             onAdd={() => setCreating(true)}
           />
-          {compact && (
+          {compact && !dashboardColumn && (
             <a
               href="/my-tasks"
               className="mt-4 block text-xs text-accent underline underline-offset-4"
@@ -226,7 +240,12 @@ export function PersonalTodos({
             </a>
           )}
         </aside>
-        <div className="flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-1">
+        <div
+          className={cn(
+            "flex min-w-0 flex-col gap-4",
+            !dashboardColumn && "lg:col-start-1 lg:row-start-1",
+          )}
+        >
           {compact && (
             <OverdueTodoPreview selectedDate={date} onEdit={setEditing} />
           )}
@@ -490,19 +509,21 @@ export function PersonalTodos({
                 </button>
               ))}
             </div>
-            <div className="relative ml-auto min-w-40">
-              <Search size={14} className="absolute left-3 top-3 text-muted" />
-              <input
-                aria-label="Search personal todos"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search todos…"
-                className="pl-9!"
-              />
-            </div>
+            {!dashboardColumn && (
+              <div className="relative ml-auto min-w-40">
+                <Search size={14} className="absolute left-3 top-3 text-muted" />
+                <input
+                  aria-label="Search personal todos"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search todos…"
+                  className="pl-9!"
+                />
+              </div>
+            )}
           </div>
           {(error || loadError) && (
             <div
@@ -743,7 +764,7 @@ export function PersonalTodos({
               })}
             </div>
           )}
-          {data && (data.total > data.limit || page > 1) && (
+          {data && !dashboardColumn && (data.total > data.limit || page > 1) && (
             <div className="flex items-center justify-between border-t border-rule-soft pt-4 text-xs text-muted">
               <span>
                 {data.total} todos · Page {page} of{" "}
@@ -771,6 +792,41 @@ export function PersonalTodos({
           )}
         </div>
       </div>
+    </>
+  );
+  return (
+    <section
+      aria-label="Personal todo planner"
+      className={cn(
+        "personal-workspace",
+        dashboardColumn ? "min-w-0" : "flex min-w-0 flex-col gap-4",
+      )}
+    >
+      {dashboardColumn ? (
+        <Panel
+          dense
+          icon="check"
+          title="Personal Tasks"
+          description="Personal work outside the study plan."
+          action={
+            <div className="flex shrink-0 items-center gap-2.5">
+              <a
+                href="/my-tasks"
+                className="text-[10px] font-medium text-accent hover:text-accent-hover"
+              >
+                All tasks
+              </a>
+              <Button type="button" size="sm" onClick={() => setCreating(true)}>
+                <Plus size={14} /> Add task
+              </Button>
+            </div>
+          }
+        >
+          <div className="px-4 pb-4">{body}</div>
+        </Panel>
+      ) : (
+        body
+      )}
       {creating && (
         <TodoEditor
           key="create"
