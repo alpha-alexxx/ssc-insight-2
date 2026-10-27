@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Dialog } from "radix-ui";
 import { PlainIcon } from "../icon";
 import { Button } from "../ui/button";
-import { CategoryChip, CompleteToggle, PlanErrorCard } from "./plan-shared";
+import { CategoryChip, CompleteToggle, PlanErrorCard, PersonalTaskRow, nextStatus, statusOf } from "./plan-shared";
 import { usePlanData, type PersonalTaskInput } from "../use-plan-data";
 import { shortDate } from "@/lib/format";
 import {
@@ -181,66 +181,25 @@ export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData>
               count={personalFiltered.length}
               action={
                 personalFiltered.length > 0 ? (
-                  <span className="text-[11px] muted">Edit or complete from the row</span>
+                  <span className="text-[11px] muted">
+                    Click the dot to change status · edit or delete from the row
+                  </span>
                 ) : undefined
               }
             >
               {personalFiltered.map((task) => (
-                <li key={task.id} className="flex items-start gap-3 px-4 sm:px-6 py-3">
-                  <CompleteToggle
-                    completed={task.status === "completed"}
-                    label={`Mark ${task.title} ${task.status === "completed" ? "not done" : "done"}`}
-                    onToggle={() =>
-                      void updatePersonalTask(task.id, {
-                        status: task.status === "completed" ? "todo" : "completed",
-                      })
-                    }
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`text-[13px] font-medium ${task.status === "completed" ? "muted line-through" : ""}`}
-                    >
-                      {task.title}
-                    </p>
-                    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] muted">
-                      <span className="rounded-pill border border-rule-soft bg-soft px-2 py-0.5">
-                        {CATEGORIES.find((c) => c.id === task.category)?.label ?? task.category}
-                      </span>
-                      {task.dueDate && (
-                        <span className={overdue(task, today) ? "text-danger font-medium" : ""}>
-                          {overdue(task, today) ? "Overdue · " : "Due "}
-                          {shortDate(task.dueDate)}
-                        </span>
-                      )}
-                      {task.priority !== "normal" && (
-                        <span
-                          className={
-                            task.priority === "high" ? "text-accent font-medium" : "muted"
-                          }
-                        >
-                          {task.priority} priority
-                        </span>
-                      )}
-                      {task.notes && <span className="truncate max-w-48">{task.notes}</span>}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${task.title}`}
-                    onClick={() => setEditing(task)}
-                    className="muted hover:text-accent transition-colors mt-0.5"
-                  >
-                    <PlainIcon name="settings" size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${task.title}`}
-                    onClick={() => setConfirmDelete(task)}
-                    className="muted hover:text-danger transition-colors mt-0.5"
-                  >
-                    <PlainIcon name="close" size={14} />
-                  </button>
-                </li>
+                <PersonalTaskRow
+                  key={task.id}
+                  task={task}
+                  today={today}
+                  onCycleStatus={(t) =>
+                    void updatePersonalTask(t.id, {
+                      status: nextStatus(statusOf(t, today)),
+                    })
+                  }
+                  onEdit={setEditing}
+                  onDelete={setConfirmDelete}
+                />
               ))}
             </TaskList>
           </div>
@@ -297,12 +256,6 @@ export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData>
   );
 }
 
-function overdue(task: PersonalTaskView, today: string) {
-  return (
-    task.status !== "completed" && !!task.dueDate && task.dueDate < today
-  );
-}
-
 function TaskList({
   heading,
   emptyText,
@@ -348,6 +301,7 @@ function PersonalTaskForm({
 }) {
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [url, setUrl] = useState("");
   const [category, setCategory] = useState("other");
   const [priority, setPriority] = useState("normal");
   const [notes, setNotes] = useState("");
@@ -359,10 +313,36 @@ function PersonalTaskForm({
     setLastKey(key);
     setTitle(editing?.title ?? "");
     setDueDate(editing?.dueDate ?? "");
+    setUrl(editing?.url ?? "");
     setCategory(editing?.category ?? "other");
     setPriority(editing?.priority ?? "normal");
     setNotes(editing?.notes ?? "");
     setError("");
+  }
+
+  /** Same strict http(s) rule as the API (safeHttpUrl in progress.ts). */
+  const trimmedUrl = url.trim();
+  const urlValid =
+    !trimmedUrl ||
+    (/^https?:\/\/\S+$/i.test(trimmedUrl) &&
+      (() => {
+        try {
+          const parsed = new URL(trimmedUrl);
+          return (
+            (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+            Boolean(parsed.hostname)
+          );
+        } catch {
+          return false;
+        }
+      })());
+  let urlHost: string | null = null;
+  if (urlValid && trimmedUrl) {
+    try {
+      urlHost = new URL(trimmedUrl).hostname || null;
+    } catch {
+      urlHost = null;
+    }
   }
 
   return (
@@ -384,12 +364,17 @@ function PersonalTaskForm({
                 setError("Give the task a title.");
                 return;
               }
+              if (!urlValid) {
+                setError("Use a full link starting with https:// or http://.");
+                return;
+              }
               setBusy(true);
               setError("");
               void onSubmit({
                 title: title.trim(),
                 notes: notes.trim() || undefined,
                 dueDate: dueDate || null,
+                url: trimmedUrl || null,
                 category,
                 priority,
                 status: editing?.status ?? "todo",
@@ -409,6 +394,36 @@ function PersonalTaskForm({
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Reattempt profit & loss errors"
               />
+            </label>
+            <label>
+              Link (optional)
+              <input
+                type="url"
+                inputMode="url"
+                maxLength={2048}
+                aria-invalid={!urlValid}
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com/quiz"
+              />
+              {trimmedUrl && urlValid && (
+                <span className="mt-1 flex items-center gap-2 text-[11px] text-muted">
+                  <span>Opens {urlHost}</span>
+                  <a
+                    href={trimmedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="text-accent hover:underline"
+                  >
+                    Preview
+                  </a>
+                </span>
+              )}
+              {!urlValid && (
+                <span className="mt-1 text-[11px] text-danger">
+                  Use a full link starting with https:// or http://.
+                </span>
+              )}
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label>

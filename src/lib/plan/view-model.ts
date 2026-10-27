@@ -61,6 +61,8 @@ export type PersonalTaskView = {
   title: string;
   notes: string;
   dueDate: string | null;
+  /** Validated http(s) link, or "" when the task has none. */
+  url: string;
   category: string;
   priority: "low" | "normal" | "high";
   status: PlanTaskStatus;
@@ -288,4 +290,65 @@ export function dayNeighbours(days: PlanDayView[], date: string) {
 
 export function findDayByDate(days: PlanDayView[], date: string) {
   return days.find((day) => day.date === date);
+}
+
+/* ---------- personal tasks (shared by calendar, My Tasks, dashboard) ----- */
+
+/**
+ * Strict external-link policy for personal tasks, shared by the API
+ * validation (progress.ts re-exports this) and the client form: only http(s)
+ * URLs are stored, so a task link can always render as a plain anchor that
+ * opens a new tab. javascript:, data:, and scheme-less text fail. An empty
+ * string passes here and normalizes to null before persisting.
+ */
+export const safeHttpUrlCore = (value: string): boolean => {
+  if (!value) return true; // empty -> normalized to null before persist
+  try {
+    const parsed = new URL(value);
+    return (
+      (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+      Boolean(parsed.hostname)
+    );
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The display status of a personal task: the stored status with "overdue"
+ * derived from the due date. A completed task is never overdue, and tasks
+ * without a due date are never overdue. The dot system renders these four.
+ */
+export function effectiveStatus(
+  task: Pick<PersonalTaskView, "status" | "dueDate">,
+  todayIso: string,
+): PlanTaskStatus | "overdue" {
+  if (task.status === "completed") return "completed";
+  if (task.dueDate && task.dueDate < todayIso) return "overdue";
+  return task.status;
+}
+
+/** Host of a stored task URL, or null when the URL is missing/invalid. Used
+ * for aria-labels and hint chips so raw URLs never flood the UI. */
+export function linkHost(url: string): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Personal tasks grouped by their due date ("" bucket = no due date). */
+export function personalTasksByDate(
+  tasks: PersonalTaskView[],
+): Map<string, PersonalTaskView[]> {
+  const byDate = new Map<string, PersonalTaskView[]>();
+  for (const task of tasks) {
+    const key = task.dueDate ?? "";
+    const bucket = byDate.get(key);
+    if (bucket) bucket.push(task);
+    else byDate.set(key, [task]);
+  }
+  return byDate;
 }

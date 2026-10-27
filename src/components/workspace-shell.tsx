@@ -28,7 +28,7 @@ import { MockDetailDialog } from "./mock-detail-dialog";
 import { AddMockView } from "./add-mock-view";
 import { DashboardView } from "./dashboard-view";
 import { AiCoachCard } from "./ai-coach-card";
-import { AiChatSheet } from "./ai-chat-sheet";
+import { AiChatSheet, type LogMockPayload } from "./ai-chat-sheet";
 import { PageHeader } from "./page-header";
 import { useAiWorkspace } from "./use-ai-workspace";
 import { useBackupImport } from "./use-backup-import";
@@ -413,6 +413,21 @@ function WorkspaceShellInner({
       ? `${VIEW_META[view].label} · ${shortDate(`${aiScreenContext.date}T12:00:00+05:30`)}`
       : undefined;
 
+  /** One-shot reviewed draft from the AI panel's Log a Mock tab. Consumed by
+   * AddMockView on the next /add render, then cleared. The form stays the
+   * sole save path; this only prefills it. */
+  const [addPrefill, setAddPrefill] = useState<LogMockPayload | null>(null);
+  const handleLogMock = useCallback(
+    (draft: LogMockPayload) => {
+      setAddPrefill(draft);
+      router.push("/add");
+    },
+    [router],
+  );
+  const handleTaskAdded = useCallback(() => {
+    toast.success("Task added to My Tasks");
+  }, [toast]);
+
   const openDetail = useCallback((a: Attempt) => setDetail(a), []);
   const closeDetail = useCallback(() => setDetail(null), []);
   const editFromDetail = useCallback(
@@ -526,6 +541,8 @@ function WorkspaceShellInner({
                   key={editing?.id ?? "new"}
                   attempt={editing}
                   knownAttempts={allAttempts}
+                  prefill={addPrefill}
+                  onConsumePrefill={() => setAddPrefill(null)}
                   onClose={closeForm}
                   onSaved={savedMock}
                 />
@@ -867,6 +884,9 @@ function WorkspaceShellInner({
           onStop={ai.chat.stop}
           onClear={ai.chat.clear}
           onAiConfigured={() => void ai.refreshAiStatus()}
+          taskApi={{ createPersonalTask: planApi.createPersonalTask }}
+          onLogMock={handleLogMock}
+          onTaskAdded={handleTaskAdded}
         />
       </div>
     </MotionConfig>

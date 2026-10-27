@@ -11,6 +11,7 @@ import type {
   PlanTaskStatus,
   PlanTaskView,
 } from "./view-model";
+import { safeHttpUrlCore } from "./view-model";
 
 /**
  * User progress for the static 50-day plan. Plan rows are keyed by
@@ -199,10 +200,26 @@ export const personalTaskStatuses = [
   "completed",
 ] as const;
 
+/**
+ * Strict external-link policy for personal tasks: only http(s) URLs are
+ * stored, so a task link can always be rendered as a plain anchor that opens
+ * a new tab. javascript:, data:, and scheme-less text never reach the
+ * database. An empty string is allowed here and normalized to null before
+ * persisting, so "cleared" inputs erase the link.
+ * The core check lives in the client-safe view-model; this adds the zod
+ * wrapper and the length cap for the API boundary.
+ */
+export const safeHttpUrl = z
+  .string()
+  .trim()
+  .max(2048)
+  .refine(safeHttpUrlCore, "Use a full link starting with https:// or http://");
+
 export const personalTaskCreate = z.object({
   title: z.string().trim().min(1).max(200),
   notes: z.string().trim().max(2000).optional(),
   dueDate: z.iso.date().nullable().optional(),
+  url: safeHttpUrl.nullable().optional(),
   category: z.enum(personalTaskCategories).default("other"),
   priority: z.enum(personalTaskPriorities).default("normal"),
   status: z.enum(personalTaskStatuses).default("todo"),
@@ -217,6 +234,7 @@ function toView(row: {
   title: string;
   notes: string | null;
   dueDate: string | null;
+  url: string | null;
   category: string;
   priority: string;
   status: string;
@@ -227,6 +245,7 @@ function toView(row: {
     title: row.title,
     notes: row.notes ?? "",
     dueDate: row.dueDate,
+    url: row.url ?? "",
     category: row.category,
     priority: (row.priority as PersonalTaskView["priority"]) ?? "normal",
     status: (row.status as PlanTaskStatus) ?? "todo",
@@ -252,6 +271,7 @@ export async function createPersonalTask(
       title: input.title,
       notes: input.notes ?? null,
       dueDate: input.dueDate ?? null,
+      url: input.url ? input.url : null,
       category: input.category,
       priority: input.priority,
       status: input.status,
@@ -272,6 +292,9 @@ export async function updatePersonalTask(
   const data: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input))
     if (value !== undefined) data[key] = value;
+  // A cleared link input arrives as "" (valid per safeHttpUrl); persist the
+  // absence of a link as NULL so empty strings never accumulate.
+  if (data.url === "") data.url = null;
   if (!Object.keys(data).length) return toView(existing);
   const row = await database().personalTask.update({
     where: { id: existing.id },

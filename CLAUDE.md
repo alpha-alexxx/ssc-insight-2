@@ -1,18 +1,46 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file gives a coding agent the working knowledge needed to change this repository safely. `AGENTS.md` is its mirror — **they carry the same context and must be updated together**. If the two ever disagree, prefer the code and the authoritative docs listed below, then fix both files.
 
 ## What this project is
 
 SSC Insight is a private SSC CGL Tier 2 mock tracker. It records full, sectional, and subject mocks, derives performance views, and supports a portable JSON backup that can be imported into a different signed-in account.
 
-`/` is a public landing (signed-in visitors redirect to `/dashboard`); the authenticated workspace is the `(workspace)` route group (`/dashboard`, `/add`, `/history`, `/compare`, `/settings`, `/calendar`, `/my-tasks`, `/plan/[date]`), whose layout renders `WorkspaceShell` for the current pathname. Authoritative product/design/setup docs:
+`/` is a public landing (signed-in visitors redirect to `/dashboard`); the authenticated workspace is the `(workspace)` route group (`/dashboard`, `/add`, `/history`, `/compare`, `/settings`, `/calendar`, `/my-tasks`, `/plan/[date]`), whose layout renders `WorkspaceShell` for the current pathname.
+
+Authoritative docs — read the relevant one before changing its area:
 
 - `PRODUCT.md` — product behavior, scope boundaries, private-account rules.
 - `DESIGN.md` — paper-and-ink visual system, chart tokens, interaction rules.
 - `README.md` — Neon/Vercel setup, environment variables, migrations, verification scripts.
-- `AGENTS.md` — generated Next.js agent warning (see below).
 - `docs/private-accounts.md`, `docs/neon-migration.md` — ownership and migration history.
+- `docs/caching.md` — the cache-policy matrix.
+- `docs/ui-overhaul/*` — the 15-phase design overhaul history.
+
+## graphify
+
+This project has a knowledge graph at `graphify-out/` — roughly 1,650 nodes, ~4,110 edges and 97 labelled communities covering TypeScript symbols, the docs corpus (`PRODUCT.md`, `DESIGN.md`, `README.md`, `docs/**`) and the reference screenshots.
+
+When the user types `/graphify`, use the installed graphify skill before doing anything else.
+
+```bash
+graphify query "<question>"              # scoped subgraph for "how does X work" / "what calls Y"
+graphify query "<question>" --dfs        # trace one specific path through the graph
+graphify path "MockForm()" "domain.ts"   # shortest path between two concepts
+graphify explain "analytical scopes"     # one concept and its neighbours
+graphify update .                        # re-extract code after edits (AST only, no API cost)
+```
+
+Rules:
+
+- Before your first grep, folder listing or speculative source read for a codebase question, run `graphify query "<question>"` and read only the lines it points at. Put this rule in every subagent prompt that explores code.
+- `path` answers "how are these two connected"; `explain` answers "what is this and what touches it".
+- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when query/path/explain are not enough. Open `graphify-out/graph.html` in a browser for the interactive view (no server needed).
+- **The graph is a map, not the source of truth.** It tells you which file and line to read; it does not prove an invariant. Confirm every rule against this file and the actual source before changing code. `INFERRED` edges are heuristic, and ~78 nodes are weakly connected — treat those as real documentation gaps, never as license to invent a relationship.
+- Graphify indexes code symbols and extracted doc/screenshot concepts. It does not model runtime behavior, Next.js version specifics, or test results — those live in the Next.js docs, this file, and the test files.
+- After modifying code, run `graphify update .` (re-extracts **code files only**). Doc, markdown and screenshot changes need the heavier `/graphify --update` skill flow, which dispatches semantic extraction.
+- Dirty `graphify-out/` files are expected after hooks or incremental updates and are never a reason to skip the graph. Skip it only when the task is about the graph itself being stale or wrong, or the user says not to use it.
+- `graph.json` and `graph.html` are regenerated whole on every build, so large diffs in a pull request are expected — do not flag them as churn or suggest dropping the graph. Never hand-edit anything in `graphify-out/`.
 
 ## Commands
 
@@ -51,7 +79,7 @@ ALLOW_DESTRUCTIVE_REPLACE=1 TEST_SESSION_COOKIE=... TEST_OTHER_SESSION_COOKIE=..
 
 ## Next.js constraints
 
-`AGENTS.md` is generated and re-added by `next dev`; do not remove it. It requires reading the bundled docs under `node_modules/next/dist/docs/` before writing Next.js code — this Next 16 version differs from older conventions.
+`AGENTS.md` is generated and re-added by `next dev`; do not remove it. Read the bundled docs under `node_modules/next/dist/docs/` before writing Next.js code — this Next 16 version differs from older conventions.
 
 - App Router; server components by default. Client state lives behind `"use client"` boundaries.
 - Cache Components are not enabled. Personalized APIs use `Cache-Control: private, no-store`; do not add shared caching or `revalidate` behavior to account data.
@@ -129,6 +157,7 @@ The 50-day plan is static source data (`src/data/study-plan.json`, zod-validated
 - `src/lib/plan/progress.ts` merges plan × progress and owns all mutations. Routes: `GET /api/plan` (merged payload), `POST /api/plan/progress` (zod discriminated union: task patch / checklist / day revision / day notes), `GET|POST /api/tasks`, `PUT|DELETE /api/tasks/[id]` — all through `defineRoute` with ownership scoping like every other route.
 - `usePlanData` (mounted once in the shell) is the single client owner of the merged payload + personal tasks; mutations patch optimistically and revert by refetch on failure. Views: `plan/calendar-view.tsx`, `plan/tasks-view.tsx`, `plan/plan-day-view.tsx`, `plan/dashboard-plan-sections.tsx`; `/plan/<date>` is matched by prefix in the shell's view derivation.
 - Tracker results and plan results are deliberately separate stores: the tracker keeps full subject-level MockAttempts; plan progress records the plan task's own score/wrong/unattempted fields. Revision completion is always manual.
+- Personal tasks carry an optional external link validated by `safeHttpUrl` (strict http(s) only; empty → null). `safeHttpUrlCore` lives in the client-safe `view-model.ts` and is re-exported wrapped in zod by server-only `progress.ts` — do not duplicate the policy. Links render as `target="_blank" rel="noopener noreferrer nofollow"` anchors with the host shown. Display status derives `overdue` via `effectiveStatus()` (completed is never overdue); the dot mapping lives in `plan-shared.tsx` `STATUS_META` and uses only theme-protected semantic tokens. AI task suggestions (`src/lib/ai/task-suggestion.ts`) are a prompt-convention fenced block parsed client-side; **AI task creation is client-confirmed — the model never writes, and the task persists only on the user's Add click.** The AI panel's Log a Mock tab never saves either: it hands a reviewed draft through `AddMockView prefill` → `MockForm initialDraft` (applied once via the same `applyExtracted` merge path), keeping `MockForm` the sole save path.
 
 ## AI subsystem
 
@@ -180,7 +209,7 @@ AI is optional, read-only, and server-only. It must fail closed without breaking
 - **Date semantics (no migration):** scheduled date = plan day/static task date; attempt date = `MockAttempt.completedAt` (user-entered date at IST midnight, used by filters/ordering/analytics/charts); recorded date = `createdAt`, shown only as “Logged” in the detail dialog. Trend ordering uses `completedAt`, never `createdAt` (regression-tested in `tests/subject-performance.test.ts`). Logging a tracker attempt never creates, moves, or auto-completes a plan task.
 - Dates are displayed in Asia/Kolkata via the memoized formatters in `src/lib/format.ts` (`shortDate`, `longDate`, `istDateKey`, `isIsoDate`, `mockTypeLabel`) — do not construct new `Intl.DateTimeFormat` instances in components. Invalid/legacy dates render a neutral `—` rather than an invented date.
 - `/add` renders `add-mock-view.tsx` inside a Suspense boundary (it reads `date`, `name`, `returnTo` via `useSearchParams`) and still hands the save to `MockForm`; planner “Add mock record” actions route there with the selected date.
-- The AI panel is a right-side shadcn Sheet (`ai-chat-sheet.tsx`, desktop ~460px, full width on mobile, `dvh` flex layout with an independently scrolling log). Chat accepts a validated orientation-only screen context (`{ view, date? }`, wrapped as `<screen_context>` in the system prompt); it carries no titles, notes, IDs, email, or attempt records.
+- The AI panel is a right-side shadcn Sheet (`ai-chat-sheet.tsx`, desktop ~520px, full width on mobile, `dvh` flex layout with an independently scrolling log, tabbed header: Coach chat / Log a mock). Chat accepts a validated orientation-only screen context (`{ view, date? }`, wrapped as `<screen_context>` in the system prompt); it carries no titles, notes, IDs, email, or attempt records.
 - `src/app/not-found.tsx` is the styled 404 for unknown pages; unknown `/api/*` paths answer with the JSON envelope via the catch-all route handler.
 - **Client-state decision (2026-10 overhaul):** no Zustand and no TanStack Query. All shared client state is owned by the shell-scoped hooks above (the shell never unmounts inside the workspace, so there is no cross-component sync problem for a store to solve), server data is fetched with plain `api()` + SWR headers, and the only cross-branch contexts are `ToastProvider` and `ThemeStyleProvider`. Revisit only if a feature introduces genuinely global client state or polling/infinite-scroll server state. Cache policies: `docs/caching.md`.
 - **Multi-theme system:** `data-palette` (orange=original default, blue, lime, violet, rose) and `data-style` (vega=original default, sera, mira) are `<html>` attributes set before paint by the inline script in `theme-style-provider.tsx` (localStorage `ssc.palette`/`ssc.style`, safe defaults) and resolved entirely by CSS custom properties in `globals.css` — never hardcode palette hexes in components. Chart hues alias `--accent`/`--muted` where the identity is shared; per-palette chart hues live in the `[data-palette]` blocks. Styles vary geometry/density/motion via tokens (`--radius-*`, `--control-*`, `--table-cell-*`, `--dur-*`, `--elev-pop`); density vars are consumed by the base element defaults and component classes, so Tailwind utilities still override per view. The selection UI is `appearance-panel.tsx` in Settings (choices apply instantly, aria-pressed, mounted-gated selected states). next-themes keeps owning light/dark; each palette defines its own dark charcoal tint in `.dark[data-palette=…]`. All 15 combinations keep AA accent contrast (verified) and identical layout/behavior.
@@ -196,6 +225,8 @@ Tests use the built-in `node:test` runner with `tsx`. There are no component, br
 
 The authenticated scripts are integration checks, not unit tests; they require live QA sessions and should run against a disposable Neon branch with cleanup.
 
+Run `typecheck`, `lint`, and `test` before calling a change done; CI runs all three plus `build`.
+
 ## Environment and deployment
 
 - Copy `.env.example`; real values stay server-side. Required: `DATABASE_URL`, `DATABASE_URL_UNPOOLED` (migrations), `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `GOOGLE_AUTH_ENABLED`. Optional AI: `AI_API_KEY`, `AI_MODEL`, and the tuning variables documented above.
@@ -207,4 +238,6 @@ The authenticated scripts are integration checks, not unit tests; they require l
 
 ## Documentation map
 
-Change behavior in this order: update the implementation, then the relevant of `PRODUCT.md` (behavior), `DESIGN.md` (visual/chart rules), `README.md` (setup/API/verification). Keep `CLAUDE.md` focused on architecture and invariants rather than duplicating every product rule.
+Change behavior in this order: update the implementation, then the relevant of `PRODUCT.md` (behavior), `DESIGN.md` (visual/chart rules), `README.md` (setup/API/verification). Keep `CLAUDE.md` and `AGENTS.md` focused on architecture and invariants rather than duplicating every product rule, and update both together when an invariant changes.
+
+`graphify-out/` is generated and committed. Run `graphify update .` after code changes; when an architecture rule in this file changes, the `/graphify --update` skill flow refreshes the doc-derived nodes so queries answer from the current rules.

@@ -6,7 +6,7 @@ import { Panel } from "../dashboard-panels";
 import { PlainIcon } from "../icon";
 import { Button } from "../ui/button";
 import { AttemptRecordCard } from "../attempt-outcome-card";
-import { CategoryChip, CompleteToggle, PlanErrorCard, ResultLine } from "./plan-shared";
+import { CategoryChip, CompleteToggle, PlanErrorCard, PersonalTaskRow, ResultLine, StatusDot, nextStatus, statusOf } from "./plan-shared";
 import { EventDialog } from "./event-dialog";
 import { usePlanData } from "../use-plan-data";
 import { istDateKey, shortDate } from "@/lib/format";
@@ -19,7 +19,9 @@ import {
   isoMonthStart,
   istTodayIso,
   isMockType,
+  personalTasksByDate,
   weekRange,
+  type PersonalTaskView,
   type PlanDayView,
   type PlanTaskView,
 } from "@/lib/plan/view-model";
@@ -61,12 +63,23 @@ export function CalendarView({
   onOpenAttempt: (attempt: Attempt) => void;
   onSelectedDateChange?: (date: string) => void;
 }) {
-  const { plan, loading, error, refresh, updateTask } = planApi;
+  const { plan, loading, error, refresh, updateTask, personalTasks, updatePersonalTask } = planApi;
   const router = useRouter();
   const today = istTodayIso();
   const [mode, setMode] = useState<CalendarMode>("month");
   const [selected, setSelected] = useState(() => today);
   const [event, setEvent] = useState<{ task: PlanTaskView; day: PlanDayView } | undefined>();
+
+  /** Personal tasks indexed by due date; due-date-less tasks stay in My Tasks. */
+  const personalByDate = useMemo(
+    () => personalTasksByDate(personalTasks),
+    [personalTasks],
+  );
+  const cyclePersonalStatus = (task: PersonalTaskView) => {
+    const status = statusOf(task, today);
+    void updatePersonalTask(task.id, { status: nextStatus(status) });
+  };
+  const openMyTasks = () => router.push("/my-tasks");
 
   useEffect(() => {
     onSelectedDateChange?.(selected);
@@ -185,6 +198,7 @@ export function CalendarView({
               plan={plan}
               selected={selected}
               today={today}
+              personalByDate={personalByDate}
               onSelect={setSelected}
             />
           )}
@@ -193,6 +207,7 @@ export function CalendarView({
               plan={plan}
               selected={selected}
               today={today}
+              personalByDate={personalByDate}
               onSelect={setSelected}
             />
           )}
@@ -204,6 +219,9 @@ export function CalendarView({
               onLogResult={(task) => onAddMock(task.date, task)}
               attempts={attempts}
               onOpenAttempt={onOpenAttempt}
+              personalByDate={personalByDate}
+              onCyclePersonal={cyclePersonalStatus}
+              onEditPersonal={openMyTasks}
             />
           )}
           {mode === "day" && (
@@ -215,13 +233,16 @@ export function CalendarView({
               onAddMock={onAddMock}
               onOpenAttempt={onOpenAttempt}
               onOpenTask={(task, day) => setEvent({ task, day })}
+              personalTasks={personalByDate.get(selected) ?? []}
+              onCyclePersonal={cyclePersonalStatus}
+              onEditPersonal={openMyTasks}
             />
           )}
           {mode !== "day" && mode !== "agenda" && (
             <p className="mt-2 text-[10px] text-muted">
               Select any day to open its schedule, or use{" "}
               <span className="font-medium text-ink">Add mock</span> for the
-              selected date.
+              selected date. Personal tasks show with status dots.
             </p>
           )}
         </div>
@@ -235,6 +256,9 @@ export function CalendarView({
               onAddMock={onAddMock}
               onOpenAttempt={onOpenAttempt}
               onOpenTask={(task, day) => setEvent({ task, day })}
+              personalTasks={personalByDate.get(selected) ?? []}
+              onCyclePersonal={cyclePersonalStatus}
+              onEditPersonal={openMyTasks}
             />
           </aside>
         )}
@@ -271,16 +295,20 @@ function shiftMonth(iso: string, direction: 1 | -1) {
   return date.toISOString().slice(0, 10);
 }
 
-/** Monday-led month grid covering the displayed month. */
+/** Monday-led month grid covering the displayed month. Personal tasks with a
+ * due date appear as dashed-border chips with status dots — visually distinct
+ * from solid plan chips so plan vs personal ownership stays readable. */
 function MonthView({
   plan,
   selected,
   today,
+  personalByDate,
   onSelect,
 }: {
   plan: NonNullable<ReturnType<typeof usePlanData>["plan"]>;
   selected: string;
   today: string;
+  personalByDate: Map<string, PersonalTaskView[]>;
   onSelect: (iso: string) => void;
 }) {
   const byDate = useMemo(
@@ -308,6 +336,10 @@ function MonthView({
         {cells.map((iso) => {
           const day = byDate.get(iso);
           const stats = day ? dayAssignmentStats(day) : null;
+          const personal = personalByDate.get(iso) ?? [];
+          const personalOutstanding = personal.filter(
+            (task) => statusOf(task, today) !== "completed",
+          ).length;
           const isSelected = iso === selected;
           const isToday = iso === today;
           return (
@@ -315,7 +347,7 @@ function MonthView({
               key={iso}
               role="gridcell"
               aria-selected={isSelected}
-              aria-label={`${iso}${day ? ` · ${stats?.completed}/${stats?.total} done` : " · outside the plan"}${isToday ? " · today" : ""}`}
+              aria-label={`${iso}${day ? ` · ${stats?.completed}/${stats?.total} plan done` : " · outside the plan"}${personal.length ? ` · ${personalOutstanding} personal outstanding` : ""}${isToday ? " · today" : ""}`}
               onClick={() => onSelect(iso)}
               className={`min-h-11 sm:min-h-24 p-1 sm:p-1.5 text-left align-top transition-colors ${
                 day ? "bg-paper hover:bg-soft" : "bg-canvas opacity-50"
@@ -327,13 +359,26 @@ function MonthView({
                 >
                   {Number(iso.slice(8))}
                 </span>
-                {stats && stats.completed === stats.total && (
-                  <PlainIcon name="check" size={10} className="text-positive" />
-                )}
+                <span className="flex items-center gap-1">
+                  {stats && stats.completed === stats.total && (
+                    <PlainIcon name="check" size={10} className="text-positive" />
+                  )}
+                  {personal.length > 0 && (
+                    <span className="flex -space-x-0.5" aria-hidden="true">
+                      {personal.slice(0, 3).map((task) => (
+                        <StatusDot
+                          key={task.id}
+                          status={statusOf(task, today)}
+                          size={7}
+                        />
+                      ))}
+                    </span>
+                  )}
+                </span>
               </span>
-              {day && (
+              {(day || personal.length > 0) && (
                 <span className="hidden sm:flex flex-col gap-0.5 mt-1">
-                  {day.tasks.slice(0, 3).map((task) => (
+                  {day?.tasks.slice(0, 3).map((task) => (
                     <span
                       key={task.key}
                       className={`truncate text-[10px] leading-tight rounded-[3px] px-1 py-0.5 ${
@@ -347,9 +392,29 @@ function MonthView({
                       {task.name}
                     </span>
                   ))}
-                  {day.tasks.length > 3 && (
+                  {day && day.tasks.length > 3 && (
                     <span className="text-[10px] muted px-1">
                       +{day.tasks.length - 3} more
+                    </span>
+                  )}
+                  {personal.slice(0, 2).map((task) => (
+                    <span
+                      key={task.id}
+                      className={`flex items-center gap-1 truncate text-[10px] leading-tight rounded-[3px] border border-dashed px-1 py-0.5 ${
+                        task.status === "completed"
+                          ? "border-positive/40 bg-transparent text-positive line-through"
+                          : statusOf(task, today) === "overdue"
+                            ? "border-danger/50 bg-transparent text-danger"
+                            : "border-rule bg-transparent text-muted"
+                      }`}
+                    >
+                      <StatusDot status={statusOf(task, today)} size={6} />
+                      <span className="truncate">{task.title}</span>
+                    </span>
+                  ))}
+                  {personal.length > 2 && (
+                    <span className="text-[10px] muted px-1">
+                      +{personal.length - 2} personal
                     </span>
                   )}
                 </span>
@@ -370,12 +435,25 @@ function MonthView({
                   ))}
                 </span>
               )}
+              {personal.length > 0 && (
+                <span className="sm:hidden flex gap-0.5 mt-1" aria-hidden="true">
+                  {personal.slice(0, 4).map((task) => (
+                    <StatusDot
+                      key={task.id}
+                      status={statusOf(task, today)}
+                      size={5}
+                    />
+                  ))}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
       <p className="mt-2 text-[11px] muted">
-        Days outside 26 Oct – 14 Dec are inactive. Dots mark tasks; green means done.
+        Solid chips are plan assignments; dashed chips are your personal tasks
+        with status dots (grey to do · accent in progress · green done · red
+        overdue). Days outside 26 Oct – 14 Dec are inactive.
       </p>
     </div>
   );
@@ -393,11 +471,13 @@ function WeekView({
   plan,
   selected,
   today,
+  personalByDate,
   onSelect,
 }: {
   plan: NonNullable<ReturnType<typeof usePlanData>["plan"]>;
   selected: string;
   today: string;
+  personalByDate: Map<string, PersonalTaskView[]>;
   onSelect: (iso: string) => void;
 }) {
   const from = weekStartIsoLocal(weekRange(selected).from);
@@ -407,6 +487,10 @@ function WeekView({
     <div className="grid gap-2 md:grid-cols-7">
       {days.map((iso) => {
         const day = byDate.get(iso);
+        const personal = personalByDate.get(iso) ?? [];
+        const overdueCount = personal.filter(
+          (task) => statusOf(task, today) === "overdue",
+        ).length;
         return (
           <button
             key={iso}
@@ -427,6 +511,18 @@ function WeekView({
             {day && (
               <p className="text-[11px] muted mt-1">
                 {dayAssignmentStats(day).completed}/{day.tasks.length} done
+              </p>
+            )}
+            {personal.length > 0 && (
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                <StatusDot
+                  status={overdueCount > 0 ? "overdue" : "in_progress"}
+                  size={7}
+                />
+                <span className={overdueCount > 0 ? "text-danger" : "muted"}>
+                  {personal.length} personal
+                  {overdueCount > 0 ? ` · ${overdueCount} overdue` : ""}
+                </span>
               </p>
             )}
             {day && (
@@ -452,7 +548,9 @@ function WeekView({
   );
 }
 
-/** The selected day's full schedule — compact in month/week, full in day view. */
+/** The selected day's full schedule — compact in month/week, full in day view.
+ * Personal tasks due this date get their own section below the plan tasks,
+ * separated by a rule so plan vs personal ownership stays obvious. */
 function SelectedDayAgenda({
   day,
   today,
@@ -461,6 +559,9 @@ function SelectedDayAgenda({
   onOpenTask,
   onAddMock,
   onOpenAttempt,
+  personalTasks = [],
+  onCyclePersonal,
+  onEditPersonal,
 }: {
   day: PlanDayView | undefined;
   today: string;
@@ -469,6 +570,9 @@ function SelectedDayAgenda({
   onOpenTask: (task: PlanTaskView, day: PlanDayView) => void;
   onAddMock: (date: string, task?: PlanTaskView) => void;
   onOpenAttempt: (attempt: Attempt) => void;
+  personalTasks?: PersonalTaskView[];
+  onCyclePersonal?: (task: PersonalTaskView) => void;
+  onEditPersonal?: () => void;
 }) {
   if (!day)
     return (
@@ -477,7 +581,11 @@ function SelectedDayAgenda({
         description="Pick a date inside 26 Oct – 14 Dec."
       >
         <div className="px-4 pb-4 text-xs text-muted">
-          The 50-day plan does not schedule anything here.
+          {personalTasks.length ? (
+            `${personalTasks.length} personal task${personalTasks.length === 1 ? "" : "s"} due here — open My Tasks to work on them.`
+          ) : (
+            "The 50-day plan does not schedule anything here."
+          )}
         </div>
       </Panel>
     );
@@ -514,6 +622,41 @@ function SelectedDayAgenda({
           </li>
         )}
       </ul>
+
+      <div className="border-t border-rule-soft px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+            Personal tasks
+          </p>
+          {onEditPersonal && (
+            <button
+              type="button"
+              onClick={onEditPersonal}
+              className="text-[10px] font-medium text-accent hover:text-accent-hover"
+            >
+              Manage in My Tasks
+            </button>
+          )}
+        </div>
+        {personalTasks.length ? (
+          <ul className="divide-y divide-rule-soft border-t border-rule-soft">
+            {personalTasks.map((task) => (
+              <PersonalTaskRow
+                key={task.id}
+                task={task}
+                today={today}
+                compact={compact}
+                onCycleStatus={onCyclePersonal}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="py-1.5 text-[10px] leading-relaxed text-muted">
+            No personal tasks due this day. Create one from My Tasks with a due
+            date to see it here.
+          </p>
+        )}
+      </div>
 
       <div className="border-t border-rule-soft px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -634,6 +777,9 @@ function AgendaList({
   onLogResult,
   attempts,
   onOpenAttempt,
+  personalByDate,
+  onCyclePersonal,
+  onEditPersonal,
 }: {
   plan: NonNullable<ReturnType<typeof usePlanData>["plan"]>;
   today: string;
@@ -641,6 +787,9 @@ function AgendaList({
   onLogResult: (task: PlanTaskView) => void;
   attempts: Attempt[];
   onOpenAttempt: (attempt: Attempt) => void;
+  personalByDate: Map<string, PersonalTaskView[]>;
+  onCyclePersonal: (task: PersonalTaskView) => void;
+  onEditPersonal: () => void;
 }) {
   const upcoming = plan.days.filter((day) => day.date >= today);
   const past = plan.days.filter((day) => day.date < today).reverse();
@@ -650,6 +799,7 @@ function AgendaList({
         const dayAttempts = attempts.filter(
           (attempt) => istDateKey(attempt.completedAt) === day.date,
         );
+        const dayPersonal = personalByDate.get(day.date) ?? [];
         return (
           <Panel
             key={day.day}
@@ -659,6 +809,9 @@ function AgendaList({
             action={
               <span className="text-[10px] text-muted tabular">
                 {dayAssignmentStats(day).completed}/{day.tasks.length}
+                {dayPersonal.length > 0
+                  ? ` · ${dayPersonal.filter((t) => statusOf(t, today) !== "completed").length} personal`
+                  : ""}
               </span>
             }
           >
@@ -677,6 +830,33 @@ function AgendaList({
                 />
               ))}
             </ul>
+            {dayPersonal.length > 0 && (
+              <div className="border-t border-rule-soft px-4 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                    Personal tasks
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onEditPersonal}
+                    className="text-[10px] font-medium text-accent hover:text-accent-hover"
+                  >
+                    Manage in My Tasks
+                  </button>
+                </div>
+                <ul className="divide-y divide-rule-soft border-t border-rule-soft">
+                  {dayPersonal.map((task) => (
+                    <PersonalTaskRow
+                      key={task.id}
+                      task={task}
+                      today={today}
+                      compact
+                      onCycleStatus={onCyclePersonal}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
             {dayAttempts.length > 0 && (
               <div className="border-t border-rule-soft px-4 py-3">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">

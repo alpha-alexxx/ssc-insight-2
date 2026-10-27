@@ -60,6 +60,8 @@ export function MockForm({
   knownAttempts,
   initialDate,
   initialName,
+  initialDraft,
+  onPrefillApplied,
   backLabel = "Back to dashboard",
   onClose,
   onSaved,
@@ -71,6 +73,11 @@ export function MockForm({
   /** Planner-selected date / task title for a new attempt. */
   initialDate?: string;
   initialName?: string;
+  /** Reviewed draft from the AI panel's Log a Mock tab, applied once at
+   * mount through the same merge path as a paste import. */
+  initialDraft?: { values: Partial<AttemptInput>; date?: string };
+  /** Called after the initial draft has been applied (shell clears it). */
+  onPrefillApplied?: () => void;
   backLabel?: string;
   onClose: () => void;
   onSaved: (returnTo?: string | null) => void | Promise<void>;
@@ -136,6 +143,22 @@ export function MockForm({
       cancelled = true;
     };
   }, [mode, aiStatusChecked]);
+  // One-shot AI-panel prefill: apply the reviewed draft once at mount via
+  // the same merge path as a paste import, then tell the shell it is used.
+  const prefillDraft = initialDraft;
+  const prefillAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!prefillDraft || prefillAppliedRef.current) return;
+    prefillAppliedRef.current = true;
+    applyExtracted({
+      values: prefillDraft.values,
+      warnings: [],
+      date: prefillDraft.date,
+    });
+    onPrefillApplied?.();
+    // Runs once per mount; the deps intentionally mirror the initial state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const set = <K extends keyof AttemptInput>(
     key: K,
     value: AttemptInput[K],
