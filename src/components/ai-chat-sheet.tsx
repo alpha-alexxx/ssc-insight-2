@@ -10,6 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "./ui/sheet";
+import { TodoAiComposer } from "./plan/personal-todos";
 import { AiSettingsForm } from "./ai-settings-form";
 import type { AiCredentialSummary, ChatMessage } from "@/lib/ai/client-types";
 
@@ -53,6 +54,7 @@ export function AiChatSheet({
   onAiConfigured?: (credential: AiCredentialSummary | null) => void;
 }) {
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<"coach" | "todos">("coach");
   const endRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -93,11 +95,12 @@ export function AiChatSheet({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <SheetTitle className="font-serif text-[22px] leading-tight">
-                Ask your coach
+                {mode === "todos" ? "Plan personal todos" : "Ask your coach"}
               </SheetTitle>
               <SheetDescription id="ai-sheet-description" className="mt-1">
-                Read-only answers from your aggregates and latest 20 full mocks.
-                Notes, email, and identity are never sent.
+                {mode === "todos"
+                  ? "Draft personal todo changes for review. Your todo notes and subtasks may be sent to your configured provider; nothing is saved until you confirm."
+                  : "Read-only answers from your aggregates and latest 20 full mocks. Notes, email, and identity are never sent."}
               </SheetDescription>
             </div>
           </div>
@@ -113,156 +116,195 @@ export function AiChatSheet({
         </SheetHeader>
 
         <div
-          ref={logRef}
-          role="log"
-          aria-live="polite"
-          aria-busy={streaming}
-          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
+          role="group"
+          aria-label="AI mode"
+          className="segment-group mx-4 my-3"
         >
-          {!messages.length && !configured && (
-            <div className="rounded-control border border-rule bg-canvas p-3.5">
-              <p className="text-xs leading-relaxed text-muted">
-                Add a provider and API key to start asking questions. Your key is
-                encrypted before storage and never returned to this page.
-              </p>
-              <div className="mt-3">
-                <AiSettingsForm
-                  variant="panel"
-                  showHeading={false}
-                  onChanged={onAiConfigured}
-                />
-              </div>
-            </div>
-          )}
-
-          {!messages.length && configured && (
-            <div className="rounded-control border border-rule-soft bg-canvas p-3.5">
-              <p className="text-xs leading-relaxed text-muted">
-                Ask about a score, a subject, or what to study next. Every
-                answer is rebuilt from your current saved data.
-              </p>
-              <div className="mt-3 flex flex-col items-start gap-1.5">
-                {SUGGESTIONS.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => submit(suggestion)}
-                    className="w-full rounded-control border border-rule-soft bg-paper px-2.5 py-2 text-left text-[11px] leading-snug transition-colors hover:border-accent hover:text-accent"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={
-                message.role === "user"
-                  ? "ml-auto max-w-[88%] rounded-control bg-ink px-3 py-2 text-[13px] leading-relaxed text-paper"
-                  : "max-w-[96%] border-l-2 border-accent bg-canvas px-3 py-2 text-[13px] leading-relaxed"
-              }
-            >
-              {message.role === "assistant" && !message.content ? (
-                <span className="inline-flex items-center gap-1.5 text-muted">
-                  {streaming ? (
-                    <>
-                      <PlainIcon
-                        name="refresh"
-                        size={12}
-                        className="animate-spin"
-                      />
-                      Thinking…
-                    </>
-                  ) : (
-                    "No response."
-                  )}
-                </span>
-              ) : (
-                <MessageContent content={message.content} />
-              )}
-            </div>
-          ))}
-          <div ref={endRef} />
-        </div>
-
-        {error && (
-          <div
-            role="alert"
-            className="flex flex-wrap items-center justify-between gap-2 border-t border-warning bg-warning-soft px-4 py-2.5 text-[11px] text-warning"
+          <button
+            type="button"
+            className="segment"
+            aria-pressed={mode === "coach"}
+            onClick={() => setMode("coach")}
           >
-            <span className="min-w-0">{error}</span>
-            {!streaming && lastUser && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => submit(lastUser.content)}
-              >
-                Try again
-              </Button>
-            )}
+            Coach
+          </button>
+          <button
+            type="button"
+            className="segment"
+            aria-pressed={mode === "todos"}
+            onClick={() => {
+              onStop();
+              setMode("todos");
+            }}
+          >
+            Plan todos
+          </button>
+        </div>
+        {mode === "todos" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5">
+            <TodoAiComposer compact />
           </div>
-        )}
+        ) : (
+          <>
+            <div
+              ref={logRef}
+              role="log"
+              aria-live="polite"
+              aria-busy={streaming}
+              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
+            >
+              {!messages.length && !configured && (
+                <div className="rounded-control border border-rule bg-canvas p-3.5">
+                  <p className="text-xs leading-relaxed text-muted">
+                    Add a provider and API key to start asking questions. Your
+                    key is encrypted before storage and never returned to this
+                    page.
+                  </p>
+                  <div className="mt-3">
+                    <AiSettingsForm
+                      variant="panel"
+                      showHeading={false}
+                      onChanged={onAiConfigured}
+                    />
+                  </div>
+                </div>
+              )}
 
-        <form
-          className={
-            configured
-              ? "border-t border-rule-soft bg-paper px-3 py-3"
-              : "hidden"
-          }
-          onSubmit={(event) => {
-            event.preventDefault();
-            submit(input);
-          }}
-        >
-          <label htmlFor="ai-chat-input" className="sr-only">
-            Ask the coach a question
-          </label>
-          <textarea
-            ref={inputRef}
-            id="ai-chat-input"
-            rows={2}
-            maxLength={4_000}
-            value={input}
-            disabled={streaming}
-            placeholder="Ask about a mock, a weak subject, or what to do next…"
-            className="max-h-32 resize-none text-[13px]"
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              {!messages.length && configured && (
+                <div className="rounded-control border border-rule-soft bg-canvas p-3.5">
+                  <p className="text-xs leading-relaxed text-muted">
+                    Ask about a score, a subject, or what to study next. Every
+                    answer is rebuilt from your current saved data.
+                  </p>
+                  <div className="mt-3 flex flex-col items-start gap-1.5">
+                    {SUGGESTIONS.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => submit(suggestion)}
+                        className="w-full rounded-control border border-rule-soft bg-paper px-2.5 py-2 text-left text-[11px] leading-snug transition-colors hover:border-accent hover:text-accent"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={
+                    message.role === "user"
+                      ? "ml-auto max-w-[88%] rounded-control bg-ink px-3 py-2 text-[13px] leading-relaxed text-paper"
+                      : "max-w-[96%] border-l-2 border-accent bg-canvas px-3 py-2 text-[13px] leading-relaxed"
+                  }
+                >
+                  {message.role === "assistant" && !message.content ? (
+                    <span className="inline-flex items-center gap-1.5 text-muted">
+                      {streaming ? (
+                        <>
+                          <PlainIcon
+                            name="refresh"
+                            size={12}
+                            className="animate-spin"
+                          />
+                          Thinking…
+                        </>
+                      ) : (
+                        "No response."
+                      )}
+                    </span>
+                  ) : (
+                    <MessageContent content={message.content} />
+                  )}
+                </div>
+              ))}
+              <div ref={endRef} />
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                className="flex flex-wrap items-center justify-between gap-2 border-t border-warning bg-warning-soft px-4 py-2.5 text-[11px] text-warning"
+              >
+                <span className="min-w-0">{error}</span>
+                {!streaming && lastUser && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => submit(lastUser.content)}
+                  >
+                    Try again
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <form
+              className={
+                configured
+                  ? "border-t border-rule-soft bg-paper px-3 py-3"
+                  : "hidden"
+              }
+              onSubmit={(event) => {
                 event.preventDefault();
                 submit(input);
-              }
-            }}
-          />
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onClear}
-              disabled={!messages.length && !error}
+              }}
             >
-              <Trash2 size={13} /> Clear
-            </Button>
-            {streaming ? (
-              <Button type="button" variant="outline" size="sm" onClick={onStop}>
-                <Square size={13} /> Stop
-              </Button>
-            ) : (
-              <Button type="submit" size="sm" disabled={!input.trim()}>
-                Send <Send size={13} />
-              </Button>
-            )}
-          </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-muted">
-            Closing the panel keeps this conversation for the session. Do not
-            paste sensitive personal information.
-          </p>
-        </form>
+              <label htmlFor="ai-chat-input" className="sr-only">
+                Ask the coach a question
+              </label>
+              <textarea
+                ref={inputRef}
+                id="ai-chat-input"
+                rows={2}
+                maxLength={4_000}
+                value={input}
+                disabled={streaming}
+                placeholder="Ask about a mock, a weak subject, or what to do next…"
+                className="max-h-32 resize-none text-[13px]"
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    submit(input);
+                  }
+                }}
+              />
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onClear}
+                  disabled={!messages.length && !error}
+                >
+                  <Trash2 size={13} /> Clear
+                </Button>
+                {streaming ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onStop}
+                  >
+                    <Square size={13} /> Stop
+                  </Button>
+                ) : (
+                  <Button type="submit" size="sm" disabled={!input.trim()}>
+                    Send <Send size={13} />
+                  </Button>
+                )}
+              </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-muted">
+                Closing the panel keeps this conversation for the session. Do
+                not paste sensitive personal information.
+              </p>
+            </form>
+          </>
+        )}
       </SheetContent>
     </Sheet>
   );
@@ -279,7 +321,10 @@ function MessageContent({ content }: { content: string }) {
   const flushList = () => {
     if (!list.length) return;
     blocks.push(
-      <ul key={`list-${blocks.length}`} className="my-1 flex flex-col gap-0.5 pl-4 list-disc">
+      <ul
+        key={`list-${blocks.length}`}
+        className="my-1 flex flex-col gap-0.5 pl-4 list-disc"
+      >
         {list.map((item, index) => (
           <li key={index}>{item}</li>
         ))}
