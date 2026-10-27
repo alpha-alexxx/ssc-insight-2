@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { AuthControl } from "./auth-control";
 import { DuotoneIcon, PlainIcon } from "./icon";
 import { ThemeToggle } from "./theme-toggle";
+import { istTodayIso } from "@/lib/plan/view-model";
 
 /**
  * Application shell — sidebar, header, mobile navigation (Phase 4).
@@ -16,13 +17,31 @@ import { ThemeToggle } from "./theme-toggle";
  * - Mobile nav: icon+label pills with ≥40px touch targets.
  *
  * Views are real App Router routes now: navigation renders <Link>s, and the
- * active view is derived from the pathname by the workspace shell.
+ * active view is derived from the pathname by the workspace shell. The
+ * planner views (calendar, my-tasks, plan/[date]) sit beside the tracker
+ * views; /plan/<date> is dynamic, so its links are computed per render.
  */
 
-export type AppView = "dashboard" | "history" | "compare" | "add" | "settings";
+export type AppView =
+  | "dashboard"
+  | "calendar"
+  | "tasks"
+  | "plan"
+  | "history"
+  | "compare"
+  | "add"
+  | "settings";
+
+/** Plan-day route for "today" (IST) — computed per render, not at module load. */
+export function planHref(dateIso?: string): `/${string}` {
+  return `/plan/${dateIso ?? istTodayIso()}`;
+}
 
 export const VIEW_HREF: Record<AppView, `/${string}`> = {
   dashboard: "/dashboard",
+  calendar: "/calendar",
+  tasks: "/my-tasks",
+  plan: "/plan",
   history: "/history",
   compare: "/compare",
   add: "/add",
@@ -31,6 +50,9 @@ export const VIEW_HREF: Record<AppView, `/${string}`> = {
 
 export const VIEW_META: Record<AppView, { label: string; icon: Parameters<typeof DuotoneIcon>[0]["name"] }> = {
   dashboard: { label: "Dashboard", icon: "dashboard" },
+  calendar: { label: "Study calendar", icon: "calendar" },
+  tasks: { label: "My tasks", icon: "check" },
+  plan: { label: "Daily plan", icon: "layers" },
   history: { label: "Mock history", icon: "history" },
   compare: { label: "Compare mocks", icon: "compare" },
   add: { label: "Log a mock", icon: "add" },
@@ -67,11 +89,41 @@ export function AppSidebar({
         </span>
       </Link>
       <div className="px-4 mt-6">
-        <p className="section-label px-3 mb-3">Workspace</p>
+        <p className="section-label px-3 mb-3">Planner</p>
         <nav aria-label="Main navigation" className="space-y-1">
           {(
             [
               "dashboard",
+              "calendar",
+              "tasks",
+            ] as const
+          ).map((id) => (
+            <Link
+              key={id}
+              href={VIEW_HREF[id]}
+              className={`nav-button ${view === id ? "active" : ""}`}
+              aria-current={view === id ? "page" : undefined}
+            >
+              <DuotoneIcon
+                name={VIEW_META[id].icon}
+                size={18}
+                tone={view === id ? "paper" : "ink"}
+              />
+              {VIEW_META[id].label}
+              {view === id && (
+                <motion.span
+                  layoutId="nav-dot"
+                  transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 35 }}
+                  className="ml-auto size-1.5 rounded-pill bg-accent"
+                />
+              )}
+            </Link>
+          ))}
+        </nav>
+        <p className="section-label px-3 mb-3 mt-6">Tracker</p>
+        <nav aria-label="Tracker navigation" className="space-y-1">
+          {(
+            [
               "history",
               "compare",
             ] as const
@@ -98,7 +150,7 @@ export function AppSidebar({
             </Link>
           ))}
         </nav>
-        <p className="section-label px-3 mb-3 mt-10">Preferences</p>
+        <p className="section-label px-3 mb-3 mt-6">Preferences</p>
         <Link
           href={VIEW_HREF.settings}
           className={`nav-button ${view === "settings" ? "active" : ""}`}
@@ -180,6 +232,8 @@ export function AppHeader({
 export function MobileNav({ view }: { view: AppView }) {
   const items = [
     "dashboard",
+    "calendar",
+    "tasks",
     "history",
     "compare",
     "settings",

@@ -122,3 +122,62 @@ model AiUsage {
   @@index([userId, status, createdAt])
   @@schema("ssc_insight")
 }
+
+// Study-planner progress. The 50-day plan itself is static source data
+// (src/data/study-plan.json); these rows hold ONLY user progress, keyed by
+// deterministic plan identities (taskKey "d{day}:{taskIndex}", plan day
+// number) so completing work never rewrites the schedule.
+model PlanTaskProgress {
+  id          String   @id @default(uuid())
+  userId      String
+  taskKey     String   @db.VarChar(20)
+  completed   Boolean  @default(false)
+  score       Int?
+  percentile  Float?
+  wrong       Int?
+  unattempted Int?
+  rev1        Boolean  @default(false)
+  rev2        Boolean  @default(false)
+  rev3        Boolean  @default(false)
+  notes       String?  @db.VarChar(2000)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, taskKey])
+  @@index([userId])
+  @@schema("ssc_insight")
+}
+
+model PlanDayProgress {
+  id            String   @id @default(uuid())
+  userId        String
+  day           Int
+  checklistDone String[] @default([])
+  revisionDone  String[] @default([])
+  dayNotes      String?  @db.VarChar(2000)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, day])
+  @@index([userId])
+  @@schema("ssc_insight")
+}
+
+// User-created tasks, independent of the plan. Plan-derived work is NOT
+// duplicated here — it is derived from plan + progress at read time.
+model PersonalTask {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String   @db.VarChar(200)
+  notes     String?  @db.VarChar(2000)
+  dueDate   String?  @db.VarChar(10)
+  category  String   @db.VarChar(40)
+  priority  String   @db.VarChar(20)
+  status    String   @db.VarChar(20)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([userId, status])
+  @@index([userId, dueDate])
+  @@schema("ssc_insight")
+}

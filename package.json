@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate && node scripts/fix-duo-icons.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "verify:neon": "node scripts/verify-neon.mjs"

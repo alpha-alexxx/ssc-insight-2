@@ -206,11 +206,11 @@ export type IconTone = "ink" | "accent" | "paper" | "muted" | "mono";
  * Renders a single Duo glyph with token-tinted layers, or `undefined` when
  * the name has no Duo mapping (caller decides the Lucide treatment).
  *
- * @duo-icons/react uses kebab-case SVG attributes ("fill-rule") which React 19's
- * dev-mode DOM checking flags. This wrapper renders the glyph inside a <span>,
- * then a mount effect patches kebab-case attributes to their camelCase equivalents
- * on the raw SVG children so the console stays clean. Icons render correctly
- * either way.
+ * @duo-icons/react's compiled SVGs use the kebab-case attribute "fill-rule",
+ * which React 19 dev-mode flags. scripts/fix-duo-icons.mjs rewrites the
+ * attribute to camelCase inside the installed package (wired into
+ * postinstall), so the glyphs render through plain JSX with a clean console.
+ * If the warning reappears after a library update, extend that script.
  */
 function DuoGlyph({
   name,
@@ -224,22 +224,6 @@ function DuoGlyph({
   className?: string;
 }) {
   const Glyph = resolveIcon(name).duo;
-  // Hooks stay above the early return: a DuoGlyph whose name has no Duo
-  // mapping must still call useRef/useEffect in the same order every render.
-  const ref = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    // Patch kebab-case SVG attributes caused by @duo-icons/react's JSX
-    // using "fill-rule" instead of "fillRule". Runs once on mount.
-    const els = ref.current.querySelectorAll<SVGElement>("[fill-rule]");
-    for (const el of els) {
-      const val = el.getAttribute("fill-rule");
-      if (val) {
-        el.setAttribute("fillRule", val);
-        el.removeAttribute("fill-rule");
-      }
-    }
-  }, []);
   if (!Glyph) return null;
   const toneClass =
     tone === "accent"
@@ -252,13 +236,11 @@ function DuoGlyph({
             ? "icon-mono"
             : "";
   return (
-    <span ref={ref} className="contents" aria-hidden="true">
-      <Glyph
-        size={size}
-        className={`icon-duo shrink-0 ${toneClass} ${className}`}
-        aria-hidden="true"
-      />
-    </span>
+    <Glyph
+      size={size}
+      className={`icon-duo shrink-0 ${toneClass} ${className}`}
+      aria-hidden="true"
+    />
   );
 }
 

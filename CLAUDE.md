@@ -121,6 +121,15 @@ Critical invariants:
 
 `Dashboard` keeps `scope` separate from `filters`. Clicking a dashboard tab changes scope; History/Compare change persisted-record filters.
 
+## Study planner
+
+The 50-day plan is static source data (`src/data/study-plan.json`, zod-validated in `src/lib/plan/schema.ts`; note the export declares 273 tests but contains 262 — counts always derive from actual rows). User progress lives in `PlanTaskProgress` / `PlanDayProgress` / `PersonalTask` (migration `20261027000000_study_planner`), keyed by deterministic plan identities (`taskKey = d{day}:{taskIndex}`, plan day number) — completing work never rewrites the schedule, and there is no seed or duplicate-row risk.
+
+- `src/lib/plan/plan.ts` (server-only) reads the validated plan; `src/lib/plan/view-model.ts` is the client-safe layer: view types, IST date helpers, and the derivation functions (`planProgressStats`, `nextRecommendedAction`, `upcomingMocks`, `revisionQueue`) shared by the dashboard, calendar, and tasks — tested in `tests/study-plan.test.ts`.
+- `src/lib/plan/progress.ts` merges plan × progress and owns all mutations. Routes: `GET /api/plan` (merged payload), `POST /api/plan/progress` (zod discriminated union: task patch / checklist / day revision / day notes), `GET|POST /api/tasks`, `PUT|DELETE /api/tasks/[id]` — all through `defineRoute` with ownership scoping like every other route.
+- `usePlanData` (mounted once in the shell) is the single client owner of the merged payload + personal tasks; mutations patch optimistically and revert by refetch on failure. Views: `plan/calendar-view.tsx`, `plan/tasks-view.tsx`, `plan/plan-day-view.tsx`, `plan/dashboard-plan-sections.tsx`; `/plan/<date>` is matched by prefix in the shell's view derivation.
+- Tracker results and plan results are deliberately separate stores: the tracker keeps full subject-level MockAttempts; plan progress records the plan task's own score/wrong/unattempted fields. Revision completion is always manual.
+
 ## AI subsystem
 
 AI is optional, read-only, and server-only. It must fail closed without breaking the tracker.

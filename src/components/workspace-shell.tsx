@@ -27,6 +27,11 @@ import { AiChatDrawer } from "./ai-chat-drawer";
 import { useAiWorkspace } from "./use-ai-workspace";
 import { useBackupImport } from "./use-backup-import";
 import { useWorkspaceData } from "./use-workspace-data";
+import { usePlanData } from "./use-plan-data";
+import { CalendarView } from "./plan/calendar-view";
+import { TasksView } from "./plan/tasks-view";
+import { PlanDayView } from "./plan/plan-day-view";
+import { DashboardPlanSections } from "./plan/dashboard-plan-sections";
 import { SettingsPanels } from "./settings-panels";
 import { ToastProvider, useToast } from "./toast";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
@@ -61,14 +66,22 @@ import { Dialog } from "radix-ui";
  * props are useMemo'd so streaming chat tokens do not re-render charts.
  */
 
-/** Route path → shell view. Unknown paths fall back to the dashboard. */
+/** Route path → shell view. Unknown paths fall back to the dashboard;
+ * /plan/<date> is a dynamic route matched by prefix. */
 const PATH_VIEW: Record<string, AppView> = {
   "/dashboard": "dashboard",
+  "/calendar": "calendar",
+  "/my-tasks": "tasks",
   "/add": "add",
   "/history": "history",
   "/compare": "compare",
   "/settings": "settings",
 };
+
+function viewForPathname(pathname: string): AppView {
+  if (pathname.startsWith("/plan/")) return "plan";
+  return PATH_VIEW[pathname] ?? "dashboard";
+}
 
 export function WorkspaceShell({
   authEnabled = false,
@@ -108,9 +121,13 @@ function WorkspaceShellInner({
   const { style: themeStyle } = useThemePrefs();
   // The view follows the URL; the (workspace) layout keeps this component
   // mounted across navigations so workspace state persists.
-  const view = PATH_VIEW[pathname] ?? "dashboard";
+  const view = viewForPathname(pathname);
   // Sera transitions decisive, Vega smooth, Mira quick (style tokens).
   const viewMotion = viewTransition(themeStyle);
+  // Planner state: the merged 50-day plan + progress and personal tasks,
+  // mounted once here so the dashboard, calendar, tasks, and day views
+  // all read (and mutate) one authoritative copy.
+  const planApi = usePlanData();
   const {
     filters,
     setFilters,
@@ -435,35 +452,52 @@ function WorkspaceShellInner({
                     <h1 className="page-title">
                       {view === "dashboard"
                         ? "Your preparation, in perspective."
-                        : view === "history"
-                          ? "Every mock. Every step forward."
-                          : view === "compare"
-                            ? "See what’s changing."
-                            : "Make this workspace yours."}
+                        : view === "calendar"
+                          ? "The plan, on a calendar."
+                          : view === "tasks"
+                            ? "What’s left to do."
+                            : view === "plan"
+                              ? "One day at a time."
+                              : view === "history"
+                                ? "Every mock. Every step forward."
+                                : view === "compare"
+                                  ? "See what’s changing."
+                                  : "Make this workspace yours."}
                     </h1>
                     <p className="muted mt-1.5 text-[13px]">
                       {view === "dashboard"
-                        ? "Track your effort. Understand your progress. Make the next mock count."
-                        : view === "history"
-                          ? "All your results, with the details that matter."
-                          : view === "compare"
-                            ? "Compare up to four mocks and find the difference behind the scores."
-                            : "Set a target, keep a backup, and stay in control of your data."}
+                        ? "Today's plan, your progress, and what to do next."
+                        : view === "calendar"
+                          ? "All 50 days of mocks, sectionals and revision — tap a day to work it."
+                          : view === "tasks"
+                            ? "Plan assignments and your own tasks, in one list."
+                            : view === "plan"
+                              ? "Attempt, record, and revise — the plan's work for this date."
+                              : view === "history"
+                                ? "All your results, with the details that matter."
+                                : view === "compare"
+                                  ? "Compare up to four mocks and find the difference behind the scores."
+                                  : "Set a target, keep a backup, and stay in control of your data."}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      aria-label="Download backup"
-                      onClick={() => void download("json")}
-                    >
-                      <PlainIcon name="download" size={15} />
-                      <span className="hidden sm:inline">Backup</span>
-                    </Button>
-                    <Button onClick={add}>
-                      <PlainIcon name="plus" size={17} /> Add mock
-                    </Button>
-                  </div>
+                  {(view === "dashboard" ||
+                    view === "history" ||
+                    view === "compare" ||
+                    view === "settings") && (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        aria-label="Download backup"
+                        onClick={() => void download("json")}
+                      >
+                        <PlainIcon name="download" size={15} />
+                        <span className="hidden sm:inline">Backup</span>
+                      </Button>
+                      <Button onClick={add}>
+                        <PlainIcon name="plus" size={17} /> Add mock
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 {error && (
                   <div
@@ -491,7 +525,16 @@ function WorkspaceShellInner({
                     </Button>
                   </div>
                 )}
-                {view === "settings" ? (
+                {view === "calendar" ? (
+                  <CalendarView planApi={planApi} />
+                ) : view === "tasks" ? (
+                  <TasksView planApi={planApi} />
+                ) : view === "plan" ? (
+                  <PlanDayView
+                    date={decodeURIComponent(pathname.slice("/plan/".length))}
+                    planApi={planApi}
+                  />
+                ) : view === "settings" ? (
                   <SettingsPanels
                     target={target}
                     targetInput={targetInput}
@@ -533,6 +576,7 @@ function WorkspaceShellInner({
                   />
                 ) : (
                   <>
+                    {view === "dashboard" && <DashboardPlanSections planApi={planApi} />}
                     <ScopeFilters
                       view={view}
                       scope={scope}
