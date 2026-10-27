@@ -26,6 +26,8 @@ import {
   MOCK_PLATFORMS,
   platformSelection,
 } from "@/lib/mock-entry";
+import { istTodayIso } from "@/lib/plan/view-model";
+import { isIsoDate } from "@/lib/format";
 import { DurationInput } from "./duration-input";
 import { parseReport } from "@/lib/report-parser";
 import { api } from "@/lib/api-client";
@@ -56,6 +58,9 @@ function fullMockSectionHeading(subjectId: SubjectId) {
 export function MockForm({
   attempt,
   knownAttempts,
+  initialDate,
+  initialName,
+  backLabel = "Back to dashboard",
   onClose,
   onSaved,
 }: {
@@ -63,12 +68,16 @@ export function MockForm({
   /** Already-loaded attempts from the shell; saves an extra fetch when the
    * duplicate check runs. Empty/undefined falls back to fetching. */
   knownAttempts?: Attempt[];
+  /** Planner-selected date / task title for a new attempt. */
+  initialDate?: string;
+  initialName?: string;
+  backLabel?: string;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (returnTo?: string | null) => void | Promise<void>;
 }) {
   const [values, setValues] = useState<AttemptInput>(
     attempt ?? {
-      name: "",
+      name: initialName ?? "",
       platform: "",
       completedAt: "",
       type: "full",
@@ -78,7 +87,11 @@ export function MockForm({
     },
   );
   const [date, setDate] = useState(
-    attempt ? completionDate(attempt.completedAt) : "",
+    attempt
+      ? completionDate(attempt.completedAt)
+      : initialDate && isIsoDate(initialDate)
+        ? initialDate
+        : istTodayIso(),
   );
   const [platformChoice, setPlatformChoice] = useState(
     platformSelection(attempt?.platform ?? ""),
@@ -192,7 +205,7 @@ export function MockForm({
         method: attempt ? "PUT" : "POST",
         body: JSON.stringify(input),
       });
-      onSaved();
+      await onSaved();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not save mock";
       setError(message);
@@ -321,7 +334,7 @@ export function MockForm({
         className="mb-4 flex items-center gap-2 text-sm muted hover:text-accent transition-colors"
         onClick={onClose}
       >
-        <PlainIcon name="arrowLeft" size={16} /> Back to dashboard
+        <PlainIcon name="arrowLeft" size={16} /> {backLabel}
       </button>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-rule pb-4">
         <div>
@@ -558,7 +571,7 @@ export function MockForm({
               )}
               <label>
                 <span>
-                  Completed on <span className="req" aria-hidden="true">*</span>
+                  Attempt date <span className="req" aria-hidden="true">*</span>
                 </span>
                 <input
                   required

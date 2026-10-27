@@ -55,7 +55,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { SVGProps } from "react";
-import { useEffect, useRef } from "react";
 
 /**
  * Unified icon system — Phase 8 of the UI overhaul.

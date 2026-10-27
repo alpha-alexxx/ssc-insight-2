@@ -3,19 +3,22 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { PlainIcon } from "../icon";
 import { Button } from "../ui/button";
+import { AttemptRecordCard } from "../attempt-outcome-card";
 import {
   CategoryChip,
   CompleteToggle,
   PlanErrorCard,
 } from "./plan-shared";
 import { usePlanData } from "../use-plan-data";
-import { longDate } from "@/lib/format";
+import { istDateKey, longDate } from "@/lib/format";
 import {
   dayAssignmentStats,
   dayNeighbours,
   istTodayIso,
+  isMockType,
   type PlanTaskView,
 } from "@/lib/plan/view-model";
+import type { Attempt } from "@/lib/domain";
 
 /**
  * Daily study workspace (/plan/[date]) — everything for one plan day:
@@ -26,9 +29,15 @@ import {
 export function PlanDayView({
   date,
   planApi,
+  attempts,
+  onAddMock,
+  onOpenAttempt,
 }: {
   date: string;
   planApi: ReturnType<typeof usePlanData>;
+  attempts: Attempt[];
+  onAddMock: (date: string, task?: PlanTaskView) => void;
+  onOpenAttempt: (attempt: Attempt) => void;
 }) {
   const { plan, loading, error, refresh, toggleChecklist, toggleDayRevision, saveDayNotes } =
     planApi;
@@ -54,108 +63,217 @@ export function PlanDayView({
   const stats = dayAssignmentStats(current);
   const phase = plan.phases.find((p) => p.phase === current.phase);
 
+  const dayAttempts = attempts.filter(
+    (attempt) => istDateKey(attempt.completedAt) === current.date,
+  );
+
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
-          {previous ? (
-            <Link href={`/plan/${previous.date}`} className="nav-button !w-auto px-3 py-2 text-xs">
-              <PlainIcon name="arrowLeft" size={13} /> Day {previous.day}
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1.5">
+          {previous && (
+            <Link
+              href={`/plan/${previous.date}`}
+              className="nav-button !w-auto px-2.5 py-1.5 text-[11px]"
+            >
+              <PlainIcon name="arrowLeft" size={12} /> Day {previous.day}
             </Link>
-          ) : (
-            <span />
           )}
-        </div>
-        <div className="flex gap-2">
           {current.date !== today && (
-            <Link href={`/plan/${today}`} className="nav-button !w-auto px-3 py-2 text-xs">
+            <Link
+              href={`/plan/${today}`}
+              className="nav-button !w-auto px-2.5 py-1.5 text-[11px]"
+            >
               Today
             </Link>
           )}
+          <Link
+            href="/calendar"
+            className="nav-button !w-auto px-2.5 py-1.5 text-[11px]"
+          >
+            <PlainIcon name="calendar" size={12} /> Calendar
+          </Link>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Button size="sm" onClick={() => onAddMock(current.date)}>
+            <PlainIcon name="plus" size={13} /> Add mock record
+          </Button>
           {next && (
-            <Link href={`/plan/${next.date}`} className="nav-button !w-auto px-3 py-2 text-xs">
-              Day {next.day} <PlainIcon name="arrowRight" size={13} />
+            <Link
+              href={`/plan/${next.date}`}
+              className="nav-button !w-auto px-2.5 py-1.5 text-[11px]"
+            >
+              Day {next.day} <PlainIcon name="arrowRight" size={12} />
             </Link>
           )}
         </div>
       </div>
 
-      <header className="mb-6 border-b border-rule pb-5">
-        <p className="section-label">
+      <header className="mb-5 border-b border-rule pb-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
           {phase?.name ?? `Phase ${current.phase}`} · {longDate(current.date)}
-          {current.date === today ? " · today" : current.date < today ? " · past" : " · upcoming"}
+          {current.date === today
+            ? " · today"
+            : current.date < today
+              ? " · past"
+              : " · upcoming"}
         </p>
-        <h1 className="page-title mt-1">Day {current.day}</h1>
-        <p className="muted mt-1.5 text-[13px]">{current.dayType}</p>
-        <p className="text-xs muted mt-2 tabular" aria-live="polite">
-          {stats.completed}/{stats.total} assignments ·{" "}
-          {current.checklist.filter((c) => c.done).length}/{current.checklist.length} checklist
-          {stats.dayCompleted ? " · day complete" : ""}
-        </p>
+        <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
+          <h1 className="workspace-title">Day {current.day}</h1>
+          <p className="text-xs text-muted tabular" aria-live="polite">
+            {stats.completed}/{stats.total} assignments ·{" "}
+            {current.checklist.filter((item) => item.done).length}/
+            {current.checklist.length} checklist
+            {stats.dayCompleted ? " · day complete" : ""}
+          </p>
+        </div>
+        <p className="mt-1 text-xs text-muted">{current.dayType}</p>
       </header>
 
-      <section className="panel" aria-label="Assignments">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule-soft px-4 sm:px-6 py-4">
-          <h2 className="panel-title text-lg">Assignments</h2>
-          <span className="text-xs muted">Record results after attempting</span>
-        </div>
-        <ul className="divide-y divide-rule-soft">
-          {current.tasks.map((task) => (
-            <PlanTaskRow key={task.key} task={task} planApi={planApi} />
-          ))}
-        </ul>
-      </section>
-
-      <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <section className="panel p-4 sm:p-6" aria-label="Daily checklist">
-          <h2 className="panel-title text-lg mb-1">Daily checklist</h2>
-          <p className="text-xs muted mb-4">The plan&apos;s four habits for every study day.</p>
-          <ul className="space-y-3">
-            {current.checklist.map((item) => (
-              <li key={item.id}>
-                <label className="check-row text-sm">
-                  <input
-                    type="checkbox"
-                    checked={item.done}
-                    onChange={(e) => toggleChecklist(current.day, item.id, e.target.checked)}
-                  />
-                  <span className={item.done ? "muted line-through" : ""}>{item.label}</span>
-                </label>
-              </li>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,1fr)]">
+        <section className="panel min-w-0" aria-label="Assignments">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule-soft px-4 py-3">
+            <h2 className="font-serif text-lg font-medium">Assignments</h2>
+            <span className="text-[10px] text-muted">
+              Record results after attempting
+            </span>
+          </div>
+          <ul className="divide-y divide-rule-soft">
+            {current.tasks.map((task) => (
+              <PlanTaskRow
+                key={task.key}
+                task={task}
+                planApi={planApi}
+                onLogResult={
+                  isMockType(task.type)
+                    ? () => onAddMock(current.date, task)
+                    : undefined
+                }
+              />
             ))}
           </ul>
         </section>
 
-        <section className="panel p-4 sm:p-6" aria-label="Revision">
-          <h2 className="panel-title text-lg mb-1">Revision</h2>
-          <p className="text-xs muted mb-4">{plan.revisionMethod.rev1}</p>
-          {current.revisionTasks.length === 0 ? (
-            <p className="text-sm muted">No extra revision block scheduled for this day.</p>
-          ) : (
-            <ul className="space-y-2">
-              {current.revisionTasks.map((label, index) => {
-                const done = current.revisionDone.includes(String(index));
-                return (
-                  <li key={index}>
-                    <label className="check-row text-sm items-start">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5"
-                        checked={done}
-                        onChange={(e) => toggleDayRevision(current.day, index, e.target.checked)}
-                      />
-                      <span className={done ? "muted line-through" : ""}>{label}</span>
-                    </label>
-                  </li>
-                );
-              })}
+        <aside className="flex min-w-0 flex-col gap-4">
+          <section className="panel p-4" aria-label="Daily checklist">
+            <h2 className="font-serif text-lg font-medium">Daily checklist</h2>
+            <p className="mb-3 mt-1 text-[10px] text-muted">
+              The plan&apos;s four habits for every study day.
+            </p>
+            <ul className="flex flex-col gap-2.5">
+              {current.checklist.map((item) => (
+                <li key={item.id}>
+                  <label className="check-row text-xs">
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      onChange={(e) =>
+                        toggleChecklist(current.day, item.id, e.target.checked)
+                      }
+                    />
+                    <span className={item.done ? "muted line-through" : ""}>
+                      {item.label}
+                    </span>
+                  </label>
+                </li>
+              ))}
             </ul>
-          )}
-        </section>
+          </section>
+
+          <section className="panel p-4" aria-label="Revision">
+            <h2 className="font-serif text-lg font-medium">Revision</h2>
+            <p className="mb-3 mt-1 text-[10px] leading-relaxed text-muted">
+              {plan.revisionMethod.rev1}
+            </p>
+            {current.revisionTasks.length === 0 ? (
+              <p className="text-xs text-muted">
+                No extra revision block scheduled for this day.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {current.revisionTasks.map((label, index) => {
+                  const done = current.revisionDone.includes(String(index));
+                  return (
+                    <li key={index}>
+                      <label className="check-row items-start text-xs">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={done}
+                          onChange={(e) =>
+                            toggleDayRevision(
+                              current.day,
+                              index,
+                              e.target.checked,
+                            )
+                          }
+                        />
+                        <span className={done ? "muted line-through" : ""}>
+                          {label}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <DayAttempts
+            attempts={dayAttempts}
+            onAdd={() => onAddMock(current.date)}
+            onOpen={onOpenAttempt}
+          />
+        </aside>
       </div>
 
-      <DayNotes day={current.day} initial={current.notes} onSave={saveDayNotes} />
+      <DayNotes
+        day={current.day}
+        initial={current.notes}
+        onSave={saveDayNotes}
+      />
     </div>
+  );
+}
+
+function DayAttempts({
+  attempts,
+  onAdd,
+  onOpen,
+}: {
+  attempts: Attempt[];
+  onAdd: () => void;
+  onOpen: (attempt: Attempt) => void;
+}) {
+  return (
+    <section className="panel p-4" aria-label="Logged attempts">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-serif text-lg font-medium">Logged attempts</h2>
+          <p className="mt-1 text-[10px] leading-relaxed text-muted">
+            Tracker results whose attempt date is this day.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onAdd}>
+          <PlainIcon name="plus" size={12} /> Add
+        </Button>
+      </div>
+      {attempts.length ? (
+        <ul className="mt-3 flex flex-col gap-2">
+          {attempts.map((attempt) => (
+            <li key={attempt.id}>
+              <AttemptRecordCard attempt={attempt} onOpen={onOpen} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 rounded-control border border-rule-soft bg-canvas px-3 py-3 text-[10px] leading-relaxed text-muted">
+          Nothing logged for this date yet. A scheduled plan test stays in the
+          plan; logging its score adds a tracker attempt without moving the
+          schedule.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -177,15 +295,17 @@ function PlanNotFound({ date }: { date: string }) {
 function PlanTaskRow({
   task,
   planApi,
+  onLogResult,
 }: {
   task: PlanTaskView;
   planApi: ReturnType<typeof usePlanData>;
+  onLogResult?: () => void;
 }) {
   const { updateTask } = planApi;
   const [open, setOpen] = useState(false);
   return (
-    <li className="px-4 sm:px-6 py-4">
-      <div className="flex items-start gap-3">
+    <li className="px-4 py-3">
+      <div className="flex items-start gap-2.5">
         <CompleteToggle
           completed={task.completed}
           label={`Mark ${task.name} ${task.completed ? "incomplete" : "complete"}`}
@@ -201,30 +321,37 @@ function PlanTaskRow({
             </p>
             <CategoryChip type={task.type} />
           </div>
-          <p className="mt-1 text-[11px] muted tabular">
+          <p className="mt-1 text-[10px] muted tabular">
             {task.questions} Q · {task.marks} marks
             {task.completed && task.score != null ? ` · scored ${task.score}` : ""}
             {task.completed && task.score == null ? " · result not recorded" : ""}
           </p>
         </div>
+        {onLogResult && !task.completed && (
+          <button
+            type="button"
+            onClick={onLogResult}
+            className="shrink-0 whitespace-nowrap text-[10px] font-medium text-accent hover:text-accent-hover"
+          >
+            Log attempt
+          </button>
+        )}
         <a
           href={task.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="shrink-0"
+          aria-label={`Open ${task.name} on RBE`}
+          className="shrink-0 text-muted transition-colors hover:text-accent"
         >
-          <Button variant="outline" size="sm">
-            <PlainIcon name="arrowUpRight" size={12} />
-            <span className="hidden sm:inline">Open test</span>
-          </Button>
+          <PlainIcon name="arrowUpRight" size={14} />
         </a>
       </div>
       {task.completed && (
-        <div className="mt-3 ml-0 sm:ml-8">
+        <div className="mt-2 ml-0 sm:ml-8">
           <button
             type="button"
             aria-expanded={open}
-            className="text-[11px] muted hover:text-accent transition-colors"
+            className="text-[10px] muted hover:text-accent transition-colors"
             onClick={() => setOpen(!open)}
           >
             {open ? "Hide result & revision" : "Record result & revision"}
@@ -233,7 +360,7 @@ function PlanTaskRow({
         </div>
       )}
       {!task.completed && task.notes && (
-        <p className="mt-2 ml-0 sm:ml-8 text-[11px] muted">{task.notes}</p>
+        <p className="mt-2 ml-0 sm:ml-8 text-[10px] muted">{task.notes}</p>
       )}
     </li>
   );

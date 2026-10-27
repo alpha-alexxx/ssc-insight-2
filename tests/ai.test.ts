@@ -29,6 +29,7 @@ import {
 } from "../src/lib/ai/schemas";
 import { createAiProvider } from "../src/lib/ai/provider";
 import {
+  chatMessages,
   extractionMessages,
   sanitizeReport,
 } from "../src/lib/ai/prompts";
@@ -903,4 +904,29 @@ test("extraction draft type is exported for client contracts", () => {
     confidence: "medium",
   };
   assert.equal(draft.confidence, "medium");
+});
+
+test("chat screen context is orientation-only and stays inside a data block", () => {
+  const context = buildAiContext([], null);
+  const messages = chatMessages(
+    context,
+    [{ role: "user", content: "What should I do next?" }],
+    { view: "plan", date: "2026-10-27" },
+  );
+  const system = messages[0];
+  assert.equal(system.role, "system");
+  assert.match(system.content, /<screen_context>/);
+  assert.match(system.content, /"view":"plan"/);
+  assert.match(system.content, /"date":"2026-10-27"/);
+  assert.match(system.content, /screen_context is orientation only/);
+  assert.equal(system.content.includes("attemptId"), false);
+  assert.equal(system.content.includes("notes"), false);
+});
+
+test("chat without screen context does not emit the screen block", () => {
+  const context = buildAiContext([], null);
+  const messages = chatMessages(context, [
+    { role: "user", content: "Summarise my progress." },
+  ]);
+  assert.equal(messages[0].content.includes("<screen_context>"), false);
 });

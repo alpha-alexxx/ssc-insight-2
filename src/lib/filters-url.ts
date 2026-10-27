@@ -25,6 +25,37 @@ const lenientFiltersSchema = filtersSchema.extend({
 
 export type WorkspaceUrlState = { filters: Filters; scope: DashboardScope };
 
+/** Views whose address bar mirrors the shared filter/scope state. */
+export function mirrorsWorkspaceState(pathname: string): boolean {
+  return (
+    pathname === "/dashboard" ||
+    pathname === "/history" ||
+    pathname === "/compare"
+  );
+}
+
+/**
+ * Only same-app destinations may be used as an Add Mock return target.
+ * Accepts a plan day or one of the stable planner/result routes.
+ */
+export function safeWorkspaceReturnTo(value: string | null): string | null {
+  if (!value) return null;
+  let url: URL;
+  try {
+    url = new URL(value, "https://ssc-insight.local");
+  } catch {
+    return null;
+  }
+  if (url.origin !== "https://ssc-insight.local") return null;
+  const allowed =
+    url.pathname.startsWith("/plan/") ||
+    url.pathname === "/calendar" ||
+    url.pathname === "/my-tasks" ||
+    url.pathname === "/dashboard" ||
+    url.pathname === "/history";
+  return allowed ? `${url.pathname}${url.search}` : null;
+}
+
 export function parseWorkspaceState(search: string): WorkspaceUrlState {
   const params = new URLSearchParams(search);
   const parsed = lenientFiltersSchema.parse(

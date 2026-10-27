@@ -1,25 +1,33 @@
 "use client";
 import Link from "next/link";
-import { motion, useReducedMotion } from "motion/react";
 import { AuthControl } from "./auth-control";
 import { DuotoneIcon, PlainIcon } from "./icon";
 import { ThemeToggle } from "./theme-toggle";
+import { Button } from "./ui/button";
+import { Separator } from "./ui/separator";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from "./ui/sidebar";
 import { istTodayIso } from "@/lib/plan/view-model";
 
 /**
- * Application shell — sidebar, header, mobile navigation (Phase 4).
- *
- * Design decisions:
- * - Sidebar (≥1024px): 224px paper column, ledger nav with duotone icons,
- *   live user identity (real initials/name/email), one quiet note card.
- * - Header: breadcrumb context, theme toggle on every viewport (previously
- *   hidden on mobile), help entry, auth control.
- * - Mobile nav: icon+label pills with ≥40px touch targets.
- *
- * Views are real App Router routes now: navigation renders <Link>s, and the
- * active view is derived from the pathname by the workspace shell. The
- * planner views (calendar, my-tasks, plan/[date]) sit beside the tracker
- * views; /plan/<date> is dynamic, so its links are computed per render.
+ * Application shell — official shadcn sidebar composition adapted to the
+ * real workspace routes. The sidebar owns expanded/collapsed and the mobile
+ * Sheet; the shell keeps route intent, auth, and view labels.
  */
 
 export type AppView =
@@ -48,7 +56,10 @@ export const VIEW_HREF: Record<AppView, `/${string}`> = {
   settings: "/settings",
 };
 
-export const VIEW_META: Record<AppView, { label: string; icon: Parameters<typeof DuotoneIcon>[0]["name"] }> = {
+export const VIEW_META: Record<
+  AppView,
+  { label: string; icon: Parameters<typeof DuotoneIcon>[0]["name"] }
+> = {
   dashboard: { label: "Dashboard", icon: "dashboard" },
   calendar: { label: "Study calendar", icon: "calendar" },
   tasks: { label: "My tasks", icon: "check" },
@@ -67,195 +78,306 @@ export function initials(name: string): string {
   return (first + last).toUpperCase() || "ME";
 }
 
-export function AppSidebar({
+/** Route-aware shell wrapper. Kept here so the workspace layout imports one
+ * component for both the sidebar provider and the page frame. */
+export function AppFrame({
   view,
   userName,
   userEmail,
+  authEnabled,
+  aiEnabled,
+  onRouteIntent,
+  onAddMock,
+  onOpenAi,
+  children,
 }: {
   view: AppView;
   userName: string;
   userEmail: string;
+  authEnabled: boolean;
+  aiEnabled: boolean;
+  onRouteIntent: (view: AppView) => void;
+  onAddMock: () => void;
+  onOpenAi: () => void;
+  children: React.ReactNode;
 }) {
-  const reduced = useReducedMotion();
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-[224px] bg-paper border-r border-rule hidden lg:flex flex-col z-20">
-      <Link href="/" className="flex items-center px-6 h-24" aria-label="SSC Insight home">
-        <span className="wordmark">
-          ssc<span className="text-accent">insight</span>
-          <span className="text-accent">.</span>
-          <span className="block font-sans text-[9px] tracking-[.03em] muted font-normal mt-2">
-            Your preparation, clearer
-          </span>
-        </span>
-      </Link>
-      <div className="px-4 mt-6">
-        <p className="section-label px-3 mb-3">Planner</p>
-        <nav aria-label="Main navigation" className="space-y-1">
-          {(
-            [
-              "dashboard",
-              "calendar",
-              "tasks",
-            ] as const
-          ).map((id) => (
-            <Link
-              key={id}
-              href={VIEW_HREF[id]}
-              className={`nav-button ${view === id ? "active" : ""}`}
-              aria-current={view === id ? "page" : undefined}
-            >
-              <DuotoneIcon
-                name={VIEW_META[id].icon}
-                size={18}
-                tone={view === id ? "paper" : "ink"}
-              />
-              {VIEW_META[id].label}
-              {view === id && (
-                <motion.span
-                  layoutId="nav-dot"
-                  transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 35 }}
-                  className="ml-auto size-1.5 rounded-pill bg-accent"
-                />
-              )}
-            </Link>
-          ))}
-        </nav>
-        <p className="section-label px-3 mb-3 mt-6">Tracker</p>
-        <nav aria-label="Tracker navigation" className="space-y-1">
-          {(
-            [
-              "history",
-              "compare",
-            ] as const
-          ).map((id) => (
-            <Link
-              key={id}
-              href={VIEW_HREF[id]}
-              className={`nav-button ${view === id ? "active" : ""}`}
-              aria-current={view === id ? "page" : undefined}
-            >
-              <DuotoneIcon
-                name={VIEW_META[id].icon}
-                size={18}
-                tone={view === id ? "paper" : "ink"}
-              />
-              {VIEW_META[id].label}
-              {view === id && (
-                <motion.span
-                  layoutId="nav-dot"
-                  transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 35 }}
-                  className="ml-auto size-1.5 rounded-pill bg-accent"
-                />
-              )}
-            </Link>
-          ))}
-        </nav>
-        <p className="section-label px-3 mb-3 mt-6">Preferences</p>
+    <SidebarProvider defaultOpen>
+      <AppSidebar
+        view={view}
+        userName={userName}
+        userEmail={userEmail}
+        onRouteIntent={onRouteIntent}
+        onAddMock={onAddMock}
+      />
+      <SidebarInset
+        id="main-content"
+        tabIndex={-1}
+        className="min-w-0 bg-canvas focus:outline-none"
+      >
+        <AppHeader
+          view={view}
+          authEnabled={authEnabled}
+          aiEnabled={aiEnabled}
+          onOpenAi={onOpenAi}
+        />
+        {children}
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
+const NAV_GROUPS: {
+  label: string;
+  items: { view: AppView; label: string; href: string }[];
+}[] = [
+  {
+    label: "Study planner",
+    items: [
+      { view: "dashboard", label: "Dashboard", href: VIEW_HREF.dashboard },
+      { view: "calendar", label: "Study calendar", href: VIEW_HREF.calendar },
+      { view: "plan", label: "Today's plan", href: planHref() },
+      { view: "tasks", label: "My tasks", href: VIEW_HREF.tasks },
+    ],
+  },
+  {
+    label: "Results",
+    items: [
+      { view: "history", label: "Mock history", href: VIEW_HREF.history },
+      { view: "compare", label: "Compare mocks", href: VIEW_HREF.compare },
+    ],
+  },
+];
+
+function NavItem({
+  item,
+  active,
+  onRouteIntent,
+}: {
+  item: { view: AppView; label: string; href: string };
+  active: boolean;
+  onRouteIntent: (view: AppView) => void;
+}) {
+  const { setOpenMobile } = useSidebar();
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        isActive={active}
+        tooltip={item.label}
+        className="data-[active=true]:bg-ink data-[active=true]:text-paper data-[active=true]:hover:bg-ink data-[active=true]:hover:text-paper"
+      >
         <Link
-          href={VIEW_HREF.settings}
-          className={`nav-button ${view === "settings" ? "active" : ""}`}
-          aria-current={view === "settings" ? "page" : undefined}
+          href={item.href}
+          aria-current={active ? "page" : undefined}
+          onClick={() => {
+            onRouteIntent(item.view);
+            setOpenMobile(false);
+          }}
         >
-          <DuotoneIcon
-            name="settings"
-            size={18}
-            tone={view === "settings" ? "paper" : "ink"}
+          <PlainIcon
+            name={VIEW_META[item.view].icon}
+            size={17}
+            tone={active ? "paper" : "ink"}
           />
-          Settings &amp; backup
+          <span className="group-data-[collapsible=icon]:hidden">
+            {item.label}
+          </span>
         </Link>
-      </div>
-      <div className="mt-auto mx-5 mb-5 p-4 rounded-control bg-canvas">
-        <DuotoneIcon name="book" size={22} tone="accent" className="mb-3" />
-        <p className="font-medium text-xs">One mock at a time.</p>
-        <p className="text-xs muted leading-relaxed mt-1">
-          Consistency is your biggest advantage. Keep showing up.
-        </p>
-      </div>
-      <div className="px-6 py-5 border-t border-rule-soft flex gap-3 items-center min-w-0">
-        <span
-          className="size-9 bg-ink text-paper rounded-card flex items-center justify-center text-xs font-semibold tracking-wide shrink-0"
-          aria-hidden="true"
-        >
-          {initials(userName)}
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-medium truncate">{userName || "My workspace"}</p>
-          <p className="text-[11px] muted truncate">
-            {userEmail || "Private · your account"}
-          </p>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+export function AppSidebar({
+  view,
+  userName,
+  userEmail,
+  onRouteIntent,
+  onAddMock,
+}: {
+  view: AppView;
+  userName: string;
+  userEmail: string;
+  onRouteIntent: (view: AppView) => void;
+  onAddMock: () => void;
+}) {
+  const { setOpenMobile } = useSidebar();
+  return (
+    <Sidebar collapsible="icon" className="border-r border-rule">
+      <SidebarHeader className="border-b border-rule-soft px-2 py-3">
+        <div className="flex items-center gap-1">
+          <Link
+            href="/dashboard"
+            className="flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-ink"
+            aria-label="SSC Insight dashboard"
+            onClick={() => setOpenMobile(false)}
+          >
+            <span className="grid size-8 shrink-0 place-items-center rounded-control border border-rule-soft bg-canvas">
+              <PlainIcon name="book" size={17} tone="accent" />
+            </span>
+            <span className="min-w-0 group-data-[collapsible=icon]:hidden">
+              <span className="block font-serif text-[21px] font-semibold leading-none tracking-[-0.035em]">
+                ssc<span className="text-accent">insight</span>
+                <span className="text-accent">.</span>
+              </span>
+              <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.12em] text-muted">
+                Mock workspace
+              </span>
+            </span>
+          </Link>
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={() => setOpenMobile(false)}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-muted hover:bg-soft hover:text-ink md:hidden"
+          >
+            <PlainIcon name="close" size={16} />
+          </button>
         </div>
-      </div>
-    </aside>
+      </SidebarHeader>
+      <SidebarContent>
+        {NAV_GROUPS.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel className="px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+              {group.label}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => (
+                  <NavItem
+                    key={item.view}
+                    item={item}
+                    active={view === item.view}
+                    onRouteIntent={onRouteIntent}
+                  />
+                ))}
+                {group.label === "Results" && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={view === "add"}
+                      tooltip="Log a mock"
+                      onClick={() => {
+                        onAddMock();
+                        setOpenMobile(false);
+                      }}
+                      className="data-[active=true]:bg-ink data-[active=true]:text-paper data-[active=true]:hover:bg-ink"
+                    >
+                      <PlainIcon
+                        name="plus"
+                        size={17}
+                        tone={view === "add" ? "paper" : "ink"}
+                      />
+                      <span className="group-data-[collapsible=icon]:hidden">
+                        Log a mock
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+      </SidebarContent>
+      <SidebarFooter className="border-t border-rule-soft bg-canvas/60">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={view === "settings"}
+              tooltip="Settings"
+              className="data-[active=true]:bg-ink data-[active=true]:text-paper data-[active=true]:hover:bg-ink"
+            >
+              <Link
+                href={VIEW_HREF.settings}
+                aria-current={view === "settings" ? "page" : undefined}
+                onClick={() => {
+                  onRouteIntent("settings");
+                  setOpenMobile(false);
+                }}
+              >
+                <PlainIcon
+                  name="settings"
+                  size={17}
+                  tone={view === "settings" ? "paper" : "ink"}
+                />
+                <span className="group-data-[collapsible=icon]:hidden">
+                  Settings
+                </span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <div className="flex min-w-0 items-center gap-2.5 px-2 py-1.5">
+          <span
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
+            aria-hidden="true"
+          >
+            {initials(userName)}
+          </span>
+          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+            <p className="truncate text-xs font-medium">{userName || "My workspace"}</p>
+            <p className="truncate text-[10px] text-muted">
+              {userEmail || "Private account"}
+            </p>
+          </div>
+        </div>
+        <p className="px-2 pb-1 text-[10px] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
+          SSC CGL Tier 2 · dates in IST
+        </p>
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   );
 }
 
 export function AppHeader({
   view,
   authEnabled,
+  aiEnabled,
+  onOpenAi,
 }: {
   view: AppView;
   authEnabled: boolean;
+  aiEnabled: boolean;
+  onOpenAi: () => void;
 }) {
   return (
-    <header className="h-[72px] px-5 md:px-9 bg-paper border-b border-rule flex justify-between items-center gap-3">
-      <div className="flex items-center gap-3 text-xs muted min-w-0">
-        <span className="lg:hidden wordmark-mobile text-ink">
-          sscinsight<span className="text-accent">.</span>
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-rule bg-paper/95 px-3 backdrop-blur-sm md:px-5">
+      <SidebarTrigger className="size-8 shrink-0" />
+      <Separator orientation="vertical" className="mx-1 h-5 bg-rule-soft" />
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="hidden text-[10px] font-semibold uppercase tracking-[0.12em] text-muted sm:inline">
+          Workspace
         </span>
-        <span className="hidden lg:inline">My workspace</span>
-        <PlainIcon name="chevronRight" size={13} className="hidden lg:block" />
-        <span className="text-ink font-medium hidden sm:inline">
+        <span className="truncate text-xs font-medium text-ink">
           {VIEW_META[view].label}
         </span>
       </div>
-      <div className="flex items-center gap-3 sm:gap-4">
-        <span className="hidden xl:flex items-center gap-2 text-xs muted">
-          <span className="size-1.5 rounded-pill bg-accent" />
-          SSC CGL Tier 2
-        </span>
-        <span className="h-5 w-px bg-rule-soft hidden xl:block" />
-        <ThemeToggle />
+      <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+        {aiEnabled && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onOpenAi}
+            className="h-8 px-2.5"
+            aria-label="Open AI coach"
+          >
+            <PlainIcon name="sparkles" size={15} tone="accent" />
+            <span className="hidden md:inline">Ask coach</span>
+          </Button>
+        )}
+        <ThemeToggle className="size-8" />
         <Link
           href={VIEW_HREF.settings}
-          title="Settings, backup and about"
-          aria-label="Settings, backup and about"
-          className="muted hover:text-accent transition-colors"
+          aria-label="Settings and account"
+          title="Settings and account"
+          className="inline-flex size-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-soft hover:text-ink"
         >
-          <PlainIcon name="help" size={19} />
+          <PlainIcon name="settings" size={17} />
         </Link>
         <AuthControl enabled={authEnabled} />
       </div>
     </header>
-  );
-}
-
-export function MobileNav({ view }: { view: AppView }) {
-  const items = [
-    "dashboard",
-    "calendar",
-    "tasks",
-    "history",
-    "compare",
-    "settings",
-  ] as const;
-  return (
-    <nav
-      aria-label="Mobile navigation"
-      className="lg:hidden flex gap-1 px-3 py-2 bg-paper border-b overflow-x-auto"
-    >
-      {items.map((v) => (
-        <Link
-          href={VIEW_HREF[v]}
-          aria-current={view === v ? "page" : undefined}
-          key={v}
-          className={`flex items-center gap-1.5 min-h-11 px-3 whitespace-nowrap rounded-control text-xs transition-colors ${
-            view === v ? "bg-ink text-paper" : "muted hover:bg-soft"
-          }`}
-        >
-          <DuotoneIcon name={VIEW_META[v].icon} size={15} tone={view === v ? "paper" : "muted"} />
-          {VIEW_META[v].label}
-        </Link>
-      ))}
-    </nav>
   );
 }

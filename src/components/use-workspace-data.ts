@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { api } from "@/lib/api-client";
 import {
+  mirrorsWorkspaceState,
   parseWorkspaceState,
   serializeWorkspaceState,
 } from "@/lib/filters-url";
@@ -123,6 +124,11 @@ export function useWorkspaceData() {
   // spams history; reloads and shared links reconstruct the state from it.
   useEffect(() => {
     if (!urlReady) return;
+    // Planner and Add Mock routes carry their own query context (`date`,
+    // `task`, `returnTo`); rewriting them with the filter mirror would strip
+    // that context. Only the views that actually consume filters/scope own
+    // the address bar.
+    if (!mirrorsWorkspaceState(pathname)) return;
     const url = serializeWorkspaceState(pathname, { filters, scope });
     if (window.location.pathname + window.location.search !== url)
       window.history.replaceState(null, "", url);

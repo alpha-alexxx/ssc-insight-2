@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
 import { NdjsonDecoder, parseChatEvent } from "@/lib/ai/ndjson";
 import type {
+  AiScreenContext,
   AiStatus,
   ChatMessage,
   CoachMeta,
@@ -111,7 +112,7 @@ export function useAiWorkspace() {
   }, []);
 
   const sendChat = useCallback(
-    async (text: string) => {
+    async (text: string, screen?: AiScreenContext | null) => {
       if (chatAbort.current) return; // a stream is already in flight
       const userMessage: ChatMessage = {
         id: newId(),
@@ -137,7 +138,10 @@ export function useAiWorkspace() {
           method: "POST",
           cache: "no-store",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: history }),
+          body: JSON.stringify({
+            messages: history,
+            ...(screen ? { context: screen } : {}),
+          }),
           signal: abort.signal,
         });
         if (!response.ok) {

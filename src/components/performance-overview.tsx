@@ -1,5 +1,5 @@
 "use client";
-import { useId, memo, useState, type ReactNode } from "react";
+import { useId, memo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -178,6 +178,44 @@ function ScopeTrend({
           : ""}
       </EmptyChart>
     );
+  if (trend.points.length === 1) {
+    const point = trend.points[0]!;
+    return (
+      <>
+        <div className="flex min-h-[180px] flex-col items-center justify-center rounded-control border border-rule-soft bg-canvas px-5 py-6 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+            One result so far
+          </p>
+          <p className="mt-2 font-serif text-4xl font-medium tabular tracking-tight">
+            {n(point.percentage)}%
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {dateLabel(point.date)} · {point.name}
+          </p>
+          <p className="mt-3 max-w-sm text-[11px] leading-relaxed text-muted">
+            Log one more result to turn this into a trend. This point is{" "}
+            {n(point.score)} / {point.maxScore}
+            {target != null ? `; your target is ${n(targetPercentage(target))}%` : ""}.
+          </p>
+        </div>
+        <ViewData
+          columns={["Date", "Result", "Score", "Maximum", "Percentage", "Source"]}
+          rows={[
+            [
+              dateLabel(point.date),
+              point.seriesLabel,
+              n(point.score),
+              point.maxScore,
+              `${n(point.percentage)}%`,
+              point.origin === "full-derived"
+                ? "From full mock"
+                : typeLabel(point.sourceType),
+            ],
+          ]}
+        />
+      </>
+    );
+  }
   return (
     <>
       <ChartContainer
@@ -542,7 +580,7 @@ function TargetPanel({
           </p>
         </div>
       </div>
-      {snapshots.length ? (
+      {snapshots.length > 1 ? (
         <ChartContainer
           config={config}
           className="!aspect-auto mt-2 h-[150px] w-full px-1"
@@ -629,6 +667,11 @@ function TargetPanel({
             />
           </AreaChart>
         </ChartContainer>
+      ) : snapshots.length === 1 ? (
+        <p className="mt-3 rounded-control border border-rule-soft bg-canvas px-3 py-3 text-[11px] leading-relaxed text-muted">
+          One dated snapshot is saved. Log another result to see the target
+          trend.
+        </p>
       ) : (
         <EmptyChart>Your target trend appears after your first mock.</EmptyChart>
       )}
@@ -702,6 +745,7 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
           ))}
         </select>
       </div>
+      {current.trend.length > 1 ? (
       <div className="mt-3 grid md:grid-cols-2 gap-4">
         <div>
           <p className="text-[11px] muted mb-1">
@@ -837,6 +881,12 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
           )}
         </div>
       </div>
+      ) : (
+        <p className="mt-2 rounded-control border border-rule-soft bg-canvas px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+          Only one {SUBJECTS[current.id].short} result is saved. Log another to
+          draw accuracy and time trends.
+        </p>
+      )}
       <ViewData
         columns={["Date", "Score", "Maximum", "Accuracy", "Time"]}
         rows={current.trend.map((point) => [
@@ -852,17 +902,15 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
 }
 /**
  * Memoized at the top level: the shell re-renders on every chat-stream
- * token and filter keystroke, but analytics/target/coach are stable between
- * data refreshes, so the four charts and their derived rows are skipped.
+ * token and filter keystroke, but analytics/target are stable between data
+ * refreshes, so the charts and their derived rows are skipped.
  */
 export const PerformanceOverview = memo(function PerformanceOverview({
   analytics,
   target,
-  coach,
 }: {
   analytics: Analytics | null;
   target: number | null;
-  coach?: ReactNode;
 }) {
   if (!analytics) return <EmptyChart>Loading your preparation…</EmptyChart>;
   const { scope, summary } = analytics;
@@ -877,54 +925,27 @@ export const PerformanceOverview = memo(function PerformanceOverview({
   const copy = scopeCopy[scope];
   return (
     <>
-      <div className="stat-strip">
+      <dl className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 text-[11px] text-muted">
         {[
-          {
-            label: isFull ? "Full mocks counted" : "Mocks counted",
-            value: n(analytics.sourceAttemptCount),
-            suffix: "",
-            hint: "Real saved attempts",
-          },
-          {
-            label: isFull ? "Average full-mock score" : "Average score",
-            value: isFull
-              ? n(averageMarks)
-              : n(summary.averagePercentage),
-            suffix: isFull ? "/ 390" : "%",
-            hint: `${analytics.pointCount} analysed result${analytics.pointCount === 1 ? "" : "s"}`,
-          },
-          {
-            label: isFull ? "Personal best · full mock" : "Personal best",
-            value: isFull ? n(bestMarks) : n(summary.bestPercentage),
-            suffix: isFull ? "/ 390" : "%",
-            hint:
-              target != null
-                ? `Your target: ${n(target)} / 390`
-                : "Your next benchmark",
-          },
-          {
-            label: "Overall accuracy",
-            value: n(summary.weightedAccuracy),
-            suffix: "%",
-            hint: "Correct ÷ attempted",
-          },
-        ].map((stat) => (
-          <div key={stat.label} className="stat-cell">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs muted">{stat.label}</p>
-            </div>
-            <p className="stat-value tabular mt-3">
-              {stat.value}
-              <span className="text-sm font-normal text-muted tracking-normal ml-1.5">
-                {stat.suffix}
-              </span>
-            </p>
-            <p className="text-[11px] muted mt-2">{stat.hint}</p>
+          ["Mocks", n(analytics.sourceAttemptCount)],
+          [
+            isFull ? "Average full mock" : "Average score",
+            isFull ? `${n(averageMarks)} / 390` : `${n(summary.averagePercentage)}%`,
+          ],
+          [
+            "Best",
+            isFull ? `${n(bestMarks)} / 390` : `${n(summary.bestPercentage)}%`,
+          ],
+          ["Accuracy", `${n(summary.weightedAccuracy)}%`],
+          ["Results", n(analytics.pointCount)],
+        ].map(([label, value]) => (
+          <div key={label} className="flex items-baseline gap-1.5">
+            <dt>{label}</dt>
+            <dd className="font-medium tabular text-ink">{value}</dd>
           </div>
         ))}
-      </div>
-      {coach}
-      <div className="grid xl:grid-cols-[1.65fr_1fr] gap-6 mb-6">
+      </dl>
+      <div className="grid xl:grid-cols-[1.65fr_1fr] gap-4 mb-4">
         <Panel title={copy.trend} description={copy.trendDescription}>
           <ScopeTrend analytics={analytics} targetScore={target} />
         </Panel>
@@ -936,21 +957,24 @@ export const PerformanceOverview = memo(function PerformanceOverview({
         </Panel>
       </div>
       <AttemptCards analytics={analytics} />
-      <Panel
-        title="My target"
-        description="One target, the same reference on every dashboard tab."
-        className="mb-6"
-      >
-        <TargetPanel analytics={analytics} target={target} />
-      </Panel>
-      {scope !== "subject" && (
+      {(target != null || analytics.target.snapshots.length > 0) && (
         <Panel
-          title="Subject deep dive"
-          description="Accuracy and time per attempt, with one axis per chart."
+          title="My target"
+          description="One target, the same reference on every dashboard tab."
+          className="mb-6"
         >
-          <DeepDive analytics={analytics} />
+          <TargetPanel analytics={analytics} target={target} />
         </Panel>
       )}
+      {scope !== "subject" &&
+        (analytics.deepDive ?? []).some((subject) => subject.count > 0) && (
+          <Panel
+            title="Subject deep dive"
+            description="Accuracy and time per attempt, with one axis per chart."
+          >
+            <DeepDive analytics={analytics} />
+          </Panel>
+        )}
     </>
   );
 });

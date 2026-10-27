@@ -53,7 +53,9 @@ export function MockDetailDialog({
           </Dialog.Title>
           <Dialog.Description className="muted text-xs mt-2">
             {detail &&
-              `${detail.platform} · ${longDate(detail.completedAt)} · ${typeName(detail.type)}`}
+              `${detail.platform} · ${typeName(detail.type)} · attempted ${longDate(detail.completedAt)}${
+                detail.createdAt ? ` · logged ${longDate(detail.createdAt)}` : ""
+              }`}
           </Dialog.Description>
           <Dialog.Close
             className="absolute top-5 right-5 muted hover:text-ink transition-colors"

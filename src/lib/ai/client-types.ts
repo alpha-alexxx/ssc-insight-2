@@ -53,3 +53,20 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
+
+export const AI_VIEWS = [
+  "dashboard",
+  "calendar",
+  "tasks",
+  "plan",
+  "history",
+  "compare",
+  "settings",
+] as const;
+export type AiView = (typeof AI_VIEWS)[number];
+
+/** Orientation only: never includes attempt content, notes, IDs, or identity. */
+export type AiScreenContext = {
+  view: AiView;
+  date?: string;
+};

@@ -90,6 +90,35 @@
   --dur-quick: 140ms;
   --dur-enter: 220ms;
   --dur-view: 240ms;
+  /* ---- shadcn compatibility aliases (all resolve to paper tokens) ----
+     The generated shadcn primitives use --background/--border/--sidebar-*;
+     map them onto the existing semantic system so every palette, style,
+     light/dark combination keeps working. --accent remains terracotta. */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--paper);
+  --card-foreground: var(--ink);
+  --popover: var(--paper);
+  --popover-foreground: var(--ink);
+  --primary: var(--accent);
+  --primary-foreground: var(--paper);
+  --secondary: var(--soft);
+  --secondary-foreground: var(--ink);
+  --accent-foreground: var(--paper);
+  --muted-foreground: var(--muted);
+  --border: var(--rule-soft);
+  --input: var(--rule);
+  --ring: var(--accent);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--paper);
+  --sidebar: var(--paper);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--paper);
+  --sidebar-accent: var(--soft);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--rule-soft);
+  --sidebar-ring: var(--accent);
 }
 
 /* Dark mode: warm charcoal variant of the paper aesthetic. next-themes
@@ -122,6 +151,7 @@
   --chart-ga: #ffc340;
   --chart-computer: #aaa094;
   --outcome-unattempted: #3f3a32;
+  /* shadcn aliases inherit the dark canvas/paper/ink values above. */
 }
 
 /* ---------- palette: blue — professional and precise ----------
@@ -341,6 +371,31 @@
   --radius-panel: var(--radius-panel);
   --shadow-pop: var(--elev-pop);
   --ease-out-soft: var(--ease-out-soft);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
 }
 
 /* ---------- Element defaults (layer: base) ----------
@@ -676,6 +731,89 @@
   .popover-content {
     animation: popover-in 180ms var(--ease-out-soft);
   }
+
+  /* ---------- Sheet (shadcn Dialog primitive, project motion) ----------
+     The generated shadcn component was written for tw-animate-css, which
+     this project does not use. These data-state rules keep the animation
+     dependency-free and respect the global reduced-motion override. */
+  .sheet-overlay {
+    animation: overlay-in 180ms ease;
+  }
+  .sheet-overlay[data-state="closed"] {
+    animation: overlay-out 150ms ease;
+  }
+  .sheet-content {
+    animation: sheet-in-right 220ms var(--ease-out-soft);
+  }
+  .sheet-content[data-state="closed"] {
+    animation: sheet-out-right 160ms ease;
+  }
+  .sheet-content[data-side="left"] {
+    animation-name: sheet-in-left;
+  }
+  .sheet-content[data-side="left"][data-state="closed"] {
+    animation-name: sheet-out-left;
+  }
+  .sheet-content[data-side="top"] {
+    animation-name: sheet-in-top;
+  }
+  .sheet-content[data-side="top"][data-state="closed"] {
+    animation-name: sheet-out-top;
+  }
+  .sheet-content[data-side="bottom"] {
+    animation-name: sheet-in-bottom;
+  }
+  .sheet-content[data-side="bottom"][data-state="closed"] {
+    animation-name: sheet-out-bottom;
+  }
+  @keyframes sheet-in-right {
+    from {
+      opacity: 0.7;
+      translate: 24px 0;
+    }
+  }
+  @keyframes sheet-out-right {
+    to {
+      opacity: 0.7;
+      translate: 24px 0;
+    }
+  }
+  @keyframes sheet-in-left {
+    from {
+      opacity: 0.7;
+      translate: -24px 0;
+    }
+  }
+  @keyframes sheet-out-left {
+    to {
+      opacity: 0.7;
+      translate: -24px 0;
+    }
+  }
+  @keyframes sheet-in-top {
+    from {
+      opacity: 0.7;
+      translate: 0 -24px;
+    }
+  }
+  @keyframes sheet-out-top {
+    to {
+      opacity: 0.7;
+      translate: 0 -24px;
+    }
+  }
+  @keyframes sheet-in-bottom {
+    from {
+      opacity: 0.7;
+      translate: 0 24px;
+    }
+  }
+  @keyframes sheet-out-bottom {
+    to {
+      opacity: 0.7;
+      translate: 0 24px;
+    }
+  }
   @keyframes overlay-in {
     from {
       opacity: 0;
@@ -790,6 +928,68 @@
     outline-color: var(--paper);
   }
 
+  /* ---------- Compact workspace primitives ---------- */
+  .workspace-title {
+    font-family: var(--font-heading);
+    font-size: clamp(28px, 2.6vw, 34px);
+    line-height: 1.12;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+  .workspace-subtitle {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .metric-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius-control);
+    background: var(--paper);
+    overflow: hidden;
+  }
+  .metric-cell {
+    min-width: 0;
+    padding: 13px 15px;
+  }
+  .metric-cell + .metric-cell {
+    border-left: 1px solid var(--rule-soft);
+  }
+  .metric-label {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .metric-value {
+    margin-top: 4px;
+    font-family: var(--font-heading);
+    font-size: clamp(23px, 2.1vw, 28px);
+    line-height: 1.15;
+    font-weight: 550;
+    letter-spacing: -0.025em;
+    white-space: nowrap;
+  }
+  .metric-hint {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+  .compact-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px 10px;
+  }
+  .compact-panel-body {
+    padding: 0 16px 14px;
+  }
+
   /* ---------- Landing page helpers ---------- */
   .landing-blob {
     position: absolute;
@@ -826,6 +1026,21 @@ html {
   :root {
     --table-cell-pad-y: 13px;
     --table-cell-pad-x: 12px;
+  }
+  .metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .metric-cell {
+    padding: 12px;
+  }
+  .metric-cell:nth-child(3) {
+    border-left: 0;
+  }
+  .metric-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .metric-value {
+    font-size: 24px;
   }
   .stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));

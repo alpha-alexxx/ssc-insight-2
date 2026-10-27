@@ -1,13 +1,16 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Panel } from "../dashboard-panels";
 import { PlainIcon } from "../icon";
+import { Button } from "../ui/button";
+import { AttemptRecordCard } from "../attempt-outcome-card";
 import { CategoryChip, CompleteToggle, PlanErrorCard, ResultLine } from "./plan-shared";
 import { EventDialog } from "./event-dialog";
 import { usePlanData } from "../use-plan-data";
-import { shortDate } from "@/lib/format";
+import { istDateKey, shortDate } from "@/lib/format";
+import type { Attempt } from "@/lib/domain";
 import {
   addIsoDays,
   dayAssignmentStats,
@@ -45,13 +48,29 @@ function clampToPlan(plan: { startDate: string; endDate: string }, iso: string) 
   return iso;
 }
 
-export function CalendarView({ planApi }: { planApi: ReturnType<typeof usePlanData> }) {
+export function CalendarView({
+  planApi,
+  attempts,
+  onAddMock,
+  onOpenAttempt,
+  onSelectedDateChange,
+}: {
+  planApi: ReturnType<typeof usePlanData>;
+  attempts: Attempt[];
+  onAddMock: (date: string, task?: PlanTaskView) => void;
+  onOpenAttempt: (attempt: Attempt) => void;
+  onSelectedDateChange?: (date: string) => void;
+}) {
   const { plan, loading, error, refresh, updateTask } = planApi;
   const router = useRouter();
   const today = istTodayIso();
   const [mode, setMode] = useState<CalendarMode>("month");
   const [selected, setSelected] = useState(() => today);
   const [event, setEvent] = useState<{ task: PlanTaskView; day: PlanDayView } | undefined>();
+
+  useEffect(() => {
+    onSelectedDateChange?.(selected);
+  }, [selected, onSelectedDateChange]);
 
   if (loading && !plan)
     return (
@@ -88,9 +107,14 @@ export function CalendarView({ planApi }: { planApi: ReturnType<typeof usePlanDa
     setSelected(clampToPlan(plan, next));
   };
 
+  const dayAttempts = attempts.filter(
+    (attempt) => istDateKey(attempt.completedAt) === selected,
+  );
+  const asideAgenda = mode === "month" || mode === "week";
+
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <div role="group" aria-label="Calendar view" className="segment-group">
           {MODES.map((m) => (
             <button
@@ -104,7 +128,7 @@ export function CalendarView({ planApi }: { planApi: ReturnType<typeof usePlanDa
             </button>
           ))}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             aria-label="Previous period"
@@ -139,45 +163,82 @@ export function CalendarView({ planApi }: { planApi: ReturnType<typeof usePlanDa
               onChange={(e) => e.target.value && setSelected(e.target.value)}
             />
           </label>
+          <Button size="sm" onClick={() => onAddMock(selected)}>
+            <PlainIcon name="plus" size={13} /> Add mock
+          </Button>
         </div>
       </div>
-      <p className="mb-4 font-serif text-xl" aria-live="polite">
-        {periodLabel}
-      </p>
 
-      {mode === "month" && (
-        <MonthView
-          plan={plan}
-          selected={selected}
-          today={today}
-          onSelect={setSelected}
-        />
-      )}
-      {mode === "week" && (
-        <WeekView
-          plan={plan}
-          selected={selected}
-          today={today}
-          onSelect={setSelected}
-        />
-      )}
-      {mode === "agenda" && (
-        <AgendaList
-          plan={plan}
-          today={today}
-          onOpenTask={(task, day) => setEvent({ task, day })}
-        />
-      )}
-      {(mode === "day" || mode === "month" || mode === "week") && (
-        <div className="mt-5">
-          <SelectedDayAgenda
-            day={selectedDay}
-            today={today}
-            compact={mode !== "day"}
-            onOpenTask={(task, day) => setEvent({ task, day })}
-          />
+      <div
+        className={
+          asideAgenda
+            ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(310px,1fr)]"
+            : ""
+        }
+      >
+        <div className="min-w-0">
+          <p className="mb-3 font-serif text-lg" aria-live="polite">
+            {periodLabel}
+          </p>
+          {mode === "month" && (
+            <MonthView
+              plan={plan}
+              selected={selected}
+              today={today}
+              onSelect={setSelected}
+            />
+          )}
+          {mode === "week" && (
+            <WeekView
+              plan={plan}
+              selected={selected}
+              today={today}
+              onSelect={setSelected}
+            />
+          )}
+          {mode === "agenda" && (
+            <AgendaList
+              plan={plan}
+              today={today}
+              onOpenTask={(task, day) => setEvent({ task, day })}
+              onLogResult={(task) => onAddMock(task.date, task)}
+              attempts={attempts}
+              onOpenAttempt={onOpenAttempt}
+            />
+          )}
+          {mode === "day" && (
+            <SelectedDayAgenda
+              day={selectedDay}
+              today={today}
+              compact={false}
+              attempts={dayAttempts}
+              onAddMock={onAddMock}
+              onOpenAttempt={onOpenAttempt}
+              onOpenTask={(task, day) => setEvent({ task, day })}
+            />
+          )}
+          {mode !== "day" && mode !== "agenda" && (
+            <p className="mt-2 text-[10px] text-muted">
+              Select any day to open its schedule, or use{" "}
+              <span className="font-medium text-ink">Add mock</span> for the
+              selected date.
+            </p>
+          )}
         </div>
-      )}
+        {asideAgenda && (
+          <aside className="min-w-0 xl:sticky xl:top-[72px] xl:self-start">
+            <SelectedDayAgenda
+              day={selectedDay}
+              today={today}
+              compact
+              attempts={dayAttempts}
+              onAddMock={onAddMock}
+              onOpenAttempt={onOpenAttempt}
+              onOpenTask={(task, day) => setEvent({ task, day })}
+            />
+          </aside>
+        )}
+      </div>
 
       <EventDialog
         task={event?.task ?? null}
@@ -396,17 +457,26 @@ function SelectedDayAgenda({
   day,
   today,
   compact,
+  attempts,
   onOpenTask,
+  onAddMock,
+  onOpenAttempt,
 }: {
   day: PlanDayView | undefined;
   today: string;
   compact: boolean;
+  attempts: Attempt[];
   onOpenTask: (task: PlanTaskView, day: PlanDayView) => void;
+  onAddMock: (date: string, task?: PlanTaskView) => void;
+  onOpenAttempt: (attempt: Attempt) => void;
 }) {
   if (!day)
     return (
-      <Panel title="No plan for this date" description="Pick a date inside 26 Oct – 14 Dec.">
-        <div className="p-6 pt-2 text-sm muted">
+      <Panel
+        title="No plan for this date"
+        description="Pick a date inside 26 Oct – 14 Dec."
+      >
+        <div className="px-4 pb-4 text-xs text-muted">
           The 50-day plan does not schedule anything here.
         </div>
       </Panel>
@@ -414,44 +484,87 @@ function SelectedDayAgenda({
   const stats = dayAssignmentStats(day);
   return (
     <Panel
+      dense
       title={`Day ${day.day} · ${shortDate(day.date)}`}
       description={`${day.weekday} · ${day.dayType}`}
       action={
-        <span className="text-xs muted tabular whitespace-nowrap">
+        <span className="text-[10px] text-muted tabular whitespace-nowrap">
           {stats.completed}/{stats.total} done
         </span>
       }
     >
       <ul className="divide-y divide-rule-soft">
-        {day.tasks.map((task) => (
-          <TaskRow
-            key={task.key}
-            task={task}
-            compact={compact}
-            onOpen={() => onOpenTask(task, day)}
-          />
-        ))}
+        {day.tasks.length ? (
+          day.tasks.map((task) => (
+            <TaskRow
+              key={task.key}
+              task={task}
+              compact={compact}
+              onOpen={() => onOpenTask(task, day)}
+              onLogResult={
+                isMockType(task.type)
+                  ? () => onAddMock(day.date, task)
+                  : undefined
+              }
+            />
+          ))
+        ) : (
+          <li className="px-4 py-3 text-xs text-muted">
+            No assignments scheduled.
+          </li>
+        )}
       </ul>
+
+      <div className="border-t border-rule-soft px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+            Logged attempts
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onAddMock(day.date)}
+          >
+            <PlainIcon name="plus" size={12} /> Add mock record
+          </Button>
+        </div>
+        {attempts.length ? (
+          <ul className="mt-2 flex flex-col gap-2">
+            {attempts.map((attempt) => (
+              <li key={attempt.id}>
+                <AttemptRecordCard attempt={attempt} onOpen={onOpenAttempt} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-[10px] leading-relaxed text-muted">
+            No tracker attempt on this date yet. Scheduled plan tests stay in
+            the plan until you record their result.
+          </p>
+        )}
+      </div>
+
       {day.revisionTasks.length > 0 && (
-        <div className="border-t border-rule-soft px-6 py-4">
+        <div className="border-t border-rule-soft px-4 py-3">
           <p className="section-label mb-2">Revision</p>
-          <ul className="space-y-1 text-xs muted">
+          <ul className="flex flex-col gap-1 text-[11px] text-muted">
             {day.revisionTasks.map((rt, i) => (
               <li key={i}>{rt}</li>
             ))}
           </ul>
         </div>
       )}
-      {day.date === today && (
-        <div className="border-t border-rule-soft px-6 py-3 text-xs">
-          <Link
-            href={`/plan/${day.date}`}
-            className="text-accent font-medium hover:text-accent-hover transition-colors"
-          >
-            Open the full daily workspace →
-          </Link>
-        </div>
-      )}
+      <div className="border-t border-rule-soft px-4 py-2.5 text-xs">
+        <Link
+          href={`/plan/${day.date}`}
+          className="font-medium text-accent transition-colors hover:text-accent-hover"
+        >
+          Open the full daily workspace →
+        </Link>
+        {day.date === today && (
+          <span className="ml-2 text-[10px] text-muted">Today</span>
+        )}
+      </div>
     </Panel>
   );
 }
@@ -461,14 +574,16 @@ export function TaskRow({
   compact,
   onOpen,
   onToggle,
+  onLogResult,
 }: {
   task: PlanTaskView;
   compact?: boolean;
   onOpen: () => void;
   onToggle?: (task: PlanTaskView) => void;
+  onLogResult?: (task: PlanTaskView) => void;
 }) {
   return (
-    <li className="flex items-start gap-3 px-4 sm:px-6 py-3">
+    <li className="flex items-start gap-2.5 px-4 py-2.5">
       <CompleteToggle
         completed={task.completed}
         label={`Mark ${task.name} ${task.completed ? "incomplete" : "complete"}`}
@@ -480,7 +595,7 @@ export function TaskRow({
         >
           {task.name}
         </span>
-        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] muted">
+        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] muted">
           <CategoryChip type={task.type} />
           <span className="tabular">
             {task.questions} Q · {task.marks} marks
@@ -488,15 +603,24 @@ export function TaskRow({
           {!compact && <ResultLine task={task} />}
         </span>
       </button>
+      {onLogResult && !task.completed && (
+        <button
+          type="button"
+          onClick={() => onLogResult(task)}
+          className="mt-0.5 whitespace-nowrap text-[10px] font-medium text-accent hover:text-accent-hover"
+        >
+          Log result
+        </button>
+      )}
       <a
         href={task.url}
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`Open ${task.name} on RBE`}
-        className="muted hover:text-accent transition-colors mt-1"
+        className="muted hover:text-accent transition-colors mt-0.5"
         onClick={(e) => e.stopPropagation()}
       >
-        <PlainIcon name="arrowUpRight" size={15} />
+        <PlainIcon name="arrowUpRight" size={14} />
       </a>
     </li>
   );
@@ -507,33 +631,72 @@ function AgendaList({
   plan,
   today,
   onOpenTask,
+  onLogResult,
+  attempts,
+  onOpenAttempt,
 }: {
   plan: NonNullable<ReturnType<typeof usePlanData>["plan"]>;
   today: string;
   onOpenTask: (task: PlanTaskView, day: PlanDayView) => void;
+  onLogResult: (task: PlanTaskView) => void;
+  attempts: Attempt[];
+  onOpenAttempt: (attempt: Attempt) => void;
 }) {
   const upcoming = plan.days.filter((day) => day.date >= today);
   const past = plan.days.filter((day) => day.date < today).reverse();
   return (
     <div className="space-y-4">
-      {upcoming.map((day) => (
-        <Panel
-          key={day.day}
-          title={`Day ${day.day} · ${shortDate(day.date)}`}
-          description={`${day.weekday} · ${day.dayType}`}
-          action={
-            <span className="text-xs muted tabular">
-              {dayAssignmentStats(day).completed}/{day.tasks.length}
-            </span>
-          }
-        >
-          <ul className="divide-y divide-rule-soft">
-            {day.tasks.map((task) => (
-              <TaskRow key={task.key} task={task} compact onOpen={() => onOpenTask(task, day)} />
-            ))}
-          </ul>
-        </Panel>
-      ))}
+      {upcoming.map((day) => {
+        const dayAttempts = attempts.filter(
+          (attempt) => istDateKey(attempt.completedAt) === day.date,
+        );
+        return (
+          <Panel
+            key={day.day}
+            dense
+            title={`Day ${day.day} · ${shortDate(day.date)}`}
+            description={`${day.weekday} · ${day.dayType}`}
+            action={
+              <span className="text-[10px] text-muted tabular">
+                {dayAssignmentStats(day).completed}/{day.tasks.length}
+              </span>
+            }
+          >
+            <ul className="divide-y divide-rule-soft">
+              {day.tasks.map((task) => (
+                <TaskRow
+                  key={task.key}
+                  task={task}
+                  compact
+                  onOpen={() => onOpenTask(task, day)}
+                  onLogResult={
+                    isMockType(task.type) && !task.completed
+                      ? () => onLogResult(task)
+                      : undefined
+                  }
+                />
+              ))}
+            </ul>
+            {dayAttempts.length > 0 && (
+              <div className="border-t border-rule-soft px-4 py-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                  Logged attempts
+                </p>
+                <ul className="flex flex-col gap-2">
+                  {dayAttempts.map((attempt) => (
+                    <li key={attempt.id}>
+                      <AttemptRecordCard
+                        attempt={attempt}
+                        onOpen={onOpenAttempt}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Panel>
+        );
+      })}
       {past.length > 0 && (
         <details className="panel">
           <summary className="cursor-pointer px-6 py-4 text-sm font-medium">

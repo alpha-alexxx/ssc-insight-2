@@ -164,11 +164,11 @@ Supporting text is generally 10–13px; section labels use 10px uppercase letter
 
 ## Layout
 
-At 1024px and above, a fixed paper sidebar occupies 224px and the main workspace offsets accordingly. Below that width, labeled horizontal navigation follows the 72px header and can scroll. Selected destinations retain both charcoal fill and `aria-current="page"`.
+The workspace uses the official shadcn sidebar composition. At `md` and above it is a 15rem paper sidebar that collapses to a 3rem icon rail through shadcn's own state, with tooltips for icon-only items. Below `md`, the same navigation is a left Sheet opened from the header trigger; links close the Sheet and retain charcoal fill plus `aria-current="page"`. A 56px sticky header carries the trigger, current view, AI trigger, theme control, settings, and account action.
 
-Main content is centered within a 1600px maximum width. Horizontal padding is 20px, increasing to 36px at 768px; vertical padding increases from 28px to 36px. Paired charts stack until 1280px and use 24px gaps.
+Main content is centered within a 1560px maximum width with 12–20px horizontal padding at small widths and 20px at desktop. The dashboard is composed as a compact overview strip followed by a primary/secondary two-column workspace at `xl`; both columns stack below that breakpoint. The planner uses calendar-plus-selected-day at `xl` and a single-column date/schedule flow on mobile.
 
-The summary is one divided stat strip, not individual floating cards. It has ink rules above and below and soft vertical dividers. Four columns become two below 768px; the second row gains a horizontal divider. Desktop cells use 23px by 24px padding, mobile cells 20px by 14px.
+The summary is one divided metric strip, not individual floating cards: soft rules, four columns on desktop, two below 768px, 13–15px cell padding, 23–28px serif values. The performance section keeps a quiet metadata row and charts below the operational overview rather than repeating the headline metrics.
 
 **The Readable Table Rule.** Keep wide tables inside their horizontal scroll container. Preserve comparable columns and nowrap values instead of squeezing them into unreadable cells.
 
@@ -188,9 +188,11 @@ Primary buttons use terracotta with paper text and a darker hover. Outline butto
 
 Fields use paper fill, rule borders, square corners, and 10px by 12px padding. Labels sit 7px above controls. Read-only fields use the soft fill. Checkboxes use ink. Selected mock filters and Manual/Paste toggles expose `aria-pressed`.
 
-Panel headers use 24px horizontal padding, 20px top padding, and 12px bottom padding. Tables use 11px muted headings on cream, a stronger header rule, and soft row rules. Cells have 15px by 18px padding, reducing to 13px by 12px below 768px. Row hover uses the soft fill. Accuracy badges use positive ink on the pale positive surface with square corners.
+Panel headers use 24px horizontal padding, 20px top padding, and 12px bottom padding; compact dashboard panels use 16px by 14px. Tables use 11px muted headings on cream, a stronger header rule, and soft row rules. Cells have 15px by 18px padding, reducing to 13px by 12px below 768px. Row hover uses the soft fill. Accuracy badges use positive ink on the pale positive surface with square corners.
 
-Tooltips are square paper boxes with rule borders and 12px text. Empty charts reserve at least 220px with centered explanatory text. Chart animations are disabled. MotionConfig respects the user's reduced-motion preference, and global CSS minimizes animation and transition durations for that preference. Notifications use only a small vertical entrance.
+The AI panel is a right-side shadcn Sheet: roughly 460px on desktop, full width on mobile, a subtle ink overlay that leaves the workspace visible, a fixed header/context chip, an independently scrolling message log, and a composer in normal flex flow (no fixed height) so the mobile keyboard cannot cover it. The Sheet uses the project's data-state CSS animations rather than adding an animation dependency.
+
+Tooltips are square paper boxes with rule borders and 12px text. Empty charts reserve at least 220px with centered explanatory text; single-point trends use a compact explicit summary instead of an empty plot. Chart animations are disabled. MotionConfig respects the user's reduced-motion preference, and global CSS minimizes animation and transition durations for that preference. Notifications use only a small vertical entrance.
 
 ## Do's and Don'ts
 
@@ -205,4 +207,6 @@ Tooltips are square paper boxes with rule borders and 12px text. Empty charts re
 
 Make every attempt count follows the supplied `docs/images/card.png` reference: softly rounded paper cards, prominent serif subject headings, a subject icon, and an olive/terracotta/beige answer-distribution ring with score percentage at its center. A ruled answer ledger shows counts, shares, and proportion bars. A pale marks/score strip and a three-column accuracy, reported-percentile availability, and score-definition footer complete each card. The ring represents question shares; its center represents marks divided by maximum, not accuracy or percentile. These reference-specific rounded corners and icon treatments are scoped to the outcome cards; the surrounding dashboard keeps its existing geometry.
 
-Outcome cards use semantic articles and definition lists with visible values, so color is supplementary. The grid uses three cards per row at desktop widths (1280px and above), two on tablets (768–1279px), and one on mobile. Card internals use container queries so type, answer labels, and footers adapt to each card’s width rather than just the viewport. Compact layouts preserve the ring and answer ledger; very narrow widths stack them. Missing accuracy uses a dash and missing percentile is explicit; inherited full-mock percentiles never describe a derived subject or section.
+Outcome cards use semantic articles and definition lists with visible values, so color is supplementary. The grid uses three cards per row at desktop widths (1280px and above), two on tablets (768–1279px), and one on mobile. Card internals use container queries so type, answer labels, and footers adapt to each card’s width rather than just the viewport. Desktop cards are compact horizontal compositions: a small header, 84px ring, three-row answer ledger, and one metadata row; very narrow widths stack them. Missing accuracy uses a dash and missing percentile is explicit; inherited full-mock percentiles never describe a derived subject or section.
+
+Dated saved attempts use the companion `AttemptRecordCard` in the same module. It is a compact horizontal row with a 62px score ring, a visible “Attempted” state, the actual attempt date, title, platform/type, score/max, accuracy, and a result action. Aggregate answer-stack cards never invent a single attempt date.

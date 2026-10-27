@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseWorkspaceState, serializeWorkspaceState } from "../src/lib/filters-url";
+import {
+  mirrorsWorkspaceState,
+  parseWorkspaceState,
+  safeWorkspaceReturnTo,
+  serializeWorkspaceState,
+} from "../src/lib/filters-url";
 import { filtersSchema } from "../src/lib/domain";
 
 test("workspace url state round-trips through serialize and parse", () => {
@@ -45,6 +50,26 @@ test("over-long platform and search values are dropped, not errors", () => {
 test("parse tolerates empty and absent query strings", () => {
   assert.deepEqual(parseWorkspaceState(""), { filters: {}, scope: "full" });
   assert.deepEqual(parseWorkspaceState("?scope=all"), { filters: {}, scope: "all" });
+});
+
+test("planner/Add Mock routes are excluded from the filter URL mirror", () => {
+  assert.equal(mirrorsWorkspaceState("/dashboard"), true);
+  assert.equal(mirrorsWorkspaceState("/history"), true);
+  assert.equal(mirrorsWorkspaceState("/compare"), true);
+  assert.equal(mirrorsWorkspaceState("/add"), false);
+  assert.equal(mirrorsWorkspaceState("/calendar"), false);
+  assert.equal(mirrorsWorkspaceState("/plan/2026-10-27"), false);
+  assert.equal(mirrorsWorkspaceState("/my-tasks"), false);
+  assert.equal(mirrorsWorkspaceState("/settings"), false);
+});
+
+test("Add Mock return targets are same-app planner/result routes only", () => {
+  assert.equal(safeWorkspaceReturnTo("/plan/2026-10-27"), "/plan/2026-10-27");
+  assert.equal(safeWorkspaceReturnTo("/calendar"), "/calendar");
+  assert.equal(safeWorkspaceReturnTo("https://evil.example/plan/2026-10-27"), null);
+  assert.equal(safeWorkspaceReturnTo("//evil.example/calendar"), null);
+  assert.equal(safeWorkspaceReturnTo("/settings"), null);
+  assert.equal(safeWorkspaceReturnTo("/add"), null);
 });
 
 test("shared strict schema (analytics API contract) rejects bad params, allows empty dates", () => {

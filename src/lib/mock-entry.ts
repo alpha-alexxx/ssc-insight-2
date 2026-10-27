@@ -1,4 +1,5 @@
 import type { AttemptInput } from "./domain";
+import { istDateKey } from "./format";
 
 export const MOCK_PLATFORMS = [
   "Testbook",
@@ -18,12 +19,7 @@ export function platformSelection(platform: string) {
 }
 
 export function completionDate(completedAt: string) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(completedAt));
+  return istDateKey(completedAt);
 }
 
 export function completionTimestamp(date: string) {

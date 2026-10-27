@@ -1,5 +1,12 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AnimatePresence,
@@ -9,9 +16,7 @@ import {
 } from "motion/react";
 import { PlainIcon } from "./icon";
 import {
-  AppHeader,
-  AppSidebar,
-  MobileNav,
+  AppFrame,
   VIEW_HREF,
   VIEW_META,
   type AppView,
@@ -20,10 +25,11 @@ import { CompareView } from "./compare-view";
 import { DateRangeFilter } from "./date-range-filter";
 import { HistoryPanel } from "./history-panel";
 import { MockDetailDialog } from "./mock-detail-dialog";
-import { MockForm } from "./mock-form";
-import { PerformanceOverview } from "./performance-overview";
+import { AddMockView } from "./add-mock-view";
+import { DashboardView } from "./dashboard-view";
 import { AiCoachCard } from "./ai-coach-card";
-import { AiChatDrawer } from "./ai-chat-drawer";
+import { AiChatSheet } from "./ai-chat-sheet";
+import { PageHeader } from "./page-header";
 import { useAiWorkspace } from "./use-ai-workspace";
 import { useBackupImport } from "./use-backup-import";
 import { useWorkspaceData } from "./use-workspace-data";
@@ -31,12 +37,12 @@ import { usePlanData } from "./use-plan-data";
 import { CalendarView } from "./plan/calendar-view";
 import { TasksView } from "./plan/tasks-view";
 import { PlanDayView } from "./plan/plan-day-view";
-import { DashboardPlanSections } from "./plan/dashboard-plan-sections";
 import { SettingsPanels } from "./settings-panels";
 import { ToastProvider, useToast } from "./toast";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import { useThemePrefs, viewTransition } from "./theme-style-provider";
 import { Button } from "./ui/button";
+import { Skeleton } from "./ui/skeleton";
 import { api } from "@/lib/api-client";
 import { BACKUP_MAX_BYTES } from "@/lib/backup";
 import {
@@ -47,6 +53,10 @@ import {
   type Filters,
 } from "@/lib/domain";
 import { formatNumber as n } from "@/lib/domain";
+import { longDate, shortDate, isIsoDate } from "@/lib/format";
+import { istTodayIso } from "@/lib/plan/view-model";
+import type { AiScreenContext, AiView } from "@/lib/ai/client-types";
+import type { PlanTaskView } from "@/lib/plan/view-model";
 import { Dialog } from "radix-ui";
 
 /**
@@ -159,9 +169,23 @@ function WorkspaceShellInner({
   const [detail, setDetail] = useState<Attempt | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [plannerDate, setPlannerDate] = useState(istTodayIso());
   // The hidden file input lives in this component's JSX; the import hook
   // only touches it inside callbacks.
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // A deep-linked /plan/<date> is authoritative for that view without a
+  // state-syncing effect. Calendar selection supplies the fallback date.
+  const pathPlanDate = useMemo(() => {
+    if (!pathname.startsWith("/plan/")) return null;
+    try {
+      const value = decodeURIComponent(pathname.slice("/plan/".length));
+      return isIsoDate(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }, [pathname]);
+  const effectivePlannerDate = pathPlanDate ?? plannerDate;
 
   /** Plain route change — keeps in-progress state (editing, selection). */
   const go = useCallback(
@@ -179,7 +203,32 @@ function WorkspaceShellInner({
     },
     [go, setFilters],
   );
+  /** Sidebar/header link intent: reset stale edit state without navigating. */
+  const routeIntent = useCallback(
+    (next: AppView) => {
+      setEditing(undefined);
+      if (next === "history") setFilters((f) => ({ ...f, type: "all" }));
+    },
+    [setFilters],
+  );
   const add = useCallback(() => navigate("add"), [navigate]);
+  /**
+   * Planner → Add Mock. The actual attempt date is prefilled, but remains
+   * editable in the form. The return target is a real plan-day route.
+   */
+  const addMockForDate = useCallback(
+    (date: string, task?: PlanTaskView) => {
+      setEditing(undefined);
+      setPlannerDate(date);
+      const params = new URLSearchParams({
+        date,
+        returnTo: `/plan/${date}`,
+      });
+      if (task) params.set("name", task.name);
+      router.push(`/add?${params.toString()}`);
+    },
+    [router],
+  );
   const changeFilter = useCallback(
     (key: keyof Filters, value: string) => {
       setFilters((f) => ({ ...f, [key]: value }));
@@ -272,22 +321,23 @@ function WorkspaceShellInner({
     [toast],
   );
 
-  const saveTarget = useCallback(async () => {
+  const saveTarget = useCallback(async (): Promise<boolean> => {
     setBusy(true);
     try {
+      const value = targetInput.trim() ? Number(targetInput) : null;
       await api("/api/settings", {
         method: "PUT",
-        body: JSON.stringify({
-          targetScore: targetInput ? Number(targetInput) : null,
-        }),
+        body: JSON.stringify({ targetScore: value }),
       });
-      setTarget(targetInput ? Number(targetInput) : null);
+      setTarget(value);
       toast.success("Target updated");
+      return true;
     } catch (e) {
       toast.error(
         "Couldn’t save target",
         e instanceof Error ? e.message : "Could not save",
       );
+      return false;
     } finally {
       setBusy(false);
     }
@@ -345,6 +395,24 @@ function WorkspaceShellInner({
   const visibleAttempts =
     view === "dashboard" ? dashboardAttempts : attempts;
 
+  // Screen orientation for the AI panel. This object contains only the view
+  // name and (when relevant) an ISO date — never titles, notes, or IDs.
+  const aiScreenContext = useMemo<AiScreenContext | null>(() => {
+    if (view === "add") return null;
+    const aiView: AiView = view;
+    const date =
+      view === "dashboard"
+        ? istTodayIso()
+        : view === "calendar" || view === "plan"
+          ? effectivePlannerDate
+          : undefined;
+    return date ? { view: aiView, date } : { view: aiView };
+  }, [view, effectivePlannerDate]);
+  const aiContextLabel =
+    aiScreenContext?.date != null
+      ? `${VIEW_META[view].label} · ${shortDate(`${aiScreenContext.date}T12:00:00+05:30`)}`
+      : undefined;
+
   const openDetail = useCallback((a: Attempt) => setDetail(a), []);
   const closeDetail = useCallback(() => setDetail(null), []);
   const editFromDetail = useCallback(
@@ -377,14 +445,24 @@ function WorkspaceShellInner({
       ),
     [],
   );
-  const savedMock = useCallback(() => {
-    navigate("dashboard");
-    toast.success("Mock saved", "Your progress is up to date.");
-    void refresh();
-  }, [navigate, refresh, toast]);
+  const savedMock = useCallback(
+    async (returnTo?: string | null) => {
+      await refresh();
+      setEditing(undefined);
+      if (returnTo) {
+        const date = returnTo.match(/^\/plan\/(\d{4}-\d{2}-\d{2})/)?.[1];
+        if (date) setPlannerDate(date);
+        router.push(returnTo);
+      } else {
+        navigate("dashboard");
+      }
+      toast.success("Mock saved", "Your progress is up to date.");
+    },
+    [navigate, refresh, router, toast],
+  );
   const closeForm = useCallback(() => navigate("dashboard"), [navigate]);
 
-  // Stable coach card node: lets the memoized PerformanceOverview skip
+  // Stable coach card node: lets the memoized dashboard panels skip
   // re-renders while chat tokens stream or filters change underneath it.
   const coachNode = useMemo(
     () =>
@@ -413,22 +491,20 @@ function WorkspaceShellInner({
   return (
     <MotionConfig reducedMotion="user">
       <div className="min-h-screen">
-        <a
-          href="#main-content"
-          className="skip-link"
-        >
+        <a href="#main-content" className="skip-link">
           Skip to content
         </a>
-        <AppSidebar view={view} userName={userName} userEmail={userEmail} />
-        <div className="lg:ml-[224px]">
-          <AppHeader view={view} authEnabled={authEnabled} />
-          <MobileNav view={view} />
-          <main
-            id="main-content"
-            /* -1 lets the skip link move real focus here (Phase 12). */
-            tabIndex={-1}
-            className="px-5 md:px-9 py-7 md:py-9 max-w-[1600px] mx-auto focus:outline-none"
-          >
+        <AppFrame
+          view={view}
+          userName={userName}
+          userEmail={userEmail}
+          authEnabled={authEnabled}
+          aiEnabled={!!ai.aiStatus?.enabled}
+          onRouteIntent={routeIntent}
+          onAddMock={add}
+          onOpenAi={() => ai.chat.setOpen(true)}
+        >
+          <div className="mx-auto w-full max-w-[1560px] px-3 py-4 md:px-5 md:py-5">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={view === "add" ? "add" : view}
@@ -438,67 +514,98 @@ function WorkspaceShellInner({
                 transition={viewMotion}
               >
             {view === "add" ? (
-              <MockForm
-                key={editing?.id ?? "new"}
-                attempt={editing}
-                knownAttempts={allAttempts}
-                onClose={closeForm}
-                onSaved={savedMock}
-              />
+              <Suspense
+                fallback={
+                  <div className="mx-auto max-w-6xl">
+                    <Skeleton className="h-8 w-48" />
+                    <Skeleton className="mt-4 h-64 w-full" />
+                  </div>
+                }
+              >
+                <AddMockView
+                  key={editing?.id ?? "new"}
+                  attempt={editing}
+                  knownAttempts={allAttempts}
+                  onClose={closeForm}
+                  onSaved={savedMock}
+                />
+              </Suspense>
             ) : (
               <>
-                <div className="flex flex-wrap justify-between items-center gap-4 mb-7">
-                  <div>
-                    <h1 className="page-title">
-                      {view === "dashboard"
-                        ? "Your preparation, in perspective."
-                        : view === "calendar"
-                          ? "The plan, on a calendar."
-                          : view === "tasks"
-                            ? "What’s left to do."
-                            : view === "plan"
-                              ? "One day at a time."
-                              : view === "history"
-                                ? "Every mock. Every step forward."
-                                : view === "compare"
-                                  ? "See what’s changing."
-                                  : "Make this workspace yours."}
-                    </h1>
-                    <p className="muted mt-1.5 text-[13px]">
-                      {view === "dashboard"
-                        ? "Today's plan, your progress, and what to do next."
-                        : view === "calendar"
-                          ? "All 50 days of mocks, sectionals and revision — tap a day to work it."
-                          : view === "tasks"
-                            ? "Plan assignments and your own tasks, in one list."
-                            : view === "plan"
-                              ? "Attempt, record, and revise — the plan's work for this date."
-                              : view === "history"
-                                ? "All your results, with the details that matter."
-                                : view === "compare"
-                                  ? "Compare up to four mocks and find the difference behind the scores."
-                                  : "Set a target, keep a backup, and stay in control of your data."}
-                    </p>
-                  </div>
-                  {(view === "dashboard" ||
-                    view === "history" ||
-                    view === "compare" ||
-                    view === "settings") && (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        aria-label="Download backup"
-                        onClick={() => void download("json")}
-                      >
-                        <PlainIcon name="download" size={15} />
-                        <span className="hidden sm:inline">Backup</span>
+                {view === "dashboard" && (
+                  <PageHeader
+                    title="Dashboard"
+                    description="Today's work, plan progress, and the performance that matters."
+                    meta={
+                      <>
+                        <span>{longDate(istTodayIso())}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>SSC CGL Tier 2</span>
+                        {planApi.plan ? (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>
+                              {planApi.plan.days.find(
+                                (day) => day.date === istTodayIso(),
+                              )?.day
+                                ? `Plan day ${
+                                    planApi.plan.days.find(
+                                      (day) => day.date === istTodayIso(),
+                                    )?.day
+                                  } of 50`
+                                : "Outside the plan window"}
+                            </span>
+                          </>
+                        ) : null}
+                      </>
+                    }
+                    actions={
+                      <Button size="sm" onClick={add}>
+                        <PlainIcon name="plus" size={14} /> Add mock
                       </Button>
-                      <Button onClick={add}>
-                        <PlainIcon name="plus" size={17} /> Add mock
+                    }
+                  />
+                )}
+                {view === "calendar" && (
+                  <PageHeader
+                    title="Study planner"
+                    description="The full 50-day plan with scheduled tests, revision, and your saved attempts."
+                  />
+                )}
+                {view === "tasks" && (
+                  <PageHeader
+                    title="My tasks"
+                    description="Plan assignments and your own tasks, in one list."
+                  />
+                )}
+                {view === "history" && (
+                  <PageHeader
+                    title="Mock history"
+                    description="Every saved result with its actual attempt date, score, and details."
+                    actions={
+                      <Button size="sm" onClick={add}>
+                        <PlainIcon name="plus" size={14} /> Add mock
                       </Button>
-                    </div>
-                  )}
-                </div>
+                    }
+                  />
+                )}
+                {view === "compare" && (
+                  <PageHeader
+                    title="Compare mocks"
+                    description="Put up to four results side by side and find the difference behind the scores."
+                    actions={
+                      <Button size="sm" onClick={add}>
+                        <PlainIcon name="plus" size={14} /> Add mock
+                      </Button>
+                    }
+                  />
+                )}
+                {view === "settings" && (
+                  <PageHeader
+                    title="Settings"
+                    description="Target, appearance, account data, and the private workspace."
+                  />
+                )}
                 {error && (
                   <div
                     role="alert"
@@ -526,21 +633,32 @@ function WorkspaceShellInner({
                   </div>
                 )}
                 {view === "calendar" ? (
-                  <CalendarView planApi={planApi} />
+                  <CalendarView
+                    planApi={planApi}
+                    attempts={allAttempts}
+                    onAddMock={addMockForDate}
+                    onOpenAttempt={openDetail}
+                    onSelectedDateChange={setPlannerDate}
+                  />
                 ) : view === "tasks" ? (
                   <TasksView planApi={planApi} />
                 ) : view === "plan" ? (
                   <PlanDayView
                     date={decodeURIComponent(pathname.slice("/plan/".length))}
                     planApi={planApi}
+                    attempts={allAttempts}
+                    onAddMock={addMockForDate}
+                    onOpenAttempt={openDetail}
                   />
                 ) : view === "settings" ? (
                   <SettingsPanels
                     target={target}
                     targetInput={targetInput}
                     setTargetInput={setTargetInput}
-                    saveTarget={() => void saveTarget()}
+                    saveTarget={saveTarget}
                     busy={busy}
+                    userName={userName}
+                    userEmail={userEmail}
                     onDownload={(format) => void download(format)}
                     onChooseFile={() => fileRef.current?.click()}
                     fileInput={
@@ -574,22 +692,50 @@ function WorkspaceShellInner({
                     }
                     onOpenReplace={() => backup.setReplaceOpen(true)}
                   />
+                ) : view === "dashboard" ? (
+                  <DashboardView
+                    planApi={planApi}
+                    analytics={analytics}
+                    attempts={dashboardAttempts}
+                    target={target}
+                    loading={loading}
+                    coach={coachNode}
+                    scopeControls={
+                      <ScopeFilters
+                        view={view}
+                        scope={scope}
+                        setScope={setScope}
+                        filters={filters}
+                        setFilters={setFilters}
+                        changeFilter={changeFilter}
+                        platforms={platforms}
+                      />
+                    }
+                    onOpenAttempt={openDetail}
+                    onAdd={add}
+                    onViewAll={viewAllHistory}
+                    onOpenDay={(date) => {
+                      setPlannerDate(date);
+                      router.push(`/plan/${date}`);
+                    }}
+                  />
                 ) : (
                   <>
-                    {view === "dashboard" && <DashboardPlanSections planApi={planApi} />}
-                    <ScopeFilters
-                      view={view}
-                      scope={scope}
-                      setScope={setScope}
-                      filters={filters}
-                      setFilters={setFilters}
-                      changeFilter={changeFilter}
-                      platforms={platforms}
-                    />
+                    <div className="mb-4">
+                      <ScopeFilters
+                        view={view}
+                        scope={scope}
+                        setScope={setScope}
+                        filters={filters}
+                        setFilters={setFilters}
+                        changeFilter={changeFilter}
+                        platforms={platforms}
+                      />
+                    </div>
                     {loading && (
                       <p
                         role="status"
-                        className="text-xs muted mb-4 flex items-center gap-2"
+                        className="mb-3 flex items-center gap-2 text-xs text-muted"
                       >
                         <PlainIcon
                           name="refresh"
@@ -599,28 +745,17 @@ function WorkspaceShellInner({
                         Updating your results…
                       </p>
                     )}
-                    {view === "dashboard" && (
-                      <div aria-busy={loading}>
-                        <PerformanceOverview
-                          analytics={analytics}
-                          target={target}
-                          coach={coachNode}
-                        />
-                      </div>
-                    )}
                     {view === "compare" ? (
-                      <div className="mt-6">
-                        <CompareView
-                          attempts={attempts}
-                          compared={compared}
-                          selected={selected}
-                          onToggle={toggleCompare}
-                          onClear={clearCompare}
-                        />
-                      </div>
+                      <CompareView
+                        attempts={attempts}
+                        compared={compared}
+                        selected={selected}
+                        onToggle={toggleCompare}
+                        onClear={clearCompare}
+                      />
                     ) : (
                       <HistoryPanel
-                        mode={view === "dashboard" ? "dashboard" : "history"}
+                        mode="history"
                         attempts={visibleAttempts}
                         totalCount={allAttempts.length}
                         sourceCount={analytics?.sourceAttemptCount ?? 0}
@@ -633,7 +768,7 @@ function WorkspaceShellInner({
                     )}
                   </>
                 )}
-                <footer className="flex flex-wrap justify-between gap-2 text-[10px] muted pt-7">
+                <footer className="flex flex-wrap justify-between gap-2 pt-6 text-[10px] text-muted">
                   <p>Built for progress, one mock at a time.</p>
                   <p>
                     SSC CGL Tier 2 <span className="mx-2">·</span> All dates in
@@ -644,8 +779,8 @@ function WorkspaceShellInner({
             )}
               </motion.div>
             </AnimatePresence>
-          </main>
-        </div>
+          </div>
+        </AppFrame>
         <MockDetailDialog
           attempt={detail}
           onClose={closeDetail}
@@ -720,13 +855,14 @@ function WorkspaceShellInner({
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
-        <AiChatDrawer
+        <AiChatSheet
           open={ai.chat.open}
           onOpenChange={ai.chat.setOpen}
           messages={ai.chat.messages}
           streaming={ai.chat.streaming}
           error={ai.chat.error}
-          onSend={(text) => void ai.chat.send(text)}
+          contextLabel={aiContextLabel}
+          onSend={(text) => void ai.chat.send(text, aiScreenContext)}
           onStop={ai.chat.stop}
           onClear={ai.chat.clear}
         />
@@ -754,7 +890,7 @@ function ScopeFilters({
   platforms: string[];
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-6">
+    <div className="flex flex-wrap items-center gap-2">
       <div
         role="group"
         aria-label="Analytical scope"

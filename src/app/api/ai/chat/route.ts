@@ -33,6 +33,20 @@ const bodySchema = z
       )
       .min(1)
       .max(8),
+    context: z
+      .object({
+        view: z.enum([
+          "dashboard",
+          "calendar",
+          "tasks",
+          "plan",
+          "history",
+          "compare",
+          "settings",
+        ]),
+        date: z.iso.date().optional(),
+      })
+      .optional(),
   })
   .refine((body) => body.messages.at(-1)?.role === "user", {
     message: "The last message must be from you.",
@@ -77,7 +91,7 @@ export async function POST(request: Request) {
     }
 
     const provider = createAiProvider(config);
-    const messages = chatMessages(context, body.messages);
+    const messages = chatMessages(context, body.messages, body.context);
     const abort = new AbortController();
     const signal = AbortSignal.any([request.signal, abort.signal]);
     let settled = false;

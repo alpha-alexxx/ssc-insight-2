@@ -444,6 +444,37 @@ test("target trend averages dated scope snapshots", () => {
   assert.equal(stats.summary.previousSnapshotPercentage, null);
 });
 
+test("trend ordering follows the attempt date, not the recorded timestamp", () => {
+  // created later, attempted earlier — bookkeeping order is deliberately the
+  // reverse of attempt-date order so a createdAt-based sort would fail here.
+  const attemptedEarlier = attempt(
+    "earlier",
+    "full",
+    [quant, reasoning, english, ga],
+    "2026-10-02T04:00:00.000Z",
+    { scoreOverride: 200, createdAt: "2026-10-20T04:00:00.000Z" },
+  );
+  const attemptedLater = attempt(
+    "later",
+    "full",
+    [quant, reasoning, english, ga],
+    "2026-10-09T04:00:00.000Z",
+    { scoreOverride: 300, createdAt: "2026-10-11T04:00:00.000Z" },
+  );
+  const stats = analyze([attemptedLater, attemptedEarlier], "full");
+  assert.deepEqual(
+    stats.trend.points.map((point) => point.date),
+    [
+      attemptedEarlier.completedAt,
+      attemptedLater.completedAt,
+    ],
+  );
+  assert.equal(
+    stats.target.snapshots.at(-1)?.percentage,
+    (300 / 390) * 100,
+  );
+});
+
 test("sectional groups contribute only to their own subjects; missing subjects never add zero points", () => {
   const stats = analyze(all, "subject");
   const counts = Object.fromEntries(

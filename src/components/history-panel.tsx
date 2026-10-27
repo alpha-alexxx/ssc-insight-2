@@ -1,10 +1,10 @@
 "use client";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { PlainIcon, DuotoneTile } from "./icon";
 import { Button } from "./ui/button";
 import { Panel } from "./dashboard-panels";
 import { totals, formatNumber as n, formatTime, type Attempt } from "@/lib/domain";
-import { mockTypeLabel, shortDate } from "@/lib/format";
+import { longDate, mockTypeLabel, shortDate } from "@/lib/format";
 
 /**
  * Mock history / recent mocks panel (Phase 6 + 11).
@@ -48,8 +48,12 @@ export const HistoryPanel = memo(function HistoryPanel({
   onOpen: (attempt: Attempt) => void;
   onAdd: () => void;
 }) {
-  const visible =
-    mode === "dashboard" ? attempts.slice(0, 5) : attempts;
+  const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const sorted = [...attempts].sort((a, b) => {
+    const result = a.completedAt.localeCompare(b.completedAt);
+    return sort === "newest" ? -result : result;
+  });
+  const visible = mode === "dashboard" ? sorted.slice(0, 5) : sorted;
   return (
     <Panel
       icon="history"
@@ -57,7 +61,7 @@ export const HistoryPanel = memo(function HistoryPanel({
       description={
         mode === "dashboard"
           ? `${sourceCount} saved attempt${sourceCount === 1 ? "" : "s"} contribute to this view.`
-          : `${totalCount} result${totalCount === 1 ? "" : "s"} in this view`
+          : `${totalCount} result${totalCount === 1 ? "" : "s"} · sorted by attempt date`
       }
       action={
         mode === "dashboard" ? (
@@ -68,35 +72,51 @@ export const HistoryPanel = memo(function HistoryPanel({
             View all <PlainIcon name="arrowRight" size={13} />
           </button>
         ) : (
-          <div className="relative">
-            <PlainIcon
-              name="search"
-              size={14}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 muted pointer-events-none"
-            />
-            <input
-              aria-label="Search mocks"
-              placeholder="Search mocks…  /"
-              className="pl-8 py-2 text-xs w-44 sm:w-56"
-              value={search}
-              onChange={(e) => onSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape" && search) {
-                  e.stopPropagation();
-                  onSearch("");
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="!flex flex-row items-center gap-1.5 text-[10px]">
+              <span className="whitespace-nowrap text-muted">Sort</span>
+              <select
+                aria-label="Sort by attempt date"
+                className="!w-auto py-1.5 text-xs"
+                value={sort}
+                onChange={(e) =>
+                  setSort(e.target.value === "oldest" ? "oldest" : "newest")
                 }
-              }}
-            />
-            {search && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => onSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 muted hover:text-ink"
               >
-                <PlainIcon name="close" size={13} />
-              </button>
-            )}
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+            </label>
+            <div className="relative">
+              <PlainIcon
+                name="search"
+                size={14}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 muted pointer-events-none"
+              />
+              <input
+                aria-label="Search mocks"
+                placeholder="Search mocks…  /"
+                className="pl-8 py-2 text-xs w-40 sm:w-56"
+                value={search}
+                onChange={(e) => onSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && search) {
+                    e.stopPropagation();
+                    onSearch("");
+                  }
+                }}
+              />
+              {search && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => onSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 muted hover:text-ink"
+                >
+                  <PlainIcon name="close" size={13} />
+                </button>
+              )}
+            </div>
           </div>
         )
       }
@@ -107,7 +127,7 @@ export const HistoryPanel = memo(function HistoryPanel({
             <thead>
               <tr>
                 <th className="sticky-col">Mock name</th>
-                <th>Date</th>
+                <th>Attempt date</th>
                 <th>Score</th>
                 <th>Accuracy</th>
                 <th>Percentile</th>
@@ -137,7 +157,14 @@ export const HistoryPanel = memo(function HistoryPanel({
                         </span>
                       </button>
                     </td>
-                    <td className="text-xs muted">{shortDate(a.completedAt)}</td>
+                    <td className="text-xs muted">
+                      <time
+                        dateTime={a.completedAt}
+                        title={longDate(a.completedAt)}
+                      >
+                        {shortDate(a.completedAt)}
+                      </time>
+                    </td>
                     <td className="font-medium text-[13px]">
                       {n(t.score)}
                       <span className="muted font-normal text-xs">

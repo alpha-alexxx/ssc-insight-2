@@ -20,3 +20,9 @@ src/generated/prisma/
 
 .vercel
 .env*
+
+# graphify: local toolchain and rebuild caches (graphify-out/ itself is committed)
+.graphify-venv/
+.uv-cache/
+graphify-out/cache/
+graphify-out/.graphify_*
