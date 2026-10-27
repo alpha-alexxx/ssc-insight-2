@@ -1,5 +1,47 @@
 import { z } from "zod";
 
+export const todoListOptions = z.object({
+  completion: z.enum(["all", "pending", "completed"]).default("all"),
+  priority: z.enum(["all", "high", "normal", "low"]).default("all"),
+  group: z.string().max(100).default("all"),
+  sort: z.enum(["priority", "date", "newest", "title"]).default("priority"),
+  excludeDate: z.iso.date().optional(),
+});
+
+export const todoCalendarRange = z
+  .object({
+    from: z.iso.date(),
+    to: z.iso.date(),
+  })
+  .refine(({ from, to }) => {
+    const days = (Date.parse(to) - Date.parse(from)) / 86400000;
+    return days >= 0 && days < 42;
+  }, "Choose an inclusive range of at most 42 days.");
+
+export function todoCalendarWhere(
+  userId: string,
+  range: z.infer<typeof todoCalendarRange>,
+) {
+  return {
+    userId,
+    deletedAt: null,
+    dueDate: { gte: range.from, lte: range.to },
+  };
+}
+
+export function calendarCounts(
+  rows: { dueDate: string | null; status: string; _count: { _all: number } }[],
+) {
+  const days: Record<string, { pending: number; completed: number }> = {};
+  for (const row of rows) {
+    if (!row.dueDate) continue;
+    const day = (days[row.dueDate] ??= { pending: 0, completed: 0 });
+    day[row.status === "completed" ? "completed" : "pending"] +=
+      row._count._all;
+  }
+  return days;
+}
+
 /**
  * Strict external-link policy for personal todos, shared by the API
  * validation and the AI proposal schemas: only http(s) URLs are stored, so a

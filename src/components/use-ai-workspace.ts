@@ -1,4 +1,5 @@
 "use client";
+import { chatBaseForSend } from "@/lib/ai/chat-history";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
 import { NdjsonDecoder, parseChatEvent } from "@/lib/ai/ndjson";
@@ -112,20 +113,18 @@ export function useAiWorkspace() {
   }, []);
 
   const sendChat = useCallback(
-    async (text: string, screen?: AiScreenContext | null) => {
+    async (text: string, screen?: AiScreenContext | null, retry = false) => {
       if (chatAbort.current) return; // a stream is already in flight
+      const base = chatBaseForSend(chatMessages, retry);
       const userMessage: ChatMessage = {
         id: newId(),
         role: "user",
         content: text,
       };
       const assistantId = newId();
-      const history = trimChatHistory(
-        [...chatMessages, userMessage],
-        8,
-      );
-      setChatMessages((current) => [
-        ...current,
+      const history = trimChatHistory([...base, userMessage], 8);
+      setChatMessages([
+        ...base,
         userMessage,
         { id: assistantId, role: "assistant", content: "" },
       ]);

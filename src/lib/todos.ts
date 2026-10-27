@@ -9,7 +9,12 @@ import {
   todoCreateSchema,
   todoPatchSchema,
   todoApplySchema,
+  todoListOptions,
+  todoCalendarRange,
+  todoCalendarWhere,
+  calendarCounts,
 } from "./todos-core";
+import { istTodayIso } from "./plan/view-model";
 type Tx = Prisma.TransactionClient;
 export const todoView = (r: Record<string, unknown>) => ({
   ...r,
@@ -78,12 +83,14 @@ export async function mutateTodo(
   return tx.personalTask.findUniqueOrThrow({ where: { id } });
 }
 export async function listTodos(userId: string, params: URLSearchParams) {
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  const today = istTodayIso();
+  const options = todoListOptions.parse(
+    Object.fromEntries(
+      ["completion", "priority", "group", "sort", "excludeDate"].flatMap(
+        (key) => (params.has(key) ? [[key, params.get(key)]] : []),
+      ),
+    ),
+  );
   const date = params.get("date") || today;
   if (!todoCreateSchema.shape.dueDate.safeParse(date).success)
     throw new RequestError("Choose a valid date.", 400);
@@ -98,22 +105,6 @@ export async function listTodos(userId: string, params: URLSearchParams) {
     Math.min(100, Math.floor(Number(params.get("limit"))) || 50),
   );
   const active: Prisma.PersonalTaskWhereInput = { userId, deletedAt: null };
-  const where: Prisma.PersonalTaskWhereInput = {
-    userId,
-    deletedAt: view === "trash" ? { not: null } : null,
-    ...(search ? { title: { contains: search, mode: "insensitive" } } : {}),
-  };
-  if (view === "day" || view === "today")
-    where.dueDate = view === "today" ? today : date;
-  if (view === "overdue") {
-    where.dueDate = { lt: today };
-    where.status = { not: "completed" };
-  }
-  if (view === "upcoming") {
-    where.dueDate = { gt: today };
-    where.status = { not: "completed" };
-  }
-  if (view === "needsdate") where.dueDate = null;
   if (
     ![
       "day",
@@ -123,6 +114,7 @@ export async function listTodos(userId: string, params: URLSearchParams) {
       "all",
       "trash",
       "needsdate",
+      "completed",
     ].includes(view)
   )
     throw new RequestError("Unknown todo view.", 400);
@@ -141,10 +133,30 @@ export async function listTodos(userId: string, params: URLSearchParams) {
   if (view === "upcoming")
     clauses.push(Prisma.sql`"dueDate" > ${today} AND "status" <> 'completed'`);
   if (view === "needsdate") clauses.push(Prisma.sql`"dueDate" IS NULL`);
+  if (view === "completed" || options.completion === "completed")
+    clauses.push(Prisma.sql`"status" = 'completed'`);
+  if (options.completion === "pending")
+    clauses.push(Prisma.sql`"status" <> 'completed'`);
+  if (options.priority !== "all")
+    clauses.push(Prisma.sql`"priority" = ${options.priority}`);
+  if (options.excludeDate)
+    clauses.push(
+      Prisma.sql`("dueDate" IS NULL OR "dueDate" <> ${options.excludeDate})`,
+    );
+  if (options.group === "ungrouped")
+    clauses.push(Prisma.sql`"groupId" IS NULL`);
+  else if (options.group !== "all")
+    clauses.push(Prisma.sql`"groupId" = ${options.group}`);
+  const sort = {
+    priority: Prisma.sql`CASE WHEN "status"='completed' THEN 1 ELSE 0 END, CASE "priority" WHEN 'high' THEN 0 WHEN 'low' THEN 2 ELSE 1 END,"createdAt","id"`,
+    date: Prisma.sql`"dueDate" ASC NULLS LAST, CASE WHEN "status"='completed' THEN 1 ELSE 0 END,"createdAt","id"`,
+    newest: Prisma.sql`"createdAt" DESC,"id"`,
+    title: Prisma.sql`lower("title"),"id"`,
+  }[options.sort];
   const db = database();
   const [ids, total, groups, counts] = await Promise.all([
     db.$queryRaw<{ id: string }[]>(
-      Prisma.sql`SELECT "id" FROM "ssc_insight"."PersonalTask" WHERE ${Prisma.join(clauses, " AND ")} ORDER BY CASE WHEN "status"='completed' THEN 1 ELSE 0 END, CASE "priority" WHEN 'high' THEN 0 WHEN 'low' THEN 2 ELSE 1 END,"createdAt","id" LIMIT ${limit} OFFSET ${(page - 1) * limit}`,
+      Prisma.sql`SELECT "id" FROM "ssc_insight"."PersonalTask" WHERE ${Prisma.join(clauses, " AND ")} ORDER BY ${sort} LIMIT ${limit} OFFSET ${(page - 1) * limit}`,
     ),
     db.$queryRaw<{ total: bigint }[]>(
       Prisma.sql`SELECT count(*) AS total FROM "ssc_insight"."PersonalTask" WHERE ${Prisma.join(clauses, " AND ")}`,
@@ -169,6 +181,10 @@ export async function listTodos(userId: string, params: URLSearchParams) {
       db.personalTask.count({ where: active }),
       db.personalTask.count({ where: { ...active, dueDate: null } }),
       db.personalTask.count({ where: { userId, deletedAt: { not: null } } }),
+      db.personalTask.count({ where: { ...active, status: "completed" } }),
+      db.personalTask.count({
+        where: { ...active, status: { not: "completed" } },
+      }),
     ]),
   ]);
   const records = await db.personalTask.findMany({
@@ -191,8 +207,25 @@ export async function listTodos(userId: string, params: URLSearchParams) {
       all: counts[3],
       needsdate: counts[4],
       trash: counts[5],
+      completed: counts[6],
+      pending: counts[7],
     },
   };
+}
+export async function personalCalendar(
+  userId: string,
+  params: URLSearchParams,
+) {
+  const range = todoCalendarRange.parse({
+    from: params.get("from"),
+    to: params.get("to"),
+  });
+  const rows = await database().personalTask.groupBy({
+    by: ["dueDate", "status"],
+    where: todoCalendarWhere(userId, range),
+    _count: { _all: true },
+  });
+  return { ...range, days: calendarCounts(rows) };
 }
 export async function applyTodos(userId: string, input: unknown) {
   const parsed = todoApplySchema.parse(input);

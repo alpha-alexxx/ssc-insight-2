@@ -54,7 +54,7 @@ export function TodayFocusPanel({
     <Panel
       dense
       icon="fire"
-      title="Today's focus"
+      title="Study Plan"
       description={
         todayPlan
           ? `Day ${todayPlan.day} of 50 · ${phase?.name ?? `Phase ${todayPlan.phase}`} · ${todayPlan.dayType}`

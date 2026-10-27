@@ -9,7 +9,6 @@ import { AttemptRecordCard } from "./attempt-outcome-card";
 import { PerformanceOverview } from "./performance-overview";
 import { PlanErrorCard } from "./plan/plan-shared";
 import {
-  PersonalTasksPanel,
   PlanProgressPanel,
   RevisionQueuePanel,
   TodayFocusPanel,
@@ -19,6 +18,8 @@ import {
 import type { usePlanData } from "./use-plan-data";
 import type { Analytics } from "@/lib/analytics";
 import type { Attempt } from "@/lib/domain";
+import { PersonalTodos } from "./plan/personal-todos";
+import { CalendarView } from "./plan/calendar-view";
 import { istTodayIso } from "@/lib/plan/view-model";
 
 /**
@@ -39,6 +40,8 @@ export function DashboardView({
   onAdd,
   onViewAll,
   onOpenDay,
+  onAddMock,
+  studyAttempts,
 }: {
   planApi: ReturnType<typeof usePlanData>;
   analytics: Analytics | null;
@@ -51,6 +54,8 @@ export function DashboardView({
   onAdd: () => void;
   onViewAll: () => void;
   onOpenDay: (date: string) => void;
+  onAddMock: (date: string) => void;
+  studyAttempts: Attempt[];
 }) {
   const plan = planApi.plan as PlanWithToday | null;
   const today = plan?.today ?? istTodayIso();
@@ -64,45 +69,71 @@ export function DashboardView({
         loading={loading}
       />
 
-      {planApi.error && !plan ? (
-        <div className="mt-4">
+      <section
+        className="mt-5 border-t border-rule pt-4"
+        aria-labelledby="today-plan-heading"
+      >
+        <h2 id="today-plan-heading" className="mb-4 font-serif text-2xl">
+          Today&apos;s Plan
+        </h2>
+        {planApi.error && !plan ? (
           <PlanErrorCard
             message={planApi.error}
             onRetry={() => void planApi.refresh()}
           />
+        ) : !plan ? (
+          <DashboardSkeleton />
+        ) : (
+          <TodayFocusPanel
+            plan={plan}
+            today={today}
+            planApi={planApi}
+            onOpenDay={onOpenDay}
+          />
+        )}
+        <div className="mt-4">
+          <PersonalTodos compact initialDate={today} />
         </div>
-      ) : !plan ? (
-        <DashboardSkeleton />
-      ) : (
-        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,1fr)]">
+      </section>
+      <section
+        className="mt-6 border-t border-rule pt-4"
+        aria-labelledby="study-calendar-heading"
+      >
+        <div className="mb-4">
+          <h2 id="study-calendar-heading" className="font-serif text-2xl">
+            Study Calendar
+          </h2>
+          <p className="mt-1 text-xs text-muted">
+            Your structured study schedule and mock tests.
+          </p>
+        </div>
+        <CalendarView
+          planApi={planApi}
+          attempts={studyAttempts}
+          onAddMock={onAddMock}
+          onOpenAttempt={onOpenAttempt}
+        />
+      </section>
+      {plan && (
+        <div className="mt-6 grid items-start gap-4 xl:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">
-            <TodayFocusPanel
-              plan={plan}
-              today={today}
-              planApi={planApi}
-              onOpenDay={onOpenDay}
-            />
+            <PlanProgressPanel plan={plan} today={today} />
             <UpcomingTestsPanel
               plan={plan}
               today={today}
               onOpenDay={onOpenDay}
             />
+            <RevisionQueuePanel plan={plan} today={today} />
+          </div>
+          <div className="flex min-w-0 flex-col gap-4">
             <RecentAttemptsPanel
               attempts={attempts}
               onOpenAttempt={onOpenAttempt}
               onAdd={onAdd}
               onViewAll={onViewAll}
             />
-          </div>
-          <aside className="flex min-w-0 flex-col gap-4">
-            <PlanProgressPanel plan={plan} today={today} />
-            <RevisionQueuePanel plan={plan} today={today} />
-            <PersonalTasksPanel
-              personalTasks={planApi.personalTasks}
-              today={today}
-            />
             {coach}
-          </aside>
+          </div>
         </div>
       )}
 

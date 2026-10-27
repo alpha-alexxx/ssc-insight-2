@@ -7,19 +7,16 @@ import {
   Check,
   ClipboardPaste,
   Copy,
-  FileText,
   Lightbulb,
   ListTodo,
   MessageSquare,
-  Plus,
-  RefreshCw,
   Send,
   Sparkles,
   Square,
   TrendingUp,
-  Trash2,
-  Zap,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useOverlayViewport, useOverlayFocus } from "./use-overlay-viewport";
 import { Button } from "./ui/button";
 import { PlainIcon } from "./icon";
 import {
@@ -38,21 +35,45 @@ import {
   extractionToAttempt,
   type ExtractionDraft,
 } from "@/lib/ai/extraction";
-import { parseTaskSuggestions, type TaskSuggestion } from "@/lib/ai/task-suggestion";
+import {
+  parseTaskSuggestions,
+  type TaskSuggestion,
+} from "@/lib/ai/task-suggestion";
 import { istTodayIso, linkHost } from "@/lib/plan/view-model";
 import type { AttemptInput } from "@/lib/domain";
-import type {
-  AiCredentialSummary,
-  ChatMessage,
-} from "@/lib/ai/client-types";
+import type { AiCredentialSummary, ChatMessage } from "@/lib/ai/client-types";
 
 const QUICK_QUESTIONS = [
-  { text: "What should I focus on this week?", icon: BarChart3, color: "bg-accent-soft text-accent" },
-  { text: "Why did my last full mock score change?", icon: TrendingUp, color: "bg-danger-soft text-danger" },
-  { text: "Which subject has the weakest accuracy?", icon: Calendar, color: "bg-warning-soft text-warning" },
-  { text: "Suggest a study plan based on my weak topics", icon: BookOpen, color: "bg-positive-soft text-positive" },
-  { text: "Compare my last 5 mocks performance", icon: ListTodo, color: "bg-[var(--chart-reasoning)]/15 text-[var(--chart-reasoning)]" },
-  { text: "Important topics to revise next?", icon: Lightbulb, color: "bg-warning-soft text-warning" },
+  {
+    text: "What should I focus on this week?",
+    icon: BarChart3,
+    color: "bg-accent-soft text-accent",
+  },
+  {
+    text: "Why did my last full mock score change?",
+    icon: TrendingUp,
+    color: "bg-danger-soft text-danger",
+  },
+  {
+    text: "Which subject has the weakest accuracy?",
+    icon: Calendar,
+    color: "bg-warning-soft text-warning",
+  },
+  {
+    text: "Suggest a study plan based on my weak topics",
+    icon: BookOpen,
+    color: "bg-positive-soft text-positive",
+  },
+  {
+    text: "Compare my last 5 mocks performance",
+    icon: ListTodo,
+    color: "bg-[var(--chart-reasoning)]/15 text-[var(--chart-reasoning)]",
+  },
+  {
+    text: "Important topics to revise next?",
+    icon: Lightbulb,
+    color: "bg-warning-soft text-warning",
+  },
 ];
 
 /** What the sheet needs beyond chat state. The create handler performs the
@@ -93,6 +114,7 @@ export function AiChatSheet({
   onSend,
   onStop,
   onClear,
+  onRetry,
   onAiConfigured,
   taskApi,
   onLogMock,
@@ -109,6 +131,7 @@ export function AiChatSheet({
   onSend: (text: string) => void;
   onStop: () => void;
   onClear: () => void;
+  onRetry?: () => void;
   /** Notifies the shell so AI status can be refetched after setup. */
   onAiConfigured?: (credential: AiCredentialSummary | null) => void;
   /** Personal-task creator for suggest-and-confirm cards. */
@@ -125,136 +148,124 @@ export function AiChatSheet({
     setLastOpen(open);
     if (open) setTab("chat");
   }
-  // Switching to the todo composer must not leave a stream running; the
-  // composer manages its own generation requests.
-  const switchToTodos = () => {
-    onStop();
-    setTab("todos");
-  };
+  const viewport = useOverlayViewport(open);
+  const overlayFocus = useOverlayFocus();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        {...overlayFocus}
         side="right"
-        className="w-full gap-0 sm:max-w-[520px] flex flex-col"
+        className="ai-workspace-sheet w-full gap-0 sm:max-w-[520px] flex flex-col"
+        style={
+          viewport
+            ? { height: viewport.height, top: viewport.top, bottom: "auto" }
+            : undefined
+        }
         overlayClassName="bg-ink/20"
         aria-describedby="ai-sheet-description"
       >
-        {/* Header */}
-        <div className="border-b border-rule-soft px-5 pb-4 pt-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft">
-                <Sparkles size={20} className="text-accent" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="font-serif text-[22px] font-medium leading-tight text-ink">
-                  Ask your <span className="text-accent">coach</span>
-                </h2>
-                <p className="mt-1 text-xs leading-relaxed text-muted">
-                  Get insights from your mock data and personalized guidance.
-                </p>
-              </div>
+        <SheetHeader className="shrink-0 border-b border-rule-soft px-4 py-3 pr-14 sm:px-5 sm:pr-14">
+          <SheetTitle className="flex items-center gap-2 font-serif text-xl font-medium">
+            <Sparkles size={17} className="text-accent" /> Your study coach
+          </SheetTitle>
+          <SheetDescription id="ai-sheet-description">
+            {contextLabel ?? "Your workspace"} · Session-only conversation
+          </SheetDescription>
+        </SheetHeader>
+        <div
+          className="flex shrink-0 gap-1 border-b border-rule-soft px-3 py-2"
+          role="tablist"
+          aria-label="AI mode"
+        >
+          {(
+            [
+              { id: "chat", label: "Coach chat", icon: MessageSquare },
+              { id: "todos", label: "Plan todos", icon: ListTodo },
+              { id: "log", label: "Log a mock", icon: ClipboardPaste },
+            ] as const
+          ).map((item, index) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`ai-tab-${item.id}`}
+              aria-controls={`ai-panel-${item.id}`}
+              aria-selected={tab === item.id}
+              tabIndex={tab === item.id ? 0 : -1}
+              onClick={() => {
+                onStop();
+                setTab(item.id);
+              }}
+              onKeyDown={(event) => {
+                const ids = ["chat", "todos", "log"] as const;
+                const next =
+                  event.key === "ArrowRight"
+                    ? (index + 1) % 3
+                    : event.key === "ArrowLeft"
+                      ? (index + 2) % 3
+                      : event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? 2
+                          : null;
+                if (next !== null) {
+                  event.preventDefault();
+                  onStop();
+                  setTab(ids[next]);
+                  document.getElementById(`ai-tab-${ids[next]}`)?.focus();
+                }
+              }}
+              className={cn(
+                "flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-control px-2 text-xs transition-colors",
+                tab === item.id
+                  ? "bg-ink text-paper"
+                  : "text-muted hover:bg-soft hover:text-ink",
+              )}
+            >
+              <item.icon size={14} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div
+          role="tabpanel"
+          id={`ai-panel-${tab}`}
+          aria-labelledby={`ai-tab-${tab}`}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {tab === "chat" && (
+            <CoachChatTab
+              open={open}
+              messages={messages}
+              streaming={streaming}
+              error={error}
+              configured={configured}
+              onSend={onSend}
+              onStop={onStop}
+              onClear={onClear}
+              onRetry={onRetry}
+              onAiConfigured={onAiConfigured}
+              taskApi={taskApi}
+              onTaskAdded={onTaskAdded}
+            />
+          )}
+          {tab === "todos" && (
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+              <TodoAiComposer compact />
             </div>
-            {contextLabel && (
-              <div className="flex shrink-0 items-center gap-2 rounded-control border border-rule-soft bg-canvas px-3 py-1.5">
-                <Calendar size={14} className="text-muted" />
-                <div className="text-right">
-                  <p className="text-[11px] font-medium leading-tight text-ink">{contextLabel}</p>
-                  <p className="text-[10px] text-muted">Session-only chat</p>
-                </div>
-              </div>
-            )}
-          </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-muted">
-            Read-only answers from your aggregates and latest 20 full mocks. Notes, email, and identity are never sent.
-          </p>
+          )}
+          {tab === "log" && (
+            <LogMockTab
+              configured={configured}
+              onAiConfigured={onAiConfigured}
+              onLogMock={(payload) => {
+                onLogMock?.(payload);
+                onOpenChange(false);
+              }}
+            />
+          )}
         </div>
-
-        {/* Tab navigation */}
-        <div className="border-b border-rule-soft px-5 py-3">
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              aria-pressed={tab === "chat"}
-              onClick={() => setTab("chat")}
-              className={`flex flex-col items-center gap-1.5 rounded-control border px-3 py-3 text-center transition-colors ${
-                tab === "chat"
-                  ? "border-ink bg-ink text-paper"
-                  : "border-rule-soft bg-paper text-muted hover:border-rule hover:text-ink"
-              }`}
-            >
-              <MessageSquare size={18} />
-              <span className="text-[11px] font-medium leading-tight">Coach</span>
-              <span className={`text-[9px] leading-tight ${tab === "chat" ? "text-paper/70" : "text-muted"}`}>
-                Get insights & guidance
-              </span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={tab === "todos"}
-              onClick={switchToTodos}
-              className={`flex flex-col items-center gap-1.5 rounded-control border px-3 py-3 text-center transition-colors ${
-                tab === "todos"
-                  ? "border-ink bg-ink text-paper"
-                  : "border-rule-soft bg-paper text-muted hover:border-rule hover:text-ink"
-              }`}
-            >
-              <FileText size={18} />
-              <span className="text-[11px] font-medium leading-tight">Plan todos</span>
-              <span className={`text-[9px] leading-tight ${tab === "todos" ? "text-paper/70" : "text-muted"}`}>
-                Create & manage plan
-              </span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={tab === "log"}
-              onClick={() => setTab("log")}
-              className={`flex flex-col items-center gap-1.5 rounded-control border px-3 py-3 text-center transition-colors ${
-                tab === "log"
-                  ? "border-ink bg-ink text-paper"
-                  : "border-rule-soft bg-paper text-muted hover:border-rule hover:text-ink"
-              }`}
-            >
-              <Plus size={18} />
-              <span className="text-[11px] font-medium leading-tight">Add mock</span>
-              <span className={`text-[9px] leading-tight ${tab === "log" ? "text-paper/70" : "text-muted"}`}>
-                Manually add a result
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {tab === "chat" && (
-          <CoachChatTab
-            open={open}
-            messages={messages}
-            streaming={streaming}
-            error={error}
-            configured={configured}
-            onSend={onSend}
-            onStop={onStop}
-            onClear={onClear}
-            onAiConfigured={onAiConfigured}
-            taskApi={taskApi}
-            onTaskAdded={onTaskAdded}
-          />
-        )}
-        {tab === "todos" && (
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-            <TodoAiComposer compact />
-          </div>
-        )}
-        {tab === "log" && (
-          <LogMockTab
-            configured={configured}
-            onAiConfigured={onAiConfigured}
-            onLogMock={(payload) => {
-              onLogMock?.(payload);
-              onOpenChange(false);
-            }}
-          />
-        )}
       </SheetContent>
     </Sheet>
   );
@@ -271,6 +282,7 @@ function CoachChatTab({
   onSend,
   onStop,
   onClear,
+  onRetry,
   onAiConfigured,
   taskApi,
   onTaskAdded,
@@ -283,6 +295,7 @@ function CoachChatTab({
   onSend: (text: string) => void;
   onStop: () => void;
   onClear: () => void;
+  onRetry?: () => void;
   onAiConfigured?: (credential: AiCredentialSummary | null) => void;
   taskApi?: AiSheetTaskApi;
   onTaskAdded?: () => void;
@@ -291,6 +304,9 @@ function CoachChatTab({
   const endRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const follow = useRef(true);
+  const [showLatest, setShowLatest] = useState(false);
+  const [lastSent, setLastSent] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -301,13 +317,15 @@ function CoachChatTab({
   useEffect(() => {
     const log = logRef.current;
     if (!log) return;
-    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
-    if (nearBottom) endRef.current?.scrollIntoView({ block: "end" });
+    if (follow.current) log.scrollTop = log.scrollHeight;
   }, [messages, streaming]);
 
   function submit(text: string) {
     const value = text.trim();
     if (!value || streaming) return;
+    follow.current = true;
+    setShowLatest(false);
+    setLastSent(value);
     onSend(value);
     setInput("");
   }
@@ -323,7 +341,13 @@ function CoachChatTab({
         role="log"
         aria-live="polite"
         aria-busy={streaming}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4"
+        onScroll={(event) => {
+          const log = event.currentTarget;
+          follow.current =
+            log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+          setShowLatest(!follow.current);
+        }}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
       >
         {!messages.length && !configured && (
           <div className="rounded-control border border-rule bg-canvas p-4">
@@ -342,66 +366,38 @@ function CoachChatTab({
         )}
 
         {!messages.length && configured && (
-          <div className="flex flex-col gap-4">
-            {/* Quick questions header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-control bg-accent-soft">
-                  <Zap size={14} className="text-accent" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-ink">Quick questions</p>
-                  <p className="text-[10px] text-muted">Click a question below or type your own.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="flex items-center gap-1 text-[10px] text-muted hover:text-accent"
-              >
-                <RefreshCw size={11} />
-                More questions
-              </button>
+          <div className="flex flex-col gap-4 py-3">
+            <div>
+              <h3 className="font-serif text-xl">
+                What would help you study today?
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Ask about your progress, subjects, or next steps. Answers use
+                your aggregates and latest 20 full mocks.
+              </p>
             </div>
-
-            {/* Quick questions grid */}
-            <div className="grid grid-cols-2 gap-2.5">
-              {QUICK_QUESTIONS.map((q) => (
+            <div className="flex flex-col divide-y divide-rule-soft border-y border-rule-soft">
+              {QUICK_QUESTIONS.map((question) => (
                 <button
-                  key={q.text}
+                  key={question.text}
                   type="button"
-                  onClick={() => submit(q.text)}
-                  className="group flex items-start gap-2.5 rounded-control border border-rule-soft bg-paper p-3 text-left transition-all hover:border-accent hover:shadow-sm"
+                  onClick={() => submit(question.text)}
+                  className="flex items-center gap-3 py-3 text-left text-sm text-ink hover:text-accent"
                 >
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-control ${q.color}`}>
-                    <q.icon size={15} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-medium leading-snug text-ink group-hover:text-accent">
-                      {q.text}
-                    </p>
-                  </div>
-                  <svg
-                    className="mt-1 h-3 w-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
+                  <question.icon size={15} className="shrink-0 text-muted" />
+                  {question.text}
                 </button>
               ))}
             </div>
           </div>
         )}
-
         {messages.length > 0 && (
           <div className="flex flex-col gap-3">
-            {messages.map((message) => (
+            {messages.map((message, index) => (
               <ChatBubble
                 key={message.id}
                 message={message}
-                streaming={streaming}
+                streaming={streaming && index === messages.length - 1}
                 taskApi={taskApi}
                 onTaskAdded={onTaskAdded}
               />
@@ -411,24 +407,31 @@ function CoachChatTab({
         )}
       </div>
 
+      {showLatest && (
+        <div className="flex shrink-0 justify-center border-t border-rule-soft py-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              follow.current = true;
+              setShowLatest(false);
+              if (logRef.current)
+                logRef.current.scrollTop = logRef.current.scrollHeight;
+            }}
+          >
+            Jump to latest
+          </Button>
+        </div>
+      )}
       {error && (
         <div
           role="alert"
           className="flex flex-wrap items-center justify-between gap-2 border-t border-warning bg-warning-soft px-5 py-2.5 text-[11px] text-warning"
         >
           <span className="min-w-0">{error}</span>
-          {!streaming && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const lastUser = messages.findLast(
-                  (message) => message.role === "user",
-                );
-                if (lastUser) submit(lastUser.content);
-              }}
-            >
+          {!streaming && onRetry && (
+            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
               Try again
             </Button>
           )}
@@ -439,7 +442,7 @@ function CoachChatTab({
       <form
         className={
           configured
-            ? "border-t border-rule-soft bg-paper px-5 py-4"
+            ? "ai-composer shrink-0 border-t border-rule-soft bg-paper px-4 py-3 sm:px-5"
             : "hidden"
         }
         onSubmit={(event) => {
@@ -456,12 +459,16 @@ function CoachChatTab({
               rows={2}
               maxLength={maxChars}
               value={input}
-              disabled={streaming}
+              aria-label="Message your study coach"
               placeholder="Ask about a mock, a weak subject, or what to do next..."
               className="max-h-24 flex-1 resize-none border-0 bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted focus:outline-none focus:ring-0"
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
                   event.preventDefault();
                   submit(input);
                 }
@@ -469,23 +476,44 @@ function CoachChatTab({
             />
           </div>
           <div className="mt-2 flex items-center justify-between">
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-control border border-rule-soft bg-paper px-2.5 py-1.5 text-[11px] text-muted transition-colors hover:border-rule hover:text-ink"
-            >
-              <ClipboardPaste size={12} />
-              Attach (optional)
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="text-xs text-muted underline underline-offset-4 disabled:opacity-50"
+                disabled={streaming || !messages.length}
+                onClick={onClear}
+              >
+                Clear chat
+              </button>
+              {error && lastSent && (
+                <button
+                  type="button"
+                  className="text-xs text-accent underline"
+                  onClick={() => setInput(lastSent)}
+                >
+                  Edit question
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <span className="text-[10px] tabular text-muted">
                 {charCount}/{maxChars}
               </span>
               {streaming ? (
-                <Button type="button" variant="outline" size="sm" onClick={onStop}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onStop}
+                >
                   <Square size={13} /> Stop
                 </Button>
               ) : (
-                <Button type="submit" size="sm" disabled={!input.trim()}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!input.trim() || streaming}
+                >
                   Send <Send size={13} />
                 </Button>
               )}
@@ -531,7 +559,7 @@ function ChatBubble({
 
   if (message.role === "user") {
     return (
-      <div className="ml-auto max-w-[88%] rounded-control bg-ink px-3.5 py-2.5 text-[13px] leading-relaxed text-paper">
+      <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-control bg-soft px-3 py-2 text-sm leading-relaxed text-ink">
         {message.content}
       </div>
     );
@@ -539,7 +567,7 @@ function ChatBubble({
 
   const waiting = !message.content;
   return (
-    <div className="max-w-[96%] rounded-control border-l-2 border-accent bg-canvas px-3.5 py-2.5 text-[13px] leading-relaxed">
+    <div className="min-w-0 max-w-full break-words py-2 text-sm leading-relaxed">
       {waiting ? (
         <span className="inline-flex items-center gap-1.5 text-muted">
           {streaming ? (
@@ -553,7 +581,7 @@ function ChatBubble({
         </span>
       ) : (
         <>
-          <MessageContent content={parsed.text || message.content} />
+          <MessageContent content={parsed.text} />
           {parsed.suggestions.map((suggestion, index) => (
             <TaskSuggestionCard
               key={`${message.id}-${index}`}
@@ -666,8 +694,7 @@ function MessageContent({ content }: { content: string }) {
 /** Inline formatting: **bold**, `code`, and bare http(s) links. Built from
  * plain-string regex only — never HTML. */
 function inlineNodes(text: string): ReactNode[] {
-  const pattern =
-    /(\*\*[^*]+\*\*)|(`[^`]+`)|(https?:\/\/[^\s<>()\[\]{}"']+)/g;
+  const pattern = /(\*\*[^*]+\*\*)|(`[^`]+`)|(https?:\/\/[^\s<>()\[\]{}"']+)/g;
   const nodes: ReactNode[] = [];
   let last = 0;
   let match: RegExpExecArray | null;
@@ -722,9 +749,9 @@ function TaskSuggestionCard({
   taskApi?: AiSheetTaskApi;
   onTaskAdded?: () => void;
 }) {
-  const [state, setState] = useState<"pending" | "busy" | "added" | "failed">(
-    "pending",
-  );
+  const [state, setState] = useState<
+    "pending" | "busy" | "added" | "failed" | "dismissed"
+  >("pending");
   const [failure, setFailure] = useState("");
   const host = suggestion.url ? linkHost(suggestion.url) : null;
   // Personal todos now require a date; when the model leaves one out, the
@@ -732,7 +759,7 @@ function TaskSuggestionCard({
   const dueDate = suggestion.dueDate ?? istTodayIso();
 
   const add = () => {
-    if (!taskApi || state !== "pending") return;
+    if (!taskApi || (state !== "pending" && state !== "failed")) return;
     setState("busy");
     taskApi
       .createPersonalTask({
@@ -756,6 +783,7 @@ function TaskSuggestionCard({
       });
   };
 
+  if (state === "dismissed") return null;
   return (
     <div
       role="group"
@@ -829,7 +857,7 @@ function TaskSuggestionCard({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => setState("added")} // dismissed — nothing is written
+            onClick={() => setState("dismissed")}
             disabled={state === "busy"}
           >
             Dismiss

@@ -29,6 +29,14 @@ const longDay = new Intl.DateTimeFormat("en-IN", {
   year: "numeric",
   timeZone: "Asia/Kolkata",
 });
+const monthDay = new Intl.DateTimeFormat("en-IN", {
+  month: "long",
+  year: "numeric",
+  timeZone: "Asia/Kolkata",
+});
+export function monthDate(date: string): string {
+  return safeFormat(monthDay, date);
+}
 
 const istDayKey = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",

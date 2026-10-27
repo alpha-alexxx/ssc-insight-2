@@ -29,9 +29,9 @@ import { useAiWorkspace } from "./use-ai-workspace";
 import { useBackupImport } from "./use-backup-import";
 import { useWorkspaceData } from "./use-workspace-data";
 import { usePlanData } from "./use-plan-data";
-import { PlannerTabs } from "./plan/planner-tabs";
+import { PersonalTodos } from "./plan/personal-todos";
+import { TodosDataProvider } from "./use-todos-data";
 import { CalendarView } from "./plan/calendar-view";
-import { TasksView } from "./plan/tasks-view";
 import { PlanDayView } from "./plan/plan-day-view";
 import { SettingsPanels } from "./settings-panels";
 import { ToastProvider, useToast } from "./toast";
@@ -102,11 +102,13 @@ export function WorkspaceShell({
   // ErrorBoundary already wraps the whole tree in layout.tsx.
   return (
     <ToastProvider>
-      <WorkspaceShellInner
-        authEnabled={authEnabled}
-        userEmail={userEmail}
-        userName={userName}
-      />
+      <TodosDataProvider>
+        <WorkspaceShellInner
+          authEnabled={authEnabled}
+          userEmail={userEmail}
+          userName={userName}
+        />
+      </TodosDataProvider>
     </ToastProvider>
   );
 }
@@ -645,19 +647,15 @@ function WorkspaceShellInner({
                       </div>
                     )}
                     {view === "calendar" ? (
-                      <PlannerTabs onChanged={() => void planApi.refresh()}>
-                        <CalendarView
-                          planApi={planApi}
-                          attempts={allAttempts}
-                          onAddMock={addMockForDate}
-                          onOpenAttempt={openDetail}
-                          onSelectedDateChange={setPlannerDate}
-                        />
-                      </PlannerTabs>
+                      <CalendarView
+                        planApi={planApi}
+                        attempts={allAttempts}
+                        onAddMock={addMockForDate}
+                        onOpenAttempt={openDetail}
+                        onSelectedDateChange={setPlannerDate}
+                      />
                     ) : view === "tasks" ? (
-                      <PlannerTabs onChanged={() => void planApi.refresh()}>
-                        <TasksView planApi={planApi} mockOnly />
-                      </PlannerTabs>
+                      <PersonalTodos />
                     ) : view === "plan" ? (
                       <PlanDayView
                         date={decodeURIComponent(
@@ -714,6 +712,8 @@ function WorkspaceShellInner({
                       />
                     ) : view === "dashboard" ? (
                       <DashboardView
+                        studyAttempts={allAttempts}
+                        onAddMock={addMockForDate}
                         planApi={planApi}
                         analytics={analytics}
                         attempts={dashboardAttempts}
@@ -884,6 +884,13 @@ function WorkspaceShellInner({
           contextLabel={aiContextLabel}
           configured={!!ai.aiStatus?.enabled}
           onSend={(text) => void ai.chat.send(text, aiScreenContext)}
+          onRetry={() => {
+            const lastUser = ai.chat.messages.findLast(
+              (message) => message.role === "user",
+            );
+            if (lastUser)
+              void ai.chat.send(lastUser.content, aiScreenContext, true);
+          }}
           onStop={ai.chat.stop}
           onClear={ai.chat.clear}
           onAiConfigured={() => void ai.refreshAiStatus()}

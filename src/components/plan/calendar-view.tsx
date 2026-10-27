@@ -6,7 +6,16 @@ import { Panel } from "../dashboard-panels";
 import { PlainIcon } from "../icon";
 import { Button } from "../ui/button";
 import { AttemptRecordCard } from "../attempt-outcome-card";
-import { CategoryChip, CompleteToggle, PlanErrorCard, PersonalTaskRow, ResultLine, StatusDot, nextStatus, statusOf } from "./plan-shared";
+import {
+  CategoryChip,
+  CompleteToggle,
+  PlanErrorCard,
+  PersonalTaskRow,
+  ResultLine,
+  StatusDot,
+  nextStatus,
+  statusOf,
+} from "./plan-shared";
 import { EventDialog } from "./event-dialog";
 import { usePlanData } from "../use-plan-data";
 import { istDateKey, shortDate } from "@/lib/format";
@@ -44,7 +53,10 @@ const MODES: { id: CalendarMode; label: string }[] = [
   { id: "agenda", label: "Agenda" },
 ];
 
-function clampToPlan(plan: { startDate: string; endDate: string }, iso: string) {
+function clampToPlan(
+  plan: { startDate: string; endDate: string },
+  iso: string,
+) {
   if (iso < plan.startDate) return plan.startDate;
   if (iso > plan.endDate) return plan.endDate;
   return iso;
@@ -63,18 +75,18 @@ export function CalendarView({
   onOpenAttempt: (attempt: Attempt) => void;
   onSelectedDateChange?: (date: string) => void;
 }) {
-  const { plan, loading, error, refresh, updateTask, personalTasks, updatePersonalTask } = planApi;
+  const { plan, loading, error, refresh, updateTask, updatePersonalTask } =
+    planApi;
   const router = useRouter();
   const today = istTodayIso();
   const [mode, setMode] = useState<CalendarMode>("month");
   const [selected, setSelected] = useState(() => today);
-  const [event, setEvent] = useState<{ task: PlanTaskView; day: PlanDayView } | undefined>();
+  const [event, setEvent] = useState<
+    { task: PlanTaskView; day: PlanDayView } | undefined
+  >();
 
   /** Personal tasks indexed by due date; due-date-less tasks stay in My Tasks. */
-  const personalByDate = useMemo(
-    () => personalTasksByDate(personalTasks),
-    [personalTasks],
-  );
+  const personalByDate = useMemo(() => personalTasksByDate([]), []);
   const cyclePersonalStatus = (task: PersonalTaskView) => {
     const status = statusOf(task, today);
     void updatePersonalTask(task.id, { status: nextStatus(status) });
@@ -242,7 +254,7 @@ export function CalendarView({
             <p className="mt-2 text-[10px] text-muted">
               Select any day to open its schedule, or use{" "}
               <span className="font-medium text-ink">Add mock</span> for the
-              selected date. Personal tasks show with status dots.
+              selected date. Personal tasks have their own calendar in My Tasks.
             </p>
           )}
         </div>
@@ -322,7 +334,11 @@ function MonthView({
     cells.push(iso);
   return (
     <div>
-      <div className="grid grid-cols-7 gap-px bg-rule-soft border border-rule-soft rounded-control overflow-hidden" role="grid" aria-label="Month calendar">
+      <div
+        className="grid grid-cols-7 gap-px bg-rule-soft border border-rule-soft rounded-control overflow-hidden"
+        role="grid"
+        aria-label="Month calendar"
+      >
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name) => (
           <div
             key={name}
@@ -361,7 +377,11 @@ function MonthView({
                 </span>
                 <span className="flex items-center gap-1">
                   {stats && stats.completed === stats.total && (
-                    <PlainIcon name="check" size={10} className="text-positive" />
+                    <PlainIcon
+                      name="check"
+                      size={10}
+                      className="text-positive"
+                    />
                   )}
                   {personal.length > 0 && (
                     <span className="flex -space-x-0.5" aria-hidden="true">
@@ -420,7 +440,10 @@ function MonthView({
                 </span>
               )}
               {day && (
-                <span className="sm:hidden flex gap-0.5 mt-1" aria-hidden="true">
+                <span
+                  className="sm:hidden flex gap-0.5 mt-1"
+                  aria-hidden="true"
+                >
                   {day.tasks.slice(0, 4).map((task) => (
                     <span
                       key={task.key}
@@ -436,7 +459,10 @@ function MonthView({
                 </span>
               )}
               {personal.length > 0 && (
-                <span className="sm:hidden flex gap-0.5 mt-1" aria-hidden="true">
+                <span
+                  className="sm:hidden flex gap-0.5 mt-1"
+                  aria-hidden="true"
+                >
                   {personal.slice(0, 4).map((task) => (
                     <StatusDot
                       key={task.id}
@@ -497,7 +523,9 @@ function WeekView({
             type="button"
             onClick={() => onSelect(iso)}
             className={`text-left panel p-3 transition-colors ${
-              iso === selected ? "outline-2 -outline-offset-2 outline-accent" : ""
+              iso === selected
+                ? "outline-2 -outline-offset-2 outline-accent"
+                : ""
             } ${day ? "" : "opacity-50"}`}
           >
             <p className="text-[11px] muted">
@@ -505,7 +533,9 @@ function WeekView({
                 weekday: "short",
                 timeZone: "UTC",
               })}
-              {iso === today && <span className="text-accent font-semibold"> · today</span>}
+              {iso === today && (
+                <span className="text-accent font-semibold"> · today</span>
+              )}
             </p>
             <p className="font-serif text-lg">{Number(iso.slice(8))}</p>
             {day && (
@@ -581,11 +611,9 @@ function SelectedDayAgenda({
         description="Pick a date inside 26 Oct – 14 Dec."
       >
         <div className="px-4 pb-4 text-xs text-muted">
-          {personalTasks.length ? (
-            `${personalTasks.length} personal task${personalTasks.length === 1 ? "" : "s"} due here — open My Tasks to work on them.`
-          ) : (
-            "The 50-day plan does not schedule anything here."
-          )}
+          {personalTasks.length
+            ? `${personalTasks.length} personal task${personalTasks.length === 1 ? "" : "s"} due here — open My Tasks to work on them.`
+            : "The 50-day plan does not schedule anything here."}
         </div>
       </Panel>
     );
@@ -623,40 +651,42 @@ function SelectedDayAgenda({
         )}
       </ul>
 
-      <div className="border-t border-rule-soft px-4 py-2">
-        <div className="flex flex-wrap items-center justify-between gap-2 py-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Personal tasks
-          </p>
-          {onEditPersonal && (
-            <button
-              type="button"
-              onClick={onEditPersonal}
-              className="text-[10px] font-medium text-accent hover:text-accent-hover"
-            >
-              Manage in My Tasks
-            </button>
+      {personalTasks.length > 0 && (
+        <div className="border-t border-rule-soft px-4 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+              Personal tasks
+            </p>
+            {onEditPersonal && (
+              <button
+                type="button"
+                onClick={onEditPersonal}
+                className="text-[10px] font-medium text-accent hover:text-accent-hover"
+              >
+                Manage in My Tasks
+              </button>
+            )}
+          </div>
+          {personalTasks.length ? (
+            <ul className="divide-y divide-rule-soft border-t border-rule-soft">
+              {personalTasks.map((task) => (
+                <PersonalTaskRow
+                  key={task.id}
+                  task={task}
+                  today={today}
+                  compact={compact}
+                  onCycleStatus={onCyclePersonal}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="py-1.5 text-[10px] leading-relaxed text-muted">
+              No personal tasks due this day. Create one from My Tasks with a
+              due date to see it here.
+            </p>
           )}
         </div>
-        {personalTasks.length ? (
-          <ul className="divide-y divide-rule-soft border-t border-rule-soft">
-            {personalTasks.map((task) => (
-              <PersonalTaskRow
-                key={task.id}
-                task={task}
-                today={today}
-                compact={compact}
-                onCycleStatus={onCyclePersonal}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="py-1.5 text-[10px] leading-relaxed text-muted">
-            No personal tasks due this day. Create one from My Tasks with a due
-            date to see it here.
-          </p>
-        )}
-      </div>
+      )}
 
       <div className="border-t border-rule-soft px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -732,7 +762,11 @@ export function TaskRow({
         label={`Mark ${task.name} ${task.completed ? "incomplete" : "complete"}`}
         onToggle={() => (onToggle ? onToggle(task) : onOpen())}
       />
-      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 text-left"
+      >
         <span
           className={`block text-[13px] font-medium truncate ${task.completed ? "muted line-through" : "text-ink"}`}
         >
@@ -884,7 +918,10 @@ function AgendaList({
           </summary>
           <div className="border-t border-rule-soft">
             {past.map((day) => (
-              <div key={day.day} className="px-6 py-3 flex justify-between gap-3 text-xs border-b border-rule-soft last:border-0">
+              <div
+                key={day.day}
+                className="px-6 py-3 flex justify-between gap-3 text-xs border-b border-rule-soft last:border-0"
+              >
                 <span>
                   Day {day.day} · {shortDate(day.date)}
                 </span>

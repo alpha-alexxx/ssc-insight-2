@@ -745,6 +745,51 @@
   .sheet-content {
     animation: sheet-in-right 220ms var(--ease-out-soft);
   }
+  .ai-workspace-sheet {
+    min-height: 0;
+    overflow: hidden;
+    box-shadow: none;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .ai-composer {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+  .ai-composer > div:focus-within {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .task-editor-dialog, .task-confirm-dialog {
+    position: fixed;
+    z-index: 50;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100% - 24px);
+    max-width: 36rem;
+    max-height: 90dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-panel);
+    background: var(--paper);
+    padding: 20px;
+  }
+  .task-confirm-dialog { max-width: 28rem; }
+  @media (max-width: 639px) {
+    .task-editor-dialog {
+      top: auto;
+      bottom: 0;
+      left: 0;
+      transform: none;
+      width: 100%;
+      max-height: min(90dvh, calc(var(--task-viewport-height, 100dvh) - 24px));
+      bottom: max(0px, calc(100dvh - var(--task-viewport-height, 100dvh) - var(--task-viewport-top, 0px)));
+      padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+      scroll-padding-bottom: 24px;
+    }
+    .task-editor-dialog input, .task-editor-dialog textarea, .ai-composer textarea,
+    .personal-workspace input, .personal-workspace select { font-size: 16px; }
+  }
   .sheet-content[data-state="closed"] {
     animation: sheet-out-right 160ms ease;
   }

@@ -139,9 +139,9 @@ The AI schema migrations are `prisma/migrations/20261025000000_ai_usage` (usage 
 
 ## Personal todos
 
-Study calendar offers **Mock plan / Personal todos** tabs; **My Tasks** accesses the same personal records. Add a title on a selected date, then optionally edit notes, priority, group, and subtasks. New todos require one date and no time. Existing undated records are preserved in **Needs date**.
+**My Tasks** opens the full personal-task workspace directly. The dashboard combines today's structured assignments and personal tasks before a separate **Study Calendar**. Personal calendars select dates independently of the study schedule. Add a title on a selected date, then optionally edit notes, priority, group, and subtasks. New todos require one date and no time. Existing undated records are preserved in **Needs date**.
 
-Groups are reusable across dates. Deleting a group moves its todos to Ungrouped. Parent checkbox actions complete/reopen all subtasks together; all subtasks complete the parent, and unchecking one reopens it. Subtasks share the parent date. Unfinished items retain their dates and become overdue, with priority ordering above completed items. Date strips, filters, search, and pagination keep larger lists manageable.
+Groups are reusable across dates. Deleting a group moves its todos to Ungrouped. Parent checkbox actions complete/reopen all subtasks together; all subtasks complete the parent, and unchecking one reopens it. Subtasks share the parent date. Unfinished items retain their dates and become overdue, with priority ordering above completed items. A month calendar, filters, search, sorting, and pagination keep larger lists manageable.
 
 Deletion moves a todo and its subtasks to **Trash**, which supports restoration without automatic expiry. Restoring preserves its original state/date and uses Ungrouped when its former group no longer exists. Trash is excluded from active counts and AI context. Recurrence, reminders, and autonomous actions are outside this version.
 
@@ -207,3 +207,11 @@ A passing session endpoint is not proof of Google login. Browser verification mu
 The user-installed `neon-postgres` Codex plugin bundles the Neon skills and OAuth MCP endpoint `https://mcp.neon.tech/mcp`. Do not duplicate it with separate skills/MCP entries. The CLI is preferred for this project's operations. The linked `.neon` file is local and ignored; `neon.ts` declares only the requested services.
 
 References: [Neon skill](https://neon.com/.well-known/agent-skills/neon/SKILL.md), [Prisma on Neon](https://neon.com/docs/guides/prisma), [Neon Auth](https://neon.com/docs/auth/overview).
+
+### Personal-task calendar and queries
+
+`GET /api/todos/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD` returns `{ data: { from, to, days: { [date]: { pending, completed } } } }`. The inclusive range is limited to 42 days. Calendar counts aggregate all active records for the verified user, independently of list pagination and filters; Trash and undated records are excluded.
+
+`GET /api/todos` additionally supports `completion=all|pending|completed`, `priority=all|high|normal|low`, `group=all|ungrouped|<group-id>`, `sort=priority|date|newest|title`, and `excludeDate=YYYY-MM-DD`. Existing defaults remain unchanged, and `view=completed` is supported. `counts.pending`, `counts.completed`, and `counts.overdue` are account-wide and ignore active list filters. Sorts apply within the UI's date/group buckets. Versioned writes continue through `/api/todos/[id]`; `/api/tasks` remains compatible. No new migration is needed for this UI and query overhaul.
+
+The shell-scoped todo query cache deduplicates identical in-flight reads and invalidates lists, legacy task views, AI reference data, and calendar summaries after `ssc:todos-changed`. Study-plan progress is fetched separately. Browser verification without disposable session cookies must be reported as fixture-based rather than authenticated integration verification.

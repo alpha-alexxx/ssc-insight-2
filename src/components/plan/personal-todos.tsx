@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
+  CalendarClock,
   Plus,
   Search,
   Trash2,
@@ -13,9 +12,20 @@ import {
 } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { Button } from "../ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "../ui/sheet";
 import { api } from "@/lib/api-client";
-import { addIsoDays, istTodayIso } from "@/lib/plan/view-model";
+import { istTodayIso, linkHost, safeHttpUrlCore } from "@/lib/plan/view-model";
 import { cn } from "@/lib/utils";
+import { shortDate as dateLabel } from "@/lib/format";
+import { useOverlayViewport, useOverlayFocus } from "../use-overlay-viewport";
+import { PersonalCalendar } from "./personal-calendar";
+import { useTodoQuery, mutateTodoRequest } from "../use-todos-data";
 
 type Subtask = { id: string; title: string; completed: boolean };
 type Group = { id: string; name: string };
@@ -30,6 +40,7 @@ type Todo = {
   subtasks: Subtask[];
   version: number;
   deletedAt: string | null;
+  url?: string | null;
 };
 type Response = {
   items: Todo[];
@@ -40,39 +51,41 @@ type Response = {
   counts: Record<string, number>;
 };
 type View =
-  "day" | "today" | "overdue" | "upcoming" | "all" | "needsdate" | "trash";
+  | "day"
+  | "today"
+  | "overdue"
+  | "upcoming"
+  | "all"
+  | "needsdate"
+  | "trash"
+  | "completed";
 const VIEWS: { id: View; label: string }[] = [
   { id: "day", label: "Selected day" },
   { id: "today", label: "Today" },
   { id: "overdue", label: "Overdue" },
   { id: "upcoming", label: "Upcoming" },
   { id: "all", label: "All" },
+  { id: "completed", label: "Completed" },
   { id: "needsdate", label: "Needs date" },
   { id: "trash", label: "Trash" },
 ];
-const dateLabel = (date: string) =>
-  new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(date + "T12:00:00Z"));
-
 export function PersonalTodos({
   initialDate,
   onChanged,
   aiAction,
+  compact = false,
 }: {
   initialDate?: string;
+  compact?: boolean;
   onChanged?: () => void;
   aiAction?: React.ReactNode;
 }) {
+  const overlayFocus = useOverlayFocus();
   const [date, setDate] = useState(initialDate ?? istTodayIso());
   const [view, setView] = useState<View>("day");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [data, setData] = useState<Response | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState("");
   const [groupId, setGroupId] = useState("");
@@ -80,56 +93,53 @@ export function PersonalTodos({
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const input = useRef<HTMLInputElement>(null);
-  const revision = useRef(0);
-  const load = useCallback(() => {
-    const current = ++revision.current;
-    return api<Response>(
-      `/api/todos?${new URLSearchParams({ view, date, search, page: String(page), limit: "50" })}`,
-    )
-      .then((result) => {
-        if (current === revision.current) {
-          const lastPage = Math.max(1, Math.ceil(result.total / result.limit));
-          if (page > lastPage) {
-            setPage(lastPage);
-            return;
-          }
-          setData(result);
-          setError("");
-        }
-      })
-      .catch((cause: unknown) => {
-        if (current === revision.current)
-          setError(
-            cause instanceof Error ? cause.message : "Could not load todos.",
-          );
-      })
-      .finally(() => {
-        if (current === revision.current) setLoading(false);
-      });
-  }, [view, date, search, page]);
+  const [completion, setCompletion] = useState("all");
+  const [priority, setPriority] = useState("all");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [sort, setSort] = useState("priority");
+  const [confirmTrash, setConfirmTrash] = useState<Todo | null>(null);
+  const [rescheduling, setRescheduling] = useState<Todo | null>(null);
+  const [newDate, setNewDate] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const query = new URLSearchParams({
+    view,
+    date,
+    search,
+    page: String(page),
+    limit: compact ? "10" : "50",
+    completion,
+    priority,
+    group: groupFilter,
+    sort,
+  });
+  const {
+    data,
+    error: loadError,
+    loading,
+    refresh: load,
+  } = useTodoQuery<Response>(`/api/todos?${query}`);
   useEffect(() => {
-    void load();
-    const refresh = () => void load();
-    window.addEventListener("ssc:todos-changed", refresh);
-    return () => {
-      window.removeEventListener("ssc:todos-changed", refresh);
-    };
-  }, [load]);
+    if (data && page > Math.max(1, Math.ceil(data.total / data.limit))) {
+      const timer = window.setTimeout(
+        () => setPage(Math.max(1, Math.ceil(data.total / data.limit))),
+        0,
+      );
+      return () => window.clearTimeout(timer);
+    }
+  }, [data, page]);
   async function mutate(path: string, method: string, body?: unknown) {
     setBusy(true);
     setError("");
     try {
-      await api(path, {
-        method,
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      });
-      window.dispatchEvent(new Event("ssc:todos-changed"));
+      await mutateTodoRequest(path, method, body);
       onChanged?.();
       return true;
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not save. Try again.",
       );
+      load();
       return false;
     } finally {
       setBusy(false);
@@ -157,469 +167,725 @@ export function PersonalTodos({
     buckets.set(key, bucket);
   }
   return (
-    <section aria-label="Personal todo planner" className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section
+      aria-label="Personal todo planner"
+      className="personal-workspace flex min-w-0 flex-col gap-4"
+    >
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-serif text-2xl">Make room for your own work</h2>
-          <p className="mt-1 text-sm text-muted">
-            Dated checklists, separate from your mock plan. Overdue work stays
-            on its original date.
+          <h2 className="font-serif text-xl">
+            {compact ? "Personal Tasks" : "Your personal workspace"}
+          </h2>
+          <p className="mt-1 text-xs text-muted">
+            Choose a date, make a little progress. Your study schedule stays
+            separate.
           </p>
         </div>
-        {aiAction}
+        <Button type="button" size="sm" onClick={() => setCreating(true)}>
+          <Plus size={14} /> Add task
+        </Button>
       </div>
-      {!aiAction && <TodoAiComposer onChanged={onChanged} />}
-      <div className="panel overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule-soft p-4">
-          <div className="flex items-center gap-2">
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Previous week"
-              onClick={() => selectDate(addIsoDays(date, -7))}
-            >
-              <ChevronLeft size={16} />
-            </Button>
-            <label className="sr-only" htmlFor="personal-todo-date">
-              Selected date
-            </label>
-            <input
-              id="personal-todo-date"
-              type="date"
-              value={date}
-              onChange={(e) => selectDate(e.target.value)}
-              className="max-w-44"
-            />
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="Next week"
-              onClick={() => selectDate(addIsoDays(date, 7))}
-            >
-              <ChevronRight size={16} />
-            </Button>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setGroupsOpen(!groupsOpen)}
-            aria-expanded={groupsOpen}
-          >
-            Manage groups
-          </Button>
-        </div>
-        <div
-          className="grid grid-cols-7 border-b border-rule-soft"
-          aria-label="Choose a day"
-        >
-          {Array.from({ length: 7 }, (_, i) => addIsoDays(date, i - 3)).map(
-            (day) => (
-              <button
-                key={day}
-                type="button"
-                onClick={() => selectDate(day)}
-                aria-pressed={day === date}
-                className={cn(
-                  "min-w-0 px-1 py-3 text-center transition-colors hover:bg-soft",
-                  day === date && "bg-ink text-paper hover:bg-ink",
-                )}
-              >
-                <span className="block text-[10px]">
-                  {new Intl.DateTimeFormat("en-IN", {
-                    weekday: "short",
-                    timeZone: "UTC",
-                  }).format(new Date(day + "T12:00:00Z"))}
-                </span>
-                <span className="mt-1 block text-sm font-medium">
-                  {day.slice(8)}
-                </span>
-              </button>
-            ),
-          )}
-        </div>
-        <div className="p-4 space-y-3">
-          <form
-            className="flex flex-wrap gap-2"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!title.trim()) return;
-              if (
-                await mutate("/api/todos", "POST", {
-                  title: title.trim(),
-                  dueDate: date,
-                  groupId: groupId || null,
-                })
-              ) {
-                setTitle("");
-                selectView("day");
-                input.current?.focus();
-              }
-            }}
-          >
-            <label className="sr-only" htmlFor="quick-todo-title">
-              New todo title
-            </label>
-            <input
-              ref={input}
-              id="quick-todo-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={200}
-              required
-              placeholder={`Add a todo for ${dateLabel(date)}…`}
-              className="min-w-0 flex-1 basis-48"
-              disabled={busy}
-            />
-            <label className="sr-only" htmlFor="quick-todo-group">
-              Todo group
-            </label>
-            <select
-              id="quick-todo-group"
-              className="w-auto! max-w-40"
-              value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
-              disabled={busy}
-            >
-              {visibleGroups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-            <Button disabled={busy || !title.trim()}>
-              <Plus size={16} />
-              Add todo
-            </Button>
-          </form>
-          <p className="text-xs text-muted">
-            Press Enter to add another. Add notes, priority, or subtasks using
-            Edit.
-          </p>
-        </div>
-      </div>
-      {groupsOpen && (
-        <section
-          className="panel space-y-4 p-4"
-          aria-label="Manage todo groups"
-        >
-          <div>
-            <h3 className="font-serif text-lg">Your groups</h3>
-            <p className="mt-1 text-xs text-muted">
-              Groups are shared across dates. Removing a group keeps its todos
-              under Ungrouped.
-            </p>
-          </div>
-          <form
-            className="flex gap-2"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (
-                await mutate("/api/todos/groups", "POST", {
-                  name: groupName.trim(),
-                })
-              )
-                setGroupName("");
-            }}
-          >
-            <input
-              aria-label="New group name"
-              placeholder="e.g. Maths revision"
-              value={groupName}
-              maxLength={80}
-              onChange={(e) => setGroupName(e.target.value)}
-              required
-            />
-            <Button disabled={busy || !groupName.trim()}>Create group</Button>
-          </form>
-          {data?.groups.map((g) => (
-            <GroupRow
-              key={g.id}
-              group={g}
-              busy={busy}
-              mutate={mutate}
-              onDelete={() => {
-                if (groupId === g.id) setGroupId("");
-              }}
-            />
+      {!compact && (
+        <dl className="grid grid-cols-3 divide-x divide-rule-soft border-y border-rule-soft py-3">
+          {[
+            ["Pending", "pending"],
+            ["Completed", "completed"],
+            ["Overdue", "overdue"],
+          ].map(([label, key]) => (
+            <div key={key} className="px-3 first:pl-0">
+              <dt className="text-xs text-muted">{label}</dt>
+              <dd className="mt-1 font-serif text-2xl tabular-nums">
+                {data?.counts[key] ?? "—"}
+              </dd>
+            </div>
           ))}
-        </section>
+        </dl>
       )}
-      <div className="flex flex-wrap items-center gap-3">
-        <div
-          role="group"
-          aria-label="Personal todo views"
-          className="flex flex-wrap gap-1"
-        >
-          {VIEWS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={view === item.id}
-              onClick={() => selectView(item.id)}
-              className={cn(
-                "min-h-9 rounded-control px-3 text-xs",
-                view === item.id
-                  ? "bg-ink text-paper"
-                  : "text-muted hover:bg-soft hover:text-ink",
-              )}
-            >
-              {item.label}
-              {data?.counts[item.id] != null && item.id !== "day" ? (
-                <span className="ml-1 tabular-nums">
-                  {data.counts[item.id]}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-        <div className="relative ml-auto min-w-40">
-          <Search size={14} className="absolute left-3 top-3 text-muted" />
-          <input
-            aria-label="Search personal todos"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search todos…"
-            className="pl-9!"
+      <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <aside className="min-w-0 border-b border-rule-soft pb-4 lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:border-l lg:pb-0 lg:pl-5">
+          <PersonalCalendar
+            selected={date}
+            onSelect={selectDate}
+            onAdd={() => setCreating(true)}
           />
-        </div>
-      </div>
-      {error && (
-        <div
-          role="alert"
-          className="border border-danger bg-danger-soft p-3 text-sm text-danger"
-        >
-          {error}
-          <button
-            type="button"
-            className="ml-3 underline underline-offset-4"
-            onClick={() => void load()}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-      {loading ? (
-        <p role="status" className="py-10 text-center text-muted">
-          Loading your todos…
-        </p>
-      ) : !data?.items.length ? (
-        <div className="panel px-5 py-12 text-center">
-          <h3 className="font-serif text-xl">
-            {view === "trash"
-              ? "Trash is empty"
-              : view === "needsdate"
-                ? "Every todo has a date"
-                : search
-                  ? "No matching todos"
-                  : "A clear page for your work"}
-          </h3>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
-            {view === "trash"
-              ? "Deleted todos appear here and can be restored with their subtasks."
-              : view === "needsdate"
-                ? "Older tasks without a date will appear here. Assign a date to bring them into your planner."
-                : search
-                  ? "Try another search or choose a different view."
-                  : "Add a title above to begin your checklist, or ask AI to prepare a draft for review."}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {[...buckets.entries()].map(([key, items]) => {
-            const first = items[0];
-            const group = visibleGroups.find(
-              (g) => g.id === (first.groupId ?? ""),
-            );
-            return (
-              <section key={key} className="panel overflow-hidden">
-                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule-soft bg-canvas px-4 py-3">
-                  <h3 className="font-serif text-lg">
-                    {group?.name ?? "Ungrouped"}
-                  </h3>
-                  <p className="text-xs text-muted">
-                    {first.dueDate ? dateLabel(first.dueDate) : "Needs date"} ·{" "}
-                    {items.length} {items.length === 1 ? "todo" : "todos"}
-                  </p>
+          {compact && (
+            <a
+              href="/my-tasks"
+              className="mt-4 block text-xs text-accent underline underline-offset-4"
+            >
+              Manage all personal tasks
+            </a>
+          )}
+        </aside>
+        <div className="flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-1">
+          {compact && (
+            <OverdueTodoPreview selectedDate={date} onEdit={setEditing} />
+          )}
+          {!compact && (
+            <details className="border-b border-rule-soft pb-3">
+              <summary className="cursor-pointer text-xs font-medium">
+                Plan tasks with AI
+              </summary>
+              <div className="mt-3">
+                {aiAction ?? <TodoAiComposer onChanged={onChanged} />}
+              </div>
+            </details>
+          )}
+          <div className="overflow-hidden">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="font-serif text-lg">{dateLabel(date)}</h3>
+              {!compact && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setGroupsOpen(!groupsOpen)}
+                  aria-expanded={groupsOpen}
+                >
+                  Manage groups
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <form
+                className="flex flex-wrap gap-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!title.trim()) return;
+                  if (
+                    await mutate("/api/todos", "POST", {
+                      title: title.trim(),
+                      dueDate: date,
+                      groupId: groupId || null,
+                    })
+                  ) {
+                    setTitle("");
+                    selectView("day");
+                    input.current?.focus();
+                  }
+                }}
+              >
+                <label className="sr-only" htmlFor="quick-todo-title">
+                  New todo title
+                </label>
+                <input
+                  ref={input}
+                  id="quick-todo-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={200}
+                  required
+                  placeholder={`Add a todo for ${dateLabel(date)}…`}
+                  className="min-w-0 flex-1 basis-48"
+                  disabled={busy}
+                />
+                <label className="sr-only" htmlFor="quick-todo-group">
+                  Todo group
+                </label>
+                <select
+                  id="quick-todo-group"
+                  className="w-auto! max-w-40"
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                  disabled={busy}
+                >
+                  {visibleGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+                <Button disabled={busy || !title.trim()}>
+                  <Plus size={16} />
+                  Add todo
+                </Button>
+              </form>
+              <p className="text-xs text-muted">
+                Press Enter to add another. Add notes, priority, or subtasks
+                using Edit.
+              </p>
+            </div>
+          </div>
+          {groupsOpen && (
+            <section
+              className="panel space-y-4 p-4"
+              aria-label="Manage todo groups"
+            >
+              <div>
+                <h3 className="font-serif text-lg">Your groups</h3>
+                <p className="mt-1 text-xs text-muted">
+                  Groups are shared across dates. Removing a group keeps its
+                  todos under Ungrouped.
+                </p>
+              </div>
+              <form
+                className="flex gap-2"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (
+                    await mutate("/api/todos/groups", "POST", {
+                      name: groupName.trim(),
+                    })
+                  )
+                    setGroupName("");
+                }}
+              >
+                <input
+                  aria-label="New group name"
+                  placeholder="e.g. Maths revision"
+                  value={groupName}
+                  maxLength={80}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  required
+                />
+                <Button disabled={busy || !groupName.trim()}>
+                  Create group
+                </Button>
+              </form>
+              {data?.groups.map((g) => (
+                <GroupRow
+                  key={g.id}
+                  group={g}
+                  busy={busy}
+                  mutate={mutate}
+                  onDelete={() => {
+                    if (groupId === g.id) setGroupId("");
+                  }}
+                />
+              ))}
+            </section>
+          )}
+          {!compact && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => setFiltersOpen(true)}
+            >
+              Filters & sorting
+            </Button>
+          )}
+          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetContent
+              {...overlayFocus}
+              className="w-full sm:max-w-sm overflow-y-auto"
+            >
+              <SheetHeader className="pr-12">
+                <SheetTitle>Filters & sorting</SheetTitle>
+                <SheetDescription>
+                  Filter your task list. Calendar markers show every personal
+                  task.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="px-4 pb-5">
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <label className="text-xs">
+                    Status
+                    <select
+                      aria-label="Status"
+                      value={completion}
+                      onChange={(e) => {
+                        setCompletion(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="pending">Pending</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Priority
+                    <select
+                      aria-label="Priority"
+                      value={priority}
+                      onChange={(e) => {
+                        setPriority(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="all">All priorities</option>
+                      <option value="high">High</option>
+                      <option value="normal">Normal</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Group
+                    <select
+                      aria-label="Group"
+                      value={groupFilter}
+                      onChange={(e) => {
+                        setGroupFilter(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="all">All groups</option>
+                      <option value="ungrouped">Ungrouped</option>
+                      {data?.groups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs">
+                    Sort
+                    <select
+                      aria-label="Sort"
+                      value={sort}
+                      onChange={(e) => {
+                        setSort(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="priority">Priority</option>
+                      <option value="date">Due date</option>
+                      <option value="newest">Newest first</option>
+                      <option value="title">Title</option>
+                    </select>
+                  </label>
                 </div>
-                {items.map((todo) => (
-                  <article
-                    key={todo.id}
-                    className="border-b border-rule-soft p-4 last:border-b-0"
+              </div>
+            </SheetContent>
+          </Sheet>
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              role="group"
+              aria-label="Personal todo views"
+              className="flex flex-wrap gap-1"
+            >
+              {(compact
+                ? VIEWS.filter((item) => item.id === "day")
+                : VIEWS
+              ).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={view === item.id}
+                  onClick={() => selectView(item.id)}
+                  className={cn(
+                    "min-h-9 rounded-control px-3 text-xs",
+                    view === item.id
+                      ? "bg-ink text-paper"
+                      : "text-muted hover:bg-soft hover:text-ink",
+                  )}
+                >
+                  {item.label}
+                  {data?.counts[item.id] != null && item.id !== "day" ? (
+                    <span className="ml-1 tabular-nums">
+                      {data.counts[item.id]}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            <div className="relative ml-auto min-w-40">
+              <Search size={14} className="absolute left-3 top-3 text-muted" />
+              <input
+                aria-label="Search personal todos"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search todos…"
+                className="pl-9!"
+              />
+            </div>
+          </div>
+          {(error || loadError) && (
+            <div
+              role="alert"
+              className="border border-danger bg-danger-soft p-3 text-sm text-danger"
+            >
+              {error || loadError}
+              <button
+                type="button"
+                className="ml-3 underline underline-offset-4"
+                onClick={() => void load()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {loading ? (
+            <p role="status" className="py-10 text-center text-muted">
+              Loading your todos…
+            </p>
+          ) : !data?.items.length ? (
+            <div className="border-y border-rule-soft px-4 py-8 text-center">
+              <h3 className="font-serif text-xl">
+                {view === "trash"
+                  ? "Trash is empty"
+                  : view === "needsdate"
+                    ? "Every todo has a date"
+                    : search
+                      ? "No matching todos"
+                      : "A clear page for your work"}
+              </h3>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
+                {view === "trash"
+                  ? "Deleted todos appear here and can be restored with their subtasks."
+                  : view === "needsdate"
+                    ? "Older tasks without a date will appear here. Assign a date to bring them into your planner."
+                    : search
+                      ? "Try another search or choose a different view."
+                      : "Add a title above to begin your checklist, or ask AI to prepare a draft for review."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {[...buckets.entries()].map(([key, items]) => {
+                const first = items[0];
+                const group = visibleGroups.find(
+                  (g) => g.id === (first.groupId ?? ""),
+                );
+                return (
+                  <section
+                    key={key}
+                    className="overflow-hidden border-y border-rule-soft"
                   >
-                    <div className="flex items-start gap-3">
-                      {!todo.deletedAt && (
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          aria-label={`Complete ${todo.title}`}
-                          checked={todo.status === "completed"}
-                          disabled={busy}
-                          onChange={(e) =>
-                            void mutate(`/api/todos/${todo.id}`, "PATCH", {
-                              version: todo.version,
-                              completed: e.target.checked,
-                            })
-                          }
-                        />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <h4
-                          className={cn(
-                            "break-words text-sm font-medium",
-                            todo.status === "completed" &&
-                              "text-muted line-through",
-                          )}
-                        >
-                          {todo.title}
-                        </h4>
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                          <span>
-                            {todo.priority === "high"
-                              ? "High priority"
-                              : todo.priority === "low"
-                                ? "Low priority"
-                                : "Normal priority"}
-                          </span>
-                          {todo.dueDate &&
-                            todo.dueDate < istTodayIso() &&
-                            todo.status !== "completed" &&
-                            !todo.deletedAt && (
-                              <span className="text-danger">Overdue</span>
-                            )}
-                          {todo.subtasks.length > 0 && (
-                            <span>
-                              {todo.subtasks.filter((s) => s.completed).length}/
-                              {todo.subtasks.length} subtasks
-                            </span>
-                          )}
-                        </div>
-                        {todo.notes && (
-                          <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted">
-                            {todo.notes}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        {todo.deletedAt ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() =>
-                              void mutate(`/api/todos/${todo.id}`, "PATCH", {
-                                version: todo.version,
-                                restore: true,
-                              })
-                            }
-                          >
-                            <RotateCcw size={14} />
-                            Restore
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Edit ${todo.title}`}
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule-soft bg-canvas px-4 py-3">
+                      <h3 className="font-serif text-lg">
+                        {group?.name ?? "Ungrouped"}
+                      </h3>
+                      <p className="text-xs text-muted">
+                        {first.dueDate
+                          ? dateLabel(first.dueDate)
+                          : "Needs date"}{" "}
+                        · {items.length} {items.length === 1 ? "todo" : "todos"}
+                      </p>
+                    </div>
+                    {items.map((todo) => (
+                      <article
+                        key={todo.id}
+                        className="border-b border-rule-soft py-3 last:border-b-0"
+                      >
+                        <div className="flex items-start gap-3">
+                          {!todo.deletedAt && (
+                            <input
+                              type="checkbox"
+                              className="mt-1"
+                              aria-label={`Complete ${todo.title}`}
+                              checked={todo.status === "completed"}
                               disabled={busy}
-                              onClick={() => setEditing(todo)}
-                            >
-                              <Pencil size={15} />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Move ${todo.title} to Trash`}
-                              disabled={busy}
-                              onClick={() =>
-                                void mutate(`/api/todos/${todo.id}`, "DELETE", {
+                              onChange={(e) =>
+                                void mutate(`/api/todos/${todo.id}`, "PATCH", {
                                   version: todo.version,
+                                  completed: e.target.checked,
                                 })
                               }
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <h4
+                              className={cn(
+                                "break-words text-sm font-medium",
+                                todo.status === "completed" &&
+                                  "text-muted line-through",
+                              )}
                             >
-                              <Trash2 size={15} />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {todo.subtasks.length > 0 && (
-                      <ul className="mt-3 space-y-2 pl-7">
-                        {todo.subtasks.map((sub) => (
-                          <li key={sub.id}>
-                            <label className="check-row text-xs">
-                              <input
-                                type="checkbox"
-                                disabled={busy || Boolean(todo.deletedAt)}
-                                checked={sub.completed}
-                                onChange={(e) =>
+                              {todo.title}
+                            </h4>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+                              <span>
+                                {todo.priority === "high"
+                                  ? "High priority"
+                                  : todo.priority === "low"
+                                    ? "Low priority"
+                                    : "Normal priority"}
+                              </span>
+                              {todo.dueDate &&
+                                todo.dueDate < istTodayIso() &&
+                                todo.status !== "completed" &&
+                                !todo.deletedAt && (
+                                  <span className="text-danger">Overdue</span>
+                                )}
+                              {todo.subtasks.length > 0 && (
+                                <span>
+                                  {
+                                    todo.subtasks.filter((s) => s.completed)
+                                      .length
+                                  }
+                                  /{todo.subtasks.length} subtasks
+                                </span>
+                              )}
+                            </div>
+                            {todo.url && safeHttpUrlCore(todo.url) && (
+                              <a
+                                href={todo.url}
+                                target="_blank"
+                                rel="noopener noreferrer nofollow"
+                                className="mt-1 block break-all text-xs text-accent underline underline-offset-4"
+                              >
+                                {linkHost(todo.url)}
+                              </a>
+                            )}
+                            {todo.notes && (
+                              <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-muted">
+                                {todo.notes}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
+                            {todo.deletedAt ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={busy}
+                                onClick={() =>
                                   void mutate(
                                     `/api/todos/${todo.id}`,
                                     "PATCH",
                                     {
                                       version: todo.version,
-                                      subtasks: todo.subtasks.map((s) =>
-                                        s.id === sub.id
-                                          ? {
-                                              ...s,
-                                              completed: e.target.checked,
-                                            }
-                                          : s,
-                                      ),
+                                      restore: true,
                                     },
                                   )
                                 }
-                              />
-                              <span
-                                className={
-                                  sub.completed
-                                    ? "text-muted line-through"
-                                    : "text-ink"
-                                }
                               >
-                                {sub.title}
-                              </span>
-                            </label>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </article>
-                ))}
-              </section>
-            );
-          })}
+                                <RotateCcw size={14} />
+                                Restore
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label={`Edit ${todo.title}`}
+                                  disabled={busy}
+                                  onClick={() => setEditing(todo)}
+                                >
+                                  <Pencil size={15} />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label={`Reschedule ${todo.title}`}
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setRescheduling(todo);
+                                    setNewDate(todo.dueDate ?? date);
+                                  }}
+                                >
+                                  <CalendarClock size={15} />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label={`Move ${todo.title} to Trash`}
+                                  disabled={busy}
+                                  onClick={() => setConfirmTrash(todo)}
+                                >
+                                  <Trash2 size={15} />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {todo.subtasks.length > 0 && (
+                          <ul className="mt-3 space-y-2 pl-7">
+                            {todo.subtasks.map((sub) => (
+                              <li key={sub.id}>
+                                <label className="check-row text-xs">
+                                  <input
+                                    type="checkbox"
+                                    disabled={busy || Boolean(todo.deletedAt)}
+                                    checked={sub.completed}
+                                    onChange={(e) =>
+                                      void mutate(
+                                        `/api/todos/${todo.id}`,
+                                        "PATCH",
+                                        {
+                                          version: todo.version,
+                                          subtasks: todo.subtasks.map((s) =>
+                                            s.id === sub.id
+                                              ? {
+                                                  ...s,
+                                                  completed: e.target.checked,
+                                                }
+                                              : s,
+                                          ),
+                                        },
+                                      )
+                                    }
+                                  />
+                                  <span
+                                    className={
+                                      sub.completed
+                                        ? "text-muted line-through"
+                                        : "text-ink"
+                                    }
+                                  >
+                                    {sub.title}
+                                  </span>
+                                </label>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </article>
+                    ))}
+                  </section>
+                );
+              })}
+            </div>
+          )}
+          {data && (data.total > data.limit || page > 1) && (
+            <div className="flex items-center justify-between border-t border-rule-soft pt-4 text-xs text-muted">
+              <span>
+                {data.total} todos · Page {page} of{" "}
+                {Math.ceil(data.total / data.limit)}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page * data.limit >= data.total}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
+      </div>
+      {creating && (
+        <TodoEditor
+          key="create"
+          todo={{
+            id: "",
+            title: "",
+            dueDate: date,
+            notes: null,
+            priority: "normal",
+            status: "todo",
+            groupId: groupId || null,
+            subtasks: [],
+            version: 1,
+            deletedAt: null,
+          }}
+          groups={visibleGroups}
+          busy={busy}
+          error={error}
+          onClose={() => setCreating(false)}
+          onSave={async (body) => {
+            if (await mutate("/api/todos", "POST", body)) setCreating(false);
+          }}
+        />
       )}
-      {data && (data.total > data.limit || page > 1) && (
-        <div className="flex items-center justify-between border-t border-rule-soft pt-4 text-xs text-muted">
-          <span>
-            {data.total} todos · Page {page} of{" "}
-            {Math.ceil(data.total / data.limit)}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={page === 1}
-              onClick={() => setPage(page - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={page * data.limit >= data.total}
-              onClick={() => setPage(page + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+      {confirmTrash && (
+        <Dialog.Root
+          open
+          onOpenChange={(open) => {
+            if (!open && !busy) setConfirmTrash(null);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/25" />
+            <Dialog.Content {...overlayFocus} className="task-confirm-dialog">
+              <Dialog.Title className="font-serif text-xl">
+                Move to Trash?
+              </Dialog.Title>
+              <Dialog.Description className="mt-2 text-sm text-muted">
+                {confirmTrash.title} and its subtasks can be restored later.
+              </Dialog.Description>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => setConfirmTrash(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={async () => {
+                    if (
+                      await mutate(`/api/todos/${confirmTrash.id}`, "DELETE", {
+                        version: confirmTrash.version,
+                      })
+                    )
+                      setConfirmTrash(null);
+                  }}
+                >
+                  Move to Trash
+                </Button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
+      {rescheduling && (
+        <Dialog.Root
+          open
+          onOpenChange={(open) => {
+            if (!open && !busy) setRescheduling(null);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/25" />
+            <Dialog.Content {...overlayFocus} className="task-confirm-dialog">
+              <Dialog.Title className="font-serif text-xl">
+                Reschedule task
+              </Dialog.Title>
+              <Dialog.Description className="mt-2 text-sm text-muted">
+                {rescheduling.title}. Subtasks move with this task.
+              </Dialog.Description>
+              <form
+                className="mt-4 flex flex-col gap-3"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (
+                    await mutate(`/api/todos/${rescheduling.id}`, "PATCH", {
+                      version: rescheduling.version,
+                      dueDate: newDate,
+                    })
+                  )
+                    setRescheduling(null);
+                }}
+              >
+                <label>
+                  New date
+                  <input
+                    type="date"
+                    required
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                  />
+                </label>
+                {error && (
+                  <p role="alert" className="text-xs text-danger">
+                    {error}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => setRescheduling(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button disabled={busy}>Reschedule</Button>
+                </div>
+              </form>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
       )}
       {editing && (
         <TodoEditor
@@ -640,6 +906,59 @@ export function PersonalTodos({
           }}
         />
       )}
+    </section>
+  );
+}
+
+function OverdueTodoPreview({
+  selectedDate,
+  onEdit,
+}: {
+  selectedDate: string;
+  onEdit: (todo: Todo) => void;
+}) {
+  const { data, error, refresh } = useTodoQuery<Response>(
+    `/api/todos?view=overdue&limit=3&excludeDate=${selectedDate}`,
+  );
+  if (error)
+    return (
+      <p role="alert" className="text-xs text-danger">
+        {error}{" "}
+        <button type="button" onClick={refresh} className="underline">
+          Retry overdue tasks
+        </button>
+      </p>
+    );
+  if (!data?.total) return null;
+  return (
+    <section
+      aria-label="Overdue personal tasks"
+      className="border-b border-rule-soft pb-3"
+    >
+      <div className="flex justify-between gap-2">
+        <h3 className="text-sm font-medium text-danger">
+          Overdue · {data.total}
+        </h3>
+        <a href="/my-tasks" className="text-xs text-accent underline">
+          Review tasks
+        </a>
+      </div>
+      <ul className="mt-2 divide-y divide-rule-soft">
+        {data.items.map((todo) => (
+          <li key={todo.id}>
+            <button
+              type="button"
+              onClick={() => onEdit(todo)}
+              className="flex w-full items-start justify-between gap-3 py-2 text-left text-xs hover:text-accent"
+            >
+              <span className="min-w-0 break-words">{todo.title}</span>
+              <span className="shrink-0 text-muted">
+                {todo.dueDate && dateLabel(todo.dueDate)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -707,9 +1026,12 @@ function TodoEditor({
   onSave: (body: TodoData) => Promise<void>;
   onClose: () => void;
 }) {
+  const viewport = useOverlayViewport(true);
+  const overlayFocus = useOverlayFocus();
   const [title, setTitle] = useState(todo.title),
     [date, setDate] = useState(todo.dueDate ?? ""),
     [notes, setNotes] = useState(todo.notes ?? ""),
+    [url, setUrl] = useState(todo.url ?? ""),
     [priority, setPriority] = useState(todo.priority),
     [groupId, setGroupId] = useState(todo.groupId ?? "");
   const [subtasks, setSubtasks] = useState(todo.subtasks);
@@ -725,12 +1047,21 @@ function TodoEditor({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/40" />
         <Dialog.Content
+          {...overlayFocus}
+          style={
+            viewport
+              ? ({
+                  "--task-viewport-height": `${viewport.height}px`,
+                  "--task-viewport-top": `${viewport.top}px`,
+                } as CSSProperties)
+              : undefined
+          }
           aria-describedby="todo-editor-description"
-          className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-24px)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-panel border border-rule bg-paper p-5"
+          className="task-editor-dialog"
         >
           <div className="flex items-center justify-between">
             <Dialog.Title className="font-serif text-2xl">
-              Edit todo
+              {todo.id ? "Edit task" : "Add task"}
             </Dialog.Title>
             <Button
               variant="ghost"
@@ -756,6 +1087,7 @@ function TodoEditor({
                 title: title.trim(),
                 dueDate: date,
                 notes,
+                url,
                 priority,
                 groupId: groupId || null,
                 subtasks,
@@ -765,7 +1097,6 @@ function TodoEditor({
             <label>
               Title
               <input
-                autoFocus
                 value={title}
                 maxLength={200}
                 required
@@ -806,6 +1137,16 @@ function TodoEditor({
                   </option>
                 ))}
               </select>
+            </label>
+            <label>
+              External link
+              <input
+                type="url"
+                value={url}
+                maxLength={2048}
+                placeholder="https://…"
+                onChange={(e) => setUrl(e.target.value)}
+              />
             </label>
             <label>
               Notes
@@ -932,6 +1273,7 @@ function TodoEditor({
 }
 
 type TodoData = {
+  url?: string;
   title?: string;
   dueDate?: string;
   notes?: string;
@@ -972,27 +1314,12 @@ export function TodoAiComposer({
     [error, setError] = useState(""),
     [success, setSuccess] = useState("");
   const token = useRef(crypto.randomUUID());
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [existingTodos, setExistingTodos] = useState<Todo[]>([]);
-  const [duplicateLookupTruncated, setDuplicateLookupTruncated] =
-    useState(false);
-  const loadTodoReference = useCallback(
-    () =>
-      api<Response>("/api/todos?limit=100&view=all")
-        .then((result) => {
-          setGroups(result.groups);
-          setExistingTodos(result.items);
-          setDuplicateLookupTruncated(result.total > result.items.length);
-        })
-        .catch(() => {}),
-    [],
-  );
-  useEffect(() => {
-    void loadTodoReference();
-    const refresh = () => void loadTodoReference();
-    window.addEventListener("ssc:todos-changed", refresh);
-    return () => window.removeEventListener("ssc:todos-changed", refresh);
-  }, [loadTodoReference]);
+  const reference = useTodoQuery<Response>("/api/todos?limit=100&view=all");
+  const groups = reference.data?.groups ?? [];
+  const existingTodos = reference.data?.items ?? [];
+  const duplicateLookupTruncated =
+    (reference.data?.total ?? 0) > existingTodos.length;
+  const loadTodoReference = reference.refresh;
   async function generate() {
     setBusy(true);
     setError("");

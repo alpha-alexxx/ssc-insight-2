@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "./toast";
 import { api } from "@/lib/api-client";
+import { useTodoQuery } from "./use-todos-data";
 import type {
   PersonalTaskView,
   PlanPayload,
@@ -74,7 +75,8 @@ function patchDayInPlan<T extends PlanPayload>(
 export function usePlanData() {
   const toast = useToast();
   const [plan, setPlan] = useState<PlanApi | null>(null);
-  const [personalTasks, setPersonalTasks] = useState<PersonalTaskView[]>([]);
+  const taskQuery = useTodoQuery<PersonalTaskView[]>("/api/tasks");
+  const personalTasks = taskQuery.data ?? [];
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const requestId = useRef(0);
@@ -82,13 +84,9 @@ export function usePlanData() {
   const refresh = useCallback(async () => {
     const id = ++requestId.current;
     try {
-      const [planPayload, tasks] = await Promise.all([
-        api<PlanApi>("/api/plan"),
-        api<PersonalTaskView[]>("/api/tasks"),
-      ]);
+      const planPayload = await api<PlanApi>("/api/plan");
       if (id !== requestId.current) return;
       setPlan(planPayload);
-      setPersonalTasks(tasks);
       setError("");
     } catch (e) {
       if (id === requestId.current)
@@ -97,12 +95,6 @@ export function usePlanData() {
       if (id === requestId.current) setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    const changed = () => void refresh();
-    window.addEventListener("ssc:todos-changed", changed);
-    return () => window.removeEventListener("ssc:todos-changed", changed);
-  }, [refresh]);
 
   useEffect(() => {
     // Deferred like the tracker's refresh effect: the fetch starts on the
@@ -217,31 +209,29 @@ export function usePlanData() {
   );
 
   const createPersonalTask = useCallback(async (input: PersonalTaskInput) => {
-    const created = await api<PersonalTaskView>("/api/tasks", {
+    await api<PersonalTaskView>("/api/tasks", {
       method: "POST",
       body: JSON.stringify(input),
     });
-    setPersonalTasks((prev) => [...prev, created]);
+    window.dispatchEvent(new Event("ssc:todos-changed"));
   }, []);
 
   const updatePersonalTask = useCallback(
     async (id: string, patch: Partial<PersonalTaskInput>) => {
-      const updated = await api<PersonalTaskView>(`/api/tasks/${id}`, {
+      await api<PersonalTaskView>(`/api/tasks/${id}`, {
         method: "PUT",
         body: JSON.stringify(patch),
       });
-      setPersonalTasks((prev) =>
-        prev.map((task) => (task.id === id ? updated : task)),
-      );
+      window.dispatchEvent(new Event("ssc:todos-changed"));
     },
     [],
   );
 
   const deletePersonalTask = useCallback(
     async (id: string) => {
-      setPersonalTasks((prev) => prev.filter((task) => task.id !== id));
       try {
         await api(`/api/tasks/${id}`, { method: "DELETE" });
+        window.dispatchEvent(new Event("ssc:todos-changed"));
       } catch (e) {
         toast.error(
           "Couldn't delete the task",
