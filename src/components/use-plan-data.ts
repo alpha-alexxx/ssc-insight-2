@@ -35,6 +35,8 @@ export type PersonalTaskInput = {
   title: string;
   notes?: string;
   dueDate?: string | null;
+  /** Optional external link; the API validates strict http(s) before storing. */
+  url?: string | null;
   category: string;
   priority: string;
   status: string;

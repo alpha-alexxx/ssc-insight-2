@@ -2,12 +2,86 @@
 import { PlainIcon } from "../icon";
 import {
   PLAN_CATEGORIES,
+  effectiveStatus,
   isMockType,
+  linkHost,
+  type PersonalTaskView,
   type PlanTaskView,
 } from "@/lib/plan/view-model";
 import type { PlanTaskType } from "@/lib/plan/schema";
 
 /** Shared planner atoms — category chips, completion toggles, states. */
+
+/* ---------- personal-task status dots ----------
+   Colors come straight from the semantic tokens (--positive/--danger/
+   --accent/--rule), which are defined once in :root/.dark and never
+   overridden by [data-palette], so the dot semantics are identical across
+   all palette × style combinations. Overdue derives from the due date —
+   it is never stored. */
+export type PersonalTaskDisplayStatus =
+  | "todo"
+  | "in_progress"
+  | "completed"
+  | "overdue";
+
+export const STATUS_META: Record<
+  PersonalTaskDisplayStatus,
+  { label: string; dotClass: string; textClass: string }
+> = {
+  todo: {
+    label: "To do",
+    dotClass: "bg-paper border-2 border-rule",
+    textClass: "text-muted",
+  },
+  in_progress: {
+    label: "In progress",
+    dotClass: "bg-accent border-2 border-accent",
+    textClass: "text-accent",
+  },
+  completed: {
+    label: "Done",
+    dotClass: "bg-positive border-2 border-positive",
+    textClass: "text-positive",
+  },
+  overdue: {
+    label: "Overdue",
+    dotClass: "bg-danger border-2 border-danger ring-2 ring-danger-soft",
+    textClass: "text-danger",
+  },
+};
+
+export function statusOf(
+  task: Pick<PersonalTaskView, "status" | "dueDate">,
+  todayIso: string,
+): PersonalTaskDisplayStatus {
+  return effectiveStatus(task, todayIso) as PersonalTaskDisplayStatus;
+}
+
+/** The status cycle: clicking the dot advances a task through its states. */
+export function nextStatus(
+  status: PersonalTaskDisplayStatus,
+): PersonalTaskView["status"] {
+  if (status === "todo" || status === "overdue") return "in_progress";
+  if (status === "in_progress") return "completed";
+  return "todo";
+}
+
+export function StatusDot({
+  status,
+  size = 10,
+}: {
+  status: PersonalTaskDisplayStatus;
+  size?: number;
+}) {
+  const meta = STATUS_META[status];
+  return (
+    <span
+      aria-hidden="true"
+      style={{ width: size, height: size }}
+      className={`inline-block shrink-0 rounded-full ${meta.dotClass}`}
+    />
+  );
+}
 
 export function CategoryChip({ type }: { type: PlanTaskType }) {
   const mock = isMockType(type);
@@ -89,5 +163,129 @@ export function PlanErrorCard({ message, onRetry }: { message: string; onRetry: 
         Retry
       </button>
     </div>
+  );
+}
+
+/**
+ * One personal task row with the status-dot system: dot (click cycles
+ * todo → in progress → done), title, due chip, priority, optional http(s)
+ * link (opens a new tab), and edit/delete actions. Shared by the calendar's
+ * day panel, agenda, and the My Tasks list.
+ */
+export function PersonalTaskRow({
+  task,
+  today,
+  onCycleStatus,
+  onEdit,
+  onDelete,
+  compact = false,
+}: {
+  task: PersonalTaskView;
+  today: string;
+  onCycleStatus?: (task: PersonalTaskView) => void;
+  onEdit?: (task: PersonalTaskView) => void;
+  onDelete?: (task: PersonalTaskView) => void;
+  compact?: boolean;
+}) {
+  const status = statusOf(task, today);
+  const meta = STATUS_META[status];
+  const host = linkHost(task.url);
+  const done = status === "completed";
+  return (
+    <li className="flex items-start gap-2.5 px-4 py-2.5">
+      {onCycleStatus ? (
+        <button
+          type="button"
+          aria-label={`Status: ${meta.label}. Activate to change.`}
+          title={`Status: ${meta.label} — click to change`}
+          onClick={() => onCycleStatus(task)}
+          className="mt-1 flex size-5 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-110 motion-reduce:transition-none motion-reduce:hover:scale-100"
+        >
+          <StatusDot status={status} size={12} />
+        </button>
+      ) : (
+        <span className="mt-1 flex size-5 shrink-0 items-center">
+          <StatusDot status={status} size={12} />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <p
+          className={`text-[13px] font-medium leading-snug ${
+            done ? "muted line-through" : "text-ink"
+          }`}
+        >
+          {task.title}
+        </p>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px]">
+          <span
+            className={`inline-flex items-center gap-1 rounded-pill border border-rule-soft bg-soft px-2 py-0.5 font-medium ${meta.textClass}`}
+          >
+            <StatusDot status={status} size={6} />
+            {meta.label}
+          </span>
+          <span className="rounded-pill border border-rule-soft bg-soft px-2 py-0.5 text-muted">
+            {task.category === "other"
+              ? "Personal"
+              : task.category.replace(/_/g, " ")}
+          </span>
+          {task.dueDate && (
+            <span
+              className={`tabular ${
+                status === "overdue" ? "text-danger font-medium" : "text-muted"
+              }`}
+            >
+              {status === "overdue" ? "Overdue · " : "Due "}
+              {task.dueDate}
+            </span>
+          )}
+          {task.priority !== "normal" && (
+            <span
+              className={
+                task.priority === "high"
+                  ? "text-accent font-medium"
+                  : "text-muted"
+              }
+            >
+              {task.priority} priority
+            </span>
+          )}
+          {!compact && task.notes && (
+            <span className="max-w-48 truncate text-muted">{task.notes}</span>
+          )}
+        </p>
+      </div>
+      {task.url && (
+        <a
+          href={task.url}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          aria-label={`Open ${host ? `${host} link` : "link"} for ${task.title} in a new tab`}
+          title={host ? `Open ${host}` : "Open link"}
+          className="muted hover:text-accent transition-colors mt-0.5"
+        >
+          <PlainIcon name="arrowUpRight" size={14} />
+        </a>
+      )}
+      {onEdit && (
+        <button
+          type="button"
+          aria-label={`Edit ${task.title}`}
+          onClick={() => onEdit(task)}
+          className="muted hover:text-accent transition-colors mt-0.5"
+        >
+          <PlainIcon name="settings" size={14} />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          aria-label={`Delete ${task.title}`}
+          onClick={() => onDelete(task)}
+          className="muted hover:text-danger transition-colors mt-0.5"
+        >
+          <PlainIcon name="close" size={14} />
+        </button>
+      )}
+    </li>
   );
 }

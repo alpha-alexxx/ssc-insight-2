@@ -190,9 +190,15 @@ Fields use paper fill, rule borders, square corners, and 10px by 12px padding. L
 
 Panel headers use 24px horizontal padding, 20px top padding, and 12px bottom padding; compact dashboard panels use 16px by 14px. Tables use 11px muted headings on cream, a stronger header rule, and soft row rules. Cells have 15px by 18px padding, reducing to 13px by 12px below 768px. Row hover uses the soft fill. Accuracy badges use positive ink on the pale positive surface with square corners.
 
-The AI panel is a right-side shadcn Sheet: roughly 460px on desktop, full width on mobile, a subtle ink overlay that leaves the workspace visible, a fixed header/context chip, an independently scrolling message log, and a composer in normal flex flow (no fixed height) so the mobile keyboard cannot cover it. The Sheet uses the project's data-state CSS animations rather than adding an animation dependency.
+The AI panel is a right-side shadcn Sheet: roughly 520px on desktop, full width on mobile, a subtle ink overlay that leaves the workspace visible, a tabbed header (segment-group) for Coach chat / Log a mock, a fixed context chip in chat mode, an independently scrolling message log, and a composer in normal flex flow (no fixed height) so the mobile keyboard cannot cover it. The Sheet uses the project's data-state CSS animations rather than adding an animation dependency.
 
 Tooltips are square paper boxes with rule borders and 12px text. Empty charts reserve at least 220px with centered explanatory text; single-point trends use a compact explicit summary instead of an empty plot. Chart animations are disabled. MotionConfig respects the user's reduced-motion preference, and global CSS minimizes animation and transition durations for that preference. Notifications use only a small vertical entrance.
+
+## Status dots and personal-task conventions
+
+Personal tasks (My Tasks, calendar, dashboard preview) use a 10px `StatusDot` instead of text badges. The four states map to theme-protected semantic tokens only — never palette hues: `todo` is a hollow ink-outline dot (`border-rule` on paper), `in_progress` is `--accent`, `completed` is `--positive`, and `overdue` is `--danger` with a soft `ring-danger-soft` halo. Because `[data-palette=…]` blocks never override `--positive/--warning/--danger/--accent/--muted` (they are defined only in `:root`/`.dark`), dots render identically across all 15 palette × style combinations. The dot is a button when status can cycle; it exposes "Status: {label}. Activate to change." and its hover grows only under `motion-reduce:` guards.
+
+Dashed borders mean "user-created, not part of the read-only plan": personal-task chips in the month grid and AI task-suggestion cards use `border-dashed`, while plan assignments keep solid rules. Calendar month cells show at most two personal chips plus a `+N personal` overflow; the day/agenda panels show a separate "Personal tasks" section below plan tasks, never interleaved.
 
 ## Do's and Don'ts
 

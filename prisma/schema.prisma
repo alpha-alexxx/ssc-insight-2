@@ -192,6 +192,7 @@ model PersonalTask {
   title     String   @db.VarChar(200)
   notes     String?  @db.VarChar(2000)
   dueDate   String?  @db.VarChar(10)
+  url       String?  @db.VarChar(2048)
   category  String   @db.VarChar(40)
   priority  String   @db.VarChar(20)
   status    String   @db.VarChar(20)

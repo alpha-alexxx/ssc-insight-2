@@ -920,7 +920,14 @@ test("chat screen context is orientation-only and stays inside a data block", ()
   assert.match(system.content, /"date":"2026-10-27"/);
   assert.match(system.content, /screen_context is orientation only/);
   assert.equal(system.content.includes("attemptId"), false);
-  assert.equal(system.content.includes("notes"), false);
+  // "notes" must never appear as sent user data. The prompt template's own
+  // task-suggestion JSON schema (a `"notes"` field label) is not user data,
+  // so assert against the tracker_context data block itself.
+  const contextBlock = system.content.match(
+    /<tracker_context>\n([\s\S]*?)\n<\/tracker_context>/,
+  )?.[1];
+  assert.ok(contextBlock, "tracker_context block must be present");
+  assert.equal(contextBlock.includes("notes"), false);
 });
 
 test("chat without screen context does not emit the screen block", () => {
@@ -929,4 +936,20 @@ test("chat without screen context does not emit the screen block", () => {
     { role: "user", content: "Summarise my progress." },
   ]);
   assert.equal(messages[0].content.includes("<screen_context>"), false);
+});
+
+test("chat prompt keeps the task-suggestion contract inside the read-only rules", () => {
+  const context = buildAiContext([], null);
+  const messages = chatMessages(context, [
+    { role: "user", content: "Add a task to revise geometry." },
+  ]);
+  const system = messages[0].content;
+  // The suggestion protocol is present with its fenced block and enums…
+  assert.match(system, /```task-suggestion/);
+  assert.match(system, /"dueDate":"<optional YYYY-MM-DD>"/);
+  assert.match(system, /"priority":"<low\|normal\|high>"/);
+  assert.match(system, /"url":"<optional https:\/\/ link>"/);
+  // …and it stays client-confirmed: the model never claims a write.
+  assert.match(system, /Never claim the task was saved/);
+  assert.match(system, /You are read-only\. Never claim to save/);
 });

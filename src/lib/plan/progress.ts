@@ -1,4 +1,5 @@
 import { mutateTodo } from "../todos";
+import { safeTodoUrl } from "../todos-core";
 import "server-only";
 import { z } from "zod";
 import { database } from "@/lib/db";
@@ -211,10 +212,23 @@ export const personalTaskStatuses = [
   "completed",
 ] as const;
 
+/**
+ * Strict external-link policy for personal tasks: only http(s) URLs are
+ * stored, so a task link can always be rendered as a plain anchor that opens
+ * a new tab. javascript:, data:, and scheme-less text never reach the
+ * database. An empty string is allowed here and normalized to null before
+ * persisting, so "cleared" inputs erase the link.
+ * The zod wrapper is shared with the todo/AI proposal schemas
+ * (`safeTodoUrl` in todos-core.ts); the client-safe boolean core lives in
+ * view-model.ts (`safeHttpUrlCore`).
+ */
+export const safeHttpUrl = safeTodoUrl;
+
 export const personalTaskCreate = z.object({
   title: z.string().trim().min(1).max(200),
   notes: z.string().trim().max(2000).optional(),
   dueDate: z.iso.date().nullable().optional(),
+  url: safeHttpUrl.nullable().optional(),
   category: z.enum(personalTaskCategories).default("other"),
   priority: z.enum(personalTaskPriorities).default("normal"),
   status: z.enum(personalTaskStatuses).default("todo"),
@@ -229,6 +243,7 @@ function toView(row: {
   title: string;
   notes: string | null;
   dueDate: string | null;
+  url: string | null;
   category: string;
   priority: string;
   status: string;
@@ -239,6 +254,7 @@ function toView(row: {
     title: row.title,
     notes: row.notes ?? "",
     dueDate: row.dueDate,
+    url: row.url ?? "",
     category: row.category,
     priority: (row.priority as PersonalTaskView["priority"]) ?? "normal",
     status: (row.status as PlanTaskStatus) ?? "todo",
@@ -266,6 +282,7 @@ export async function createPersonalTask(
       title: input.title,
       notes: input.notes ?? null,
       dueDate: input.dueDate ?? null,
+      url: input.url ? input.url : null,
       category: input.category,
       priority: input.priority,
       status: input.status,
@@ -285,6 +302,9 @@ export async function updatePersonalTask(
   if (!existing) throw new RequestError("Task not found", 404);
   const { status, category, ...patch } = input;
   void category;
+  // A cleared link input arrives as "" (valid per safeHttpUrl); persist the
+  // absence of a link as NULL so empty strings never accumulate.
+  if (patch.url === "") patch.url = null;
   const row = await database().$transaction((tx) =>
     mutateTodo(tx, userId, id, {
       ...patch,
