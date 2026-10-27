@@ -15,12 +15,7 @@ import {
   useReducedMotion,
 } from "motion/react";
 import { PlainIcon } from "./icon";
-import {
-  AppFrame,
-  VIEW_HREF,
-  VIEW_META,
-  type AppView,
-} from "./app-shell";
+import { AppFrame, VIEW_HREF, VIEW_META, type AppView } from "./app-shell";
 import { CompareView } from "./compare-view";
 import { DateRangeFilter } from "./date-range-filter";
 import { HistoryPanel } from "./history-panel";
@@ -34,6 +29,7 @@ import { useAiWorkspace } from "./use-ai-workspace";
 import { useBackupImport } from "./use-backup-import";
 import { useWorkspaceData } from "./use-workspace-data";
 import { usePlanData } from "./use-plan-data";
+import { PlannerTabs } from "./plan/planner-tabs";
 import { CalendarView } from "./plan/calendar-view";
 import { TasksView } from "./plan/tasks-view";
 import { PlanDayView } from "./plan/plan-day-view";
@@ -392,8 +388,7 @@ function WorkspaceShellInner({
       .filter((attempt): attempt is Attempt => !!attempt)
       .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
   }, [allAttempts, analytics]);
-  const visibleAttempts =
-    view === "dashboard" ? dashboardAttempts : attempts;
+  const visibleAttempts = view === "dashboard" ? dashboardAttempts : attempts;
 
   // Screen orientation for the AI panel. This object contains only the view
   // name and (when relevant) an ISO date — never titles, notes, or IDs.
@@ -528,272 +523,280 @@ function WorkspaceShellInner({
                 exit={reduced ? undefined : { opacity: 0, y: -6 }}
                 transition={viewMotion}
               >
-            {view === "add" ? (
-              <Suspense
-                fallback={
-                  <div className="mx-auto max-w-6xl">
-                    <Skeleton className="h-8 w-48" />
-                    <Skeleton className="mt-4 h-64 w-full" />
-                  </div>
-                }
-              >
-                <AddMockView
-                  key={editing?.id ?? "new"}
-                  attempt={editing}
-                  knownAttempts={allAttempts}
-                  prefill={addPrefill}
-                  onConsumePrefill={() => setAddPrefill(null)}
-                  onClose={closeForm}
-                  onSaved={savedMock}
-                />
-              </Suspense>
-            ) : (
-              <>
-                {view === "dashboard" && (
-                  <PageHeader
-                    title="Dashboard"
-                    description="Today's work, plan progress, and the performance that matters."
-                    meta={
-                      <>
-                        <span>{longDate(istTodayIso())}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>SSC CGL Tier 2</span>
-                        {planApi.plan ? (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span>
-                              {planApi.plan.days.find(
-                                (day) => day.date === istTodayIso(),
-                              )?.day
-                                ? `Plan day ${
-                                    planApi.plan.days.find(
-                                      (day) => day.date === istTodayIso(),
-                                    )?.day
-                                  } of 50`
-                                : "Outside the plan window"}
-                            </span>
-                          </>
-                        ) : null}
-                      </>
+                {view === "add" ? (
+                  <Suspense
+                    fallback={
+                      <div className="mx-auto max-w-6xl">
+                        <Skeleton className="h-8 w-48" />
+                        <Skeleton className="mt-4 h-64 w-full" />
+                      </div>
                     }
-                    actions={
-                      <Button size="sm" onClick={add}>
-                        <PlainIcon name="plus" size={14} /> Add mock
-                      </Button>
-                    }
-                  />
-                )}
-                {view === "calendar" && (
-                  <PageHeader
-                    title="Study planner"
-                    description="The full 50-day plan with scheduled tests, revision, and your saved attempts."
-                  />
-                )}
-                {view === "tasks" && (
-                  <PageHeader
-                    title="My tasks"
-                    description="Plan assignments and your own tasks, in one list."
-                  />
-                )}
-                {view === "history" && (
-                  <PageHeader
-                    title="Mock history"
-                    description="Every saved result with its actual attempt date, score, and details."
-                    actions={
-                      <Button size="sm" onClick={add}>
-                        <PlainIcon name="plus" size={14} /> Add mock
-                      </Button>
-                    }
-                  />
-                )}
-                {view === "compare" && (
-                  <PageHeader
-                    title="Compare mocks"
-                    description="Put up to four results side by side and find the difference behind the scores."
-                    actions={
-                      <Button size="sm" onClick={add}>
-                        <PlainIcon name="plus" size={14} /> Add mock
-                      </Button>
-                    }
-                  />
-                )}
-                {view === "settings" && (
-                  <PageHeader
-                    title="Settings"
-                    description="Target, appearance, account data, and the private workspace."
-                  />
-                )}
-                {error && (
-                  <div
-                    role="alert"
-                    className="mb-5 flex flex-wrap gap-3 justify-between items-center bg-warning-soft text-warning border border-warning rounded-control px-5 py-4"
                   >
-                    <div>
-                      <p className="font-medium text-sm">
-                        Database connection needs attention
-                      </p>
-                      <p className="text-xs mt-1 max-w-2xl">{error}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void refresh()}
-                      disabled={loading}
-                    >
-                      <PlainIcon
-                        name="refresh"
-                        size={13}
-                        className={loading ? "animate-spin" : ""}
-                      />{" "}
-                      Retry
-                    </Button>
-                  </div>
-                )}
-                {view === "calendar" ? (
-                  <CalendarView
-                    planApi={planApi}
-                    attempts={allAttempts}
-                    onAddMock={addMockForDate}
-                    onOpenAttempt={openDetail}
-                    onSelectedDateChange={setPlannerDate}
-                  />
-                ) : view === "tasks" ? (
-                  <TasksView planApi={planApi} />
-                ) : view === "plan" ? (
-                  <PlanDayView
-                    date={decodeURIComponent(pathname.slice("/plan/".length))}
-                    planApi={planApi}
-                    attempts={allAttempts}
-                    onAddMock={addMockForDate}
-                    onOpenAttempt={openDetail}
-                  />
-                ) : view === "settings" ? (
-                  <SettingsPanels
-                    target={target}
-                    targetInput={targetInput}
-                    setTargetInput={setTargetInput}
-                    saveTarget={saveTarget}
-                    busy={busy}
-                    userName={userName}
-                    userEmail={userEmail}
-                    onDownload={(format) => void download(format)}
-                    onChooseFile={() => fileRef.current?.click()}
-                    fileInput={
-                      <input
-                        className="hidden"
-                        type="file"
-                        accept=".json,application/json"
-                        ref={fileRef}
-                        aria-label="Choose backup file"
-                        onChange={(e) =>
-                          void backup.readBackup(e.target.files?.[0])
-                        }
-                      />
-                    }
-                    backupName={backup.backupName}
-                    preview={backup.preview}
-                    importMode={backup.importMode}
-                    changeImportMode={backup.changeImportMode}
-                    applyTarget={backup.applyTarget}
-                    changeApplyTarget={backup.changeApplyTarget}
-                    safetyDownloaded={backup.safetyDownloaded}
-                    onDownloadSafety={() => void backup.downloadSafetyBackup()}
-                    onReset={backup.resetImport}
-                    onCommit={() => void backup.commitImport(false)}
-                    targetChange={
-                      backup.preview != null &&
-                      backup.applyTarget &&
-                      backup.preview.target.available &&
-                      backup.preview.target.current !==
-                        backup.preview.target.incoming
-                    }
-                    onOpenReplace={() => backup.setReplaceOpen(true)}
-                  />
-                ) : view === "dashboard" ? (
-                  <DashboardView
-                    planApi={planApi}
-                    analytics={analytics}
-                    attempts={dashboardAttempts}
-                    target={target}
-                    loading={loading}
-                    coach={coachNode}
-                    scopeControls={
-                      <ScopeFilters
-                        view={view}
-                        scope={scope}
-                        setScope={setScope}
-                        filters={filters}
-                        setFilters={setFilters}
-                        changeFilter={changeFilter}
-                        platforms={platforms}
-                      />
-                    }
-                    onOpenAttempt={openDetail}
-                    onAdd={add}
-                    onViewAll={viewAllHistory}
-                    onOpenDay={(date) => {
-                      setPlannerDate(date);
-                      router.push(`/plan/${date}`);
-                    }}
-                  />
+                    <AddMockView
+                      key={editing?.id ?? "new"}
+                      attempt={editing}
+                      knownAttempts={allAttempts}
+                      prefill={addPrefill}
+                      onConsumePrefill={() => setAddPrefill(null)}
+                      onClose={closeForm}
+                      onSaved={savedMock}
+                    />
+                  </Suspense>
                 ) : (
                   <>
-                    <div className="mb-4">
-                      <ScopeFilters
-                        view={view}
-                        scope={scope}
-                        setScope={setScope}
-                        filters={filters}
-                        setFilters={setFilters}
-                        changeFilter={changeFilter}
-                        platforms={platforms}
+                    {view === "dashboard" && (
+                      <PageHeader
+                        title="Dashboard"
+                        description="Today's work, plan progress, and the performance that matters."
+                        meta={
+                          <>
+                            <span>{longDate(istTodayIso())}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>SSC CGL Tier 2</span>
+                            {planApi.plan ? (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span>
+                                  {planApi.plan.days.find(
+                                    (day) => day.date === istTodayIso(),
+                                  )?.day
+                                    ? `Plan day ${
+                                        planApi.plan.days.find(
+                                          (day) => day.date === istTodayIso(),
+                                        )?.day
+                                      } of 50`
+                                    : "Outside the plan window"}
+                                </span>
+                              </>
+                            ) : null}
+                          </>
+                        }
+                        actions={
+                          <Button size="sm" onClick={add}>
+                            <PlainIcon name="plus" size={14} /> Add mock
+                          </Button>
+                        }
                       />
-                    </div>
-                    {loading && (
-                      <p
-                        role="status"
-                        className="mb-3 flex items-center gap-2 text-xs text-muted"
-                      >
-                        <PlainIcon
-                          name="refresh"
-                          size={12}
-                          className="animate-spin"
-                        />{" "}
-                        Updating your results…
-                      </p>
                     )}
-                    {view === "compare" ? (
-                      <CompareView
-                        attempts={attempts}
-                        compared={compared}
-                        selected={selected}
-                        onToggle={toggleCompare}
-                        onClear={clearCompare}
+                    {view === "calendar" && (
+                      <PageHeader
+                        title="Study planner"
+                        description="Your mock study plan and dated personal checklists, in one planner."
+                      />
+                    )}
+                    {view === "tasks" && (
+                      <PageHeader
+                        title="My tasks"
+                        description="Plan assignments and your own tasks, in one list."
+                      />
+                    )}
+                    {view === "history" && (
+                      <PageHeader
+                        title="Mock history"
+                        description="Every saved result with its actual attempt date, score, and details."
+                        actions={
+                          <Button size="sm" onClick={add}>
+                            <PlainIcon name="plus" size={14} /> Add mock
+                          </Button>
+                        }
+                      />
+                    )}
+                    {view === "compare" && (
+                      <PageHeader
+                        title="Compare mocks"
+                        description="Put up to four results side by side and find the difference behind the scores."
+                        actions={
+                          <Button size="sm" onClick={add}>
+                            <PlainIcon name="plus" size={14} /> Add mock
+                          </Button>
+                        }
+                      />
+                    )}
+                    {view === "settings" && (
+                      <PageHeader
+                        title="Settings"
+                        description="Target, appearance, account data, and the private workspace."
+                      />
+                    )}
+                    {error && (
+                      <div
+                        role="alert"
+                        className="mb-5 flex flex-wrap gap-3 justify-between items-center bg-warning-soft text-warning border border-warning rounded-control px-5 py-4"
+                      >
+                        <div>
+                          <p className="font-medium text-sm">
+                            Database connection needs attention
+                          </p>
+                          <p className="text-xs mt-1 max-w-2xl">{error}</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void refresh()}
+                          disabled={loading}
+                        >
+                          <PlainIcon
+                            name="refresh"
+                            size={13}
+                            className={loading ? "animate-spin" : ""}
+                          />{" "}
+                          Retry
+                        </Button>
+                      </div>
+                    )}
+                    {view === "calendar" ? (
+                      <PlannerTabs onChanged={() => void planApi.refresh()}>
+                        <CalendarView
+                          planApi={planApi}
+                          attempts={allAttempts}
+                          onAddMock={addMockForDate}
+                          onOpenAttempt={openDetail}
+                          onSelectedDateChange={setPlannerDate}
+                        />
+                      </PlannerTabs>
+                    ) : view === "tasks" ? (
+                      <PlannerTabs onChanged={() => void planApi.refresh()}>
+                        <TasksView planApi={planApi} mockOnly />
+                      </PlannerTabs>
+                    ) : view === "plan" ? (
+                      <PlanDayView
+                        date={decodeURIComponent(
+                          pathname.slice("/plan/".length),
+                        )}
+                        planApi={planApi}
+                        attempts={allAttempts}
+                        onAddMock={addMockForDate}
+                        onOpenAttempt={openDetail}
+                      />
+                    ) : view === "settings" ? (
+                      <SettingsPanels
+                        target={target}
+                        targetInput={targetInput}
+                        setTargetInput={setTargetInput}
+                        saveTarget={saveTarget}
+                        busy={busy}
+                        userName={userName}
+                        userEmail={userEmail}
+                        onDownload={(format) => void download(format)}
+                        onChooseFile={() => fileRef.current?.click()}
+                        fileInput={
+                          <input
+                            className="hidden"
+                            type="file"
+                            accept=".json,application/json"
+                            ref={fileRef}
+                            aria-label="Choose backup file"
+                            onChange={(e) =>
+                              void backup.readBackup(e.target.files?.[0])
+                            }
+                          />
+                        }
+                        backupName={backup.backupName}
+                        preview={backup.preview}
+                        importMode={backup.importMode}
+                        changeImportMode={backup.changeImportMode}
+                        applyTarget={backup.applyTarget}
+                        changeApplyTarget={backup.changeApplyTarget}
+                        safetyDownloaded={backup.safetyDownloaded}
+                        onDownloadSafety={() =>
+                          void backup.downloadSafetyBackup()
+                        }
+                        onReset={backup.resetImport}
+                        onCommit={() => void backup.commitImport(false)}
+                        targetChange={
+                          backup.preview != null &&
+                          backup.applyTarget &&
+                          backup.preview.target.available &&
+                          backup.preview.target.current !==
+                            backup.preview.target.incoming
+                        }
+                        onOpenReplace={() => backup.setReplaceOpen(true)}
+                      />
+                    ) : view === "dashboard" ? (
+                      <DashboardView
+                        planApi={planApi}
+                        analytics={analytics}
+                        attempts={dashboardAttempts}
+                        target={target}
+                        loading={loading}
+                        coach={coachNode}
+                        scopeControls={
+                          <ScopeFilters
+                            view={view}
+                            scope={scope}
+                            setScope={setScope}
+                            filters={filters}
+                            setFilters={setFilters}
+                            changeFilter={changeFilter}
+                            platforms={platforms}
+                          />
+                        }
+                        onOpenAttempt={openDetail}
+                        onAdd={add}
+                        onViewAll={viewAllHistory}
+                        onOpenDay={(date) => {
+                          setPlannerDate(date);
+                          router.push(`/plan/${date}`);
+                        }}
                       />
                     ) : (
-                      <HistoryPanel
-                        mode="history"
-                        attempts={visibleAttempts}
-                        totalCount={allAttempts.length}
-                        sourceCount={analytics?.sourceAttemptCount ?? 0}
-                        search={filters.search ?? ""}
-                        onSearch={searchFilter}
-                        onViewAll={viewAllHistory}
-                        onOpen={openDetail}
-                        onAdd={add}
-                      />
+                      <>
+                        <div className="mb-4">
+                          <ScopeFilters
+                            view={view}
+                            scope={scope}
+                            setScope={setScope}
+                            filters={filters}
+                            setFilters={setFilters}
+                            changeFilter={changeFilter}
+                            platforms={platforms}
+                          />
+                        </div>
+                        {loading && (
+                          <p
+                            role="status"
+                            className="mb-3 flex items-center gap-2 text-xs text-muted"
+                          >
+                            <PlainIcon
+                              name="refresh"
+                              size={12}
+                              className="animate-spin"
+                            />{" "}
+                            Updating your results…
+                          </p>
+                        )}
+                        {view === "compare" ? (
+                          <CompareView
+                            attempts={attempts}
+                            compared={compared}
+                            selected={selected}
+                            onToggle={toggleCompare}
+                            onClear={clearCompare}
+                          />
+                        ) : (
+                          <HistoryPanel
+                            mode="history"
+                            attempts={visibleAttempts}
+                            totalCount={allAttempts.length}
+                            sourceCount={analytics?.sourceAttemptCount ?? 0}
+                            search={filters.search ?? ""}
+                            onSearch={searchFilter}
+                            onViewAll={viewAllHistory}
+                            onOpen={openDetail}
+                            onAdd={add}
+                          />
+                        )}
+                      </>
                     )}
+                    <footer className="flex flex-wrap justify-between gap-2 pt-6 text-[10px] text-muted">
+                      <p>Built for progress, one mock at a time.</p>
+                      <p>
+                        SSC CGL Tier 2 <span className="mx-2">·</span> All dates
+                        in India Standard Time
+                      </p>
+                    </footer>
                   </>
                 )}
-                <footer className="flex flex-wrap justify-between gap-2 pt-6 text-[10px] text-muted">
-                  <p>Built for progress, one mock at a time.</p>
-                  <p>
-                    SSC CGL Tier 2 <span className="mx-2">·</span> All dates in
-                    India Standard Time
-                  </p>
-                </footer>
-              </>
-            )}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -913,11 +916,7 @@ function ScopeFilters({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div
-        role="group"
-        aria-label="Analytical scope"
-        className="segment-group"
-      >
+      <div role="group" aria-label="Analytical scope" className="segment-group">
         {(
           [
             { id: "full", label: "Full mocks" },

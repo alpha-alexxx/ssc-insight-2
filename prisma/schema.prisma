@@ -35,6 +35,7 @@ enum ImportSource {
 }
 
 enum AiFeature {
+  todos
   coach
   chat
   extract
@@ -196,9 +197,35 @@ model PersonalTask {
   priority  String   @db.VarChar(20)
   status    String   @db.VarChar(20)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  groupId String?
+  group TodoGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  subtasks Json @default("[]")
+  deletedAt DateTime? @db.Timestamptz(3)
+  version Int @default(1)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([userId, status])
   @@index([userId, dueDate])
+  @@index([userId, deletedAt, dueDate])
   @@schema("ssc_insight")
+}
+
+model TodoGroup {
+ id String @id @default(uuid())
+ userId String
+ name String @db.VarChar(80)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ tasks PersonalTask[]
+ @@unique([userId,name])
+ @@schema("ssc_insight")
+}
+model TodoMutation {
+ id String @id @default(uuid())
+ userId String
+ key String @db.VarChar(100)
+ payloadHash String
+ result Json
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([userId,key])
+ @@schema("ssc_insight")
 }

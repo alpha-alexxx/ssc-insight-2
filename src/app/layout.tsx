@@ -9,6 +9,8 @@ import {
 } from "@/components/theme-style-provider";
 import { ToastProvider } from "@/components/toast";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "SSC Insight · Mock tracker",
@@ -47,6 +49,8 @@ export default function RootLayout({
             </ErrorBoundary>
           </ThemeStyleProvider>
         </ThemeProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

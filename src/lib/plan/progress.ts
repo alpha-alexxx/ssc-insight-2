@@ -1,3 +1,5 @@
+import { mutateTodo } from "../todos";
+import { safeTodoUrl } from "../todos-core";
 import "server-only";
 import { z } from "zod";
 import { database } from "@/lib/db";
@@ -11,7 +13,6 @@ import type {
   PlanTaskStatus,
   PlanTaskView,
 } from "./view-model";
-import { safeHttpUrlCore } from "./view-model";
 
 /**
  * User progress for the static 50-day plan. Plan rows are keyed by
@@ -73,7 +74,8 @@ export async function getPlanPayload(userId: string): Promise<PlanPayload> {
       })),
       notes: progress?.dayNotes ?? "",
       dayCompleted:
-        allTasksDone && day.daily_checklist.every((c) => checklistDone.includes(c.id)),
+        allTasksDone &&
+        day.daily_checklist.every((c) => checklistDone.includes(c.id)),
     };
   });
 
@@ -158,7 +160,11 @@ export async function setDayRevision(
   done: boolean,
 ) {
   const planDay = getPlanDays().find((d) => d.day === day);
-  if (!planDay || revisionIndex < 0 || revisionIndex >= planDay.revision_tasks.length)
+  if (
+    !planDay ||
+    revisionIndex < 0 ||
+    revisionIndex >= planDay.revision_tasks.length
+  )
     throw new RequestError("Unknown revision task", 404);
   const existing = await database().planDayProgress.findUnique({
     where: { userId_day: { userId, day } },
@@ -177,7 +183,13 @@ export async function setDayRevision(
 export async function setDayNotes(userId: string, day: number, notes: string) {
   const row = await database().planDayProgress.upsert({
     where: { userId_day: { userId, day } },
-    create: { userId, day, checklistDone: [], revisionDone: [], dayNotes: notes },
+    create: {
+      userId,
+      day,
+      checklistDone: [],
+      revisionDone: [],
+      dayNotes: notes,
+    },
     update: { dayNotes: notes },
   });
   return { day, dayNotes: row.dayNotes };
@@ -206,14 +218,11 @@ export const personalTaskStatuses = [
  * a new tab. javascript:, data:, and scheme-less text never reach the
  * database. An empty string is allowed here and normalized to null before
  * persisting, so "cleared" inputs erase the link.
- * The core check lives in the client-safe view-model; this adds the zod
- * wrapper and the length cap for the API boundary.
+ * The zod wrapper is shared with the todo/AI proposal schemas
+ * (`safeTodoUrl` in todos-core.ts); the client-safe boolean core lives in
+ * view-model.ts (`safeHttpUrlCore`).
  */
-export const safeHttpUrl = z
-  .string()
-  .trim()
-  .max(2048)
-  .refine(safeHttpUrlCore, "Use a full link starting with https:// or http://");
+export const safeHttpUrl = safeTodoUrl;
 
 export const personalTaskCreate = z.object({
   title: z.string().trim().min(1).max(200),
@@ -255,7 +264,7 @@ function toView(row: {
 
 export async function listPersonalTasks(userId: string) {
   const rows = await database().personalTask.findMany({
-    where: { userId },
+    where: { userId, deletedAt: null },
     orderBy: [{ createdAt: "asc" }],
   });
   return rows.map(toView);
@@ -265,6 +274,8 @@ export async function createPersonalTask(
   userId: string,
   input: PersonalTaskCreate,
 ) {
+  if (!input.dueDate)
+    throw new RequestError("Choose a date for this todo.", 400);
   const row = await database().personalTask.create({
     data: {
       userId,
@@ -289,17 +300,18 @@ export async function updatePersonalTask(
     where: { id, userId },
   });
   if (!existing) throw new RequestError("Task not found", 404);
-  const data: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input))
-    if (value !== undefined) data[key] = value;
+  const { status, category, ...patch } = input;
+  void category;
   // A cleared link input arrives as "" (valid per safeHttpUrl); persist the
   // absence of a link as NULL so empty strings never accumulate.
-  if (data.url === "") data.url = null;
-  if (!Object.keys(data).length) return toView(existing);
-  const row = await database().personalTask.update({
-    where: { id: existing.id },
-    data,
-  });
+  if (patch.url === "") patch.url = null;
+  const row = await database().$transaction((tx) =>
+    mutateTodo(tx, userId, id, {
+      ...patch,
+      version: existing.version,
+      ...(status ? { completed: status === "completed" } : {}),
+    }),
+  );
   return toView(row);
 }
 
@@ -308,6 +320,8 @@ export async function deletePersonalTask(userId: string, id: string) {
     where: { id, userId },
   });
   if (!existing) throw new RequestError("Task not found", 404);
-  await database().personalTask.delete({ where: { id: existing.id } });
+  await database().$transaction((tx) =>
+    mutateTodo(tx, userId, id, { version: existing.version }, true),
+  );
   return { id };
 }

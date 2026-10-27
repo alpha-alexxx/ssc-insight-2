@@ -40,7 +40,13 @@ const CATEGORIES = [
   { id: "other", label: "Other" },
 ];
 
-export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData> }) {
+export function TasksView({
+  planApi,
+  mockOnly = false,
+}: {
+  planApi: ReturnType<typeof usePlanData>;
+  mockOnly?: boolean;
+}) {
   const {
     plan,
     personalTasks,
@@ -57,7 +63,9 @@ export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData>
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<PersonalTaskView | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<PersonalTaskView | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<PersonalTaskView | null>(
+    null,
+  );
 
   const planTasks = useMemo(() => {
     if (!plan) return [] as { task: PlanTaskView; day: PlanDayView }[];
@@ -118,9 +126,11 @@ export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData>
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button size="sm" onClick={() => setFormOpen(true)}>
-          <PlainIcon name="plus" size={14} /> New task
-        </Button>
+        {!mockOnly && (
+          <Button size="sm" onClick={() => setFormOpen(true)}>
+            <PlainIcon name="plus" size={14} /> New task
+          </Button>
+        )}
       </div>
 
       {loading && !plan ? (
@@ -128,7 +138,10 @@ export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData>
           <div className="h-24 w-full bg-rule-soft rounded" />
         </div>
       ) : !plan ? (
-        <PlanErrorCard message={error || "Could not load tasks."} onRetry={() => void refresh()} />
+        <PlanErrorCard
+          message={error || "Could not load tasks."}
+          onRetry={() => void refresh()}
+        />
       ) : (
         <>
           <TaskList
@@ -141,19 +154,29 @@ export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData>
             count={planFiltered.length}
           >
             {planFiltered.map(({ task }) => (
-              <li key={task.key} className="flex items-start gap-3 px-4 sm:px-6 py-3">
+              <li
+                key={task.key}
+                className="flex items-start gap-3 px-4 sm:px-6 py-3"
+              >
                 <CompleteToggle
                   completed={task.completed}
                   label={`Mark ${task.name} ${task.completed ? "incomplete" : "complete"}`}
-                  onToggle={() => updateTask(task.key, { completed: !task.completed })}
+                  onToggle={() =>
+                    updateTask(task.key, { completed: !task.completed })
+                  }
                 />
                 <div className="min-w-0 flex-1">
-                  <p className={`text-[13px] font-medium ${task.completed ? "muted line-through" : ""}`}>
+                  <p
+                    className={`text-[13px] font-medium ${task.completed ? "muted line-through" : ""}`}
+                  >
                     {task.name}
                   </p>
                   <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] muted">
                     <CategoryChip type={task.type} />
-                    <Link href={`/plan/${task.date}`} className="hover:text-accent transition-colors">
+                    <Link
+                      href={`/plan/${task.date}`}
+                      className="hover:text-accent transition-colors"
+                    >
                       {shortDate(task.date)} · Day {task.day}
                     </Link>
                     <span className="tabular">
@@ -174,35 +197,37 @@ export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData>
             ))}
           </TaskList>
 
-          <div className="mt-6">
-            <TaskList
-              heading="My personal tasks"
-              emptyText="No personal tasks here yet — create one with New task."
-              count={personalFiltered.length}
-              action={
-                personalFiltered.length > 0 ? (
-                  <span className="text-[11px] muted">
-                    Click the dot to change status · edit or delete from the row
-                  </span>
-                ) : undefined
-              }
-            >
-              {personalFiltered.map((task) => (
-                <PersonalTaskRow
-                  key={task.id}
-                  task={task}
-                  today={today}
-                  onCycleStatus={(t) =>
-                    void updatePersonalTask(t.id, {
-                      status: nextStatus(statusOf(t, today)),
-                    })
-                  }
-                  onEdit={setEditing}
-                  onDelete={setConfirmDelete}
-                />
-              ))}
-            </TaskList>
-          </div>
+          {!mockOnly && (
+            <div className="mt-6">
+              <TaskList
+                heading="My personal tasks"
+                emptyText="No personal tasks here yet — create one with New task."
+                count={personalFiltered.length}
+                action={
+                  personalFiltered.length > 0 ? (
+                    <span className="text-[11px] muted">
+                      Click the dot to change status · edit or delete from the row
+                    </span>
+                  ) : undefined
+                }
+              >
+                {personalFiltered.map((task) => (
+                  <PersonalTaskRow
+                    key={task.id}
+                    task={task}
+                    today={today}
+                    onCycleStatus={(t) =>
+                      void updatePersonalTask(t.id, {
+                        status: nextStatus(statusOf(t, today)),
+                      })
+                    }
+                    onEdit={setEditing}
+                    onDelete={setConfirmDelete}
+                  />
+                ))}
+              </TaskList>
+            </div>
+          )}
         </>
       )}
 
@@ -235,7 +260,11 @@ export function TasksView({ planApi }: { planApi: ReturnType<typeof usePlanData>
               This removes your personal task. The study plan is not affected.
             </Dialog.Description>
             <div className="flex justify-end gap-2 mt-6">
-              <Button variant="outline" size="sm" onClick={() => setConfirmDelete(null)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmDelete(null)}
+              >
                 Keep task
               </Button>
               <Button
@@ -273,8 +302,7 @@ function TaskList({
     <section aria-label={heading} className="panel">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule-soft px-4 sm:px-6 py-4">
         <h2 className="panel-title text-lg">
-          {heading}{" "}
-          <span className="text-sm font-normal muted">· {count}</span>
+          {heading} <span className="text-sm font-normal muted">· {count}</span>
         </h2>
         {action}
       </div>
@@ -312,7 +340,8 @@ function PersonalTaskForm({
   if (key !== lastKey) {
     setLastKey(key);
     setTitle(editing?.title ?? "");
-    setDueDate(editing?.dueDate ?? "");
+    // New tasks start on today's date — personal todos always carry a date.
+    setDueDate(editing?.dueDate ?? istTodayIso());
     setUrl(editing?.url ?? "");
     setCategory(editing?.category ?? "other");
     setPriority(editing?.priority ?? "normal");
@@ -368,25 +397,36 @@ function PersonalTaskForm({
                 setError("Use a full link starting with https:// or http://.");
                 return;
               }
+              if (!dueDate) {
+                setError("Choose a date for this task.");
+                return;
+              }
               setBusy(true);
               setError("");
               void onSubmit({
                 title: title.trim(),
                 notes: notes.trim() || undefined,
-                dueDate: dueDate || null,
+                dueDate,
                 url: trimmedUrl || null,
                 category,
                 priority,
                 status: editing?.status ?? "todo",
               })
                 .catch((cause: unknown) =>
-                  setError(cause instanceof Error ? cause.message : "Could not save the task"),
+                  setError(
+                    cause instanceof Error
+                      ? cause.message
+                      : "Could not save the task",
+                  ),
                 )
                 .finally(() => setBusy(false));
             }}
           >
             <label>
-              Title <span className="req" aria-hidden="true">*</span>
+              Title{" "}
+              <span className="req" aria-hidden="true">
+                *
+              </span>
               <input
                 required
                 maxLength={200}
@@ -427,16 +467,23 @@ function PersonalTaskForm({
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label>
-                Due date
+                Due date{" "}
+                <span className="req" aria-hidden="true">
+                  *
+                </span>
                 <input
                   type="date"
+                  required
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                 />
               </label>
               <label>
                 Priority
-                <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                >
                   <option value="low">Low</option>
                   <option value="normal">Normal</option>
                   <option value="high">High</option>
@@ -445,7 +492,10 @@ function PersonalTaskForm({
             </div>
             <label>
               Category
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
                 {CATEGORIES.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -469,7 +519,12 @@ function PersonalTaskForm({
               </p>
             )}
             <div className="flex justify-end gap-2 pt-1">
-              <Button type="button" variant="outline" size="sm" onClick={onClose}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onClose}
+              >
                 Cancel
               </Button>
               <Button type="submit" size="sm" disabled={busy}>

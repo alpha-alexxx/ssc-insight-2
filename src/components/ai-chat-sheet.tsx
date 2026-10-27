@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ClipboardPaste, Copy, Send, Sparkles, Square, Trash2 } from "lucide-react";
+import { Check, ClipboardPaste, Copy, ListTodo, Send, Sparkles, Square, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { PlainIcon } from "./icon";
 import {
@@ -10,6 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "./ui/sheet";
+import { TodoAiComposer } from "./plan/personal-todos";
 import { AiSettingsForm } from "./ai-settings-form";
 import { ExtractionReview } from "./extraction-review";
 import { parseReport } from "@/lib/report-parser";
@@ -19,7 +20,7 @@ import {
   type ExtractionDraft,
 } from "@/lib/ai/extraction";
 import { parseTaskSuggestions, type TaskSuggestion } from "@/lib/ai/task-suggestion";
-import { linkHost } from "@/lib/plan/view-model";
+import { istTodayIso, linkHost } from "@/lib/plan/view-model";
 import type { AttemptInput } from "@/lib/domain";
 import type {
   AiCredentialSummary,
@@ -96,13 +97,19 @@ export function AiChatSheet({
   /** Shell feedback (toast) after a suggested task is added. */
   onTaskAdded?: () => void;
 }) {
-  const [tab, setTab] = useState<"chat" | "log">("chat");
+  const [tab, setTab] = useState<"chat" | "log" | "todos">("chat");
   // Reset to chat whenever the sheet reopens; the tab is not persistent state.
   const [lastOpen, setLastOpen] = useState(false);
   if (open !== lastOpen) {
     setLastOpen(open);
     if (open) setTab("chat");
   }
+  // Switching to the todo composer must not leave a stream running; the
+  // composer manages its own generation requests.
+  const switchToTodos = () => {
+    onStop();
+    setTab("todos");
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -119,8 +126,8 @@ export function AiChatSheet({
                 AI workspace
               </SheetTitle>
               <SheetDescription id="ai-sheet-description" className="mt-1">
-                Read-only coach answers and paste-to-draft extraction. Notes,
-                email, and identity are never sent; nothing saves itself.
+                Read-only coach answers, reviewed todo proposals, and
+                paste-to-draft extraction. The panel never saves by itself.
               </SheetDescription>
             </div>
           </div>
@@ -136,6 +143,14 @@ export function AiChatSheet({
               onClick={() => setTab("chat")}
             >
               <Sparkles size={13} className="mr-1 inline" /> Coach chat
+            </button>
+            <button
+              type="button"
+              aria-pressed={tab === "todos"}
+              className="segment"
+              onClick={switchToTodos}
+            >
+              <ListTodo size={13} className="mr-1 inline" /> Plan todos
             </button>
             <button
               type="button"
@@ -159,7 +174,7 @@ export function AiChatSheet({
           )}
         </SheetHeader>
 
-        {tab === "chat" ? (
+        {tab === "chat" && (
           <CoachChatTab
             open={open}
             messages={messages}
@@ -173,7 +188,13 @@ export function AiChatSheet({
             taskApi={taskApi}
             onTaskAdded={onTaskAdded}
           />
-        ) : (
+        )}
+        {tab === "todos" && (
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5">
+            <TodoAiComposer compact />
+          </div>
+        )}
+        {tab === "log" && (
           <LogMockTab
             configured={configured}
             onAiConfigured={onAiConfigured}
@@ -216,6 +237,7 @@ function CoachChatTab({
   onTaskAdded?: () => void;
 }) {
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<"coach" | "todos">("coach");
   const endRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -478,7 +500,10 @@ function MessageContent({ content }: { content: string }) {
   const flushList = () => {
     if (!list.length) return;
     blocks.push(
-      <ul key={`list-${blocks.length}`} className="my-1 flex list-disc flex-col gap-0.5 pl-4">
+      <ul
+        key={`list-${blocks.length}`}
+        className="my-1 flex flex-col gap-0.5 pl-4 list-disc"
+      >
         {list.map((item, index) => (
           <li key={index}>{inlineNodes(item)}</li>
         ))}
@@ -610,6 +635,9 @@ function TaskSuggestionCard({
   );
   const [failure, setFailure] = useState("");
   const host = suggestion.url ? linkHost(suggestion.url) : null;
+  // Personal todos now require a date; when the model leaves one out, the
+  // confirmation card defaults to today (IST) instead of failing on save.
+  const dueDate = suggestion.dueDate ?? istTodayIso();
 
   const add = () => {
     if (!taskApi || state !== "pending") return;
@@ -618,7 +646,7 @@ function TaskSuggestionCard({
       .createPersonalTask({
         title: suggestion.title,
         notes: suggestion.notes || undefined,
-        dueDate: suggestion.dueDate,
+        dueDate,
         url: suggestion.url,
         category: suggestion.category,
         priority: suggestion.priority,
@@ -654,9 +682,7 @@ function TaskSuggestionCard({
             ? "Personal"
             : suggestion.category.replace(/_/g, " ")}
         </span>
-        {suggestion.dueDate && (
-          <span className="tabular">Due {suggestion.dueDate}</span>
-        )}
+        {dueDate && <span className="tabular">Due {dueDate}</span>}
         {suggestion.priority !== "normal" && (
           <span
             className={

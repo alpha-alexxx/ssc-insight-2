@@ -19,7 +19,15 @@ import type {
 export type TaskPatchInput = Partial<
   Pick<
     PlanTaskView,
-    "completed" | "score" | "percentile" | "wrong" | "unattempted" | "rev1" | "rev2" | "rev3" | "notes"
+    | "completed"
+    | "score"
+    | "percentile"
+    | "wrong"
+    | "unattempted"
+    | "rev1"
+    | "rev2"
+    | "rev3"
+    | "notes"
   >
 >;
 
@@ -57,7 +65,10 @@ function patchDayInPlan<T extends PlanPayload>(
   day: number,
   patch: (day: PlanPayload["days"][number]) => PlanPayload["days"][number],
 ): T {
-  return { ...plan, days: plan.days.map((d) => (d.day === day ? patch(d) : d)) };
+  return {
+    ...plan,
+    days: plan.days.map((d) => (d.day === day ? patch(d) : d)),
+  };
 }
 
 export function usePlanData() {
@@ -86,6 +97,12 @@ export function usePlanData() {
       if (id === requestId.current) setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const changed = () => void refresh();
+    window.addEventListener("ssc:todos-changed", changed);
+    return () => window.removeEventListener("ssc:todos-changed", changed);
+  }, [refresh]);
 
   useEffect(() => {
     // Deferred like the tracker's refresh effect: the fetch starts on the
@@ -117,7 +134,8 @@ export function usePlanData() {
   const updateTask = useCallback(
     (key: string, patch: TaskPatchInput) =>
       mutate(
-        () => setPlan((prev) => (prev ? patchTaskInPlan(prev, key, patch) : prev)),
+        () =>
+          setPlan((prev) => (prev ? patchTaskInPlan(prev, key, patch) : prev)),
         () =>
           api("/api/plan/progress", {
             method: "POST",
@@ -169,7 +187,12 @@ export function usePlanData() {
         () =>
           api("/api/plan/progress", {
             method: "POST",
-            body: JSON.stringify({ kind: "revision", day, revisionIndex, done }),
+            body: JSON.stringify({
+              kind: "revision",
+              day,
+              revisionIndex,
+              done,
+            }),
           }),
         "Couldn't update the revision",
       ),
@@ -193,16 +216,13 @@ export function usePlanData() {
     [mutate],
   );
 
-  const createPersonalTask = useCallback(
-    async (input: PersonalTaskInput) => {
-      const created = await api<PersonalTaskView>("/api/tasks", {
-        method: "POST",
-        body: JSON.stringify(input),
-      });
-      setPersonalTasks((prev) => [...prev, created]);
-    },
-    [],
-  );
+  const createPersonalTask = useCallback(async (input: PersonalTaskInput) => {
+    const created = await api<PersonalTaskView>("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    setPersonalTasks((prev) => [...prev, created]);
+  }, []);
 
   const updatePersonalTask = useCallback(
     async (id: string, patch: Partial<PersonalTaskInput>) => {
