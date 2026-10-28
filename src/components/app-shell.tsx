@@ -4,7 +4,6 @@ import { AuthControl } from "./auth-control";
 import { DuotoneIcon, PlainIcon } from "./icon";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
 import {
   Sidebar,
   SidebarContent,
@@ -165,7 +164,7 @@ function NavItem({
         asChild
         isActive={active}
         tooltip={item.label}
-        className="data-[active=true]:bg-ink data-[active=true]:text-paper data-[active=true]:hover:bg-ink data-[active=true]:hover:text-paper"
+        className="data-[active=true]:bg-accent-soft data-[active=true]:text-accent data-[active=true]:hover:bg-accent-soft data-[active=true]:hover:text-accent"
       >
         <Link
           href={item.href}
@@ -178,11 +177,19 @@ function NavItem({
           <PlainIcon
             name={VIEW_META[item.view].icon}
             size={17}
-            tone={active ? "paper" : "ink"}
+            tone={active ? "accent" : "ink"}
           />
           <span className="group-data-[collapsible=icon]:hidden">
             {item.label}
           </span>
+          {active && (
+            <PlainIcon
+              name="chevronRight"
+              size={13}
+              tone="accent"
+              className="ml-auto shrink-0 group-data-[collapsible=icon]:hidden"
+            />
+          )}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -239,8 +246,9 @@ export function AppSidebar({
       <SidebarContent>
         {NAV_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel className="px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+            <SidebarGroupLabel className="flex items-center gap-2.5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
               {group.label}
+              <span className="h-px flex-1 bg-rule-soft" aria-hidden="true" />
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -253,25 +261,26 @@ export function AppSidebar({
                   />
                 ))}
                 {group.label === "Results" && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      isActive={view === "add"}
-                      tooltip="Log a mock"
+                  <SidebarMenuItem className="px-1.5 pt-1.5">
+                    <button
+                      type="button"
                       onClick={() => {
                         onAddMock();
                         setOpenMobile(false);
                       }}
-                      className="data-[active=true]:bg-ink data-[active=true]:text-paper data-[active=true]:hover:bg-ink"
+                      className="flex min-h-10 w-full items-center gap-2.5 rounded-control bg-accent px-2.5 py-2 text-sm font-medium text-paper transition-colors hover:bg-accent-hover group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                     >
-                      <PlainIcon
-                        name="plus"
-                        size={17}
-                        tone={view === "add" ? "paper" : "ink"}
-                      />
+                      <PlainIcon name="plus" size={16} tone="paper" />
                       <span className="group-data-[collapsible=icon]:hidden">
                         Log a mock
                       </span>
-                    </SidebarMenuButton>
+                      <PlainIcon
+                        name="chevronRight"
+                        size={13}
+                        tone="paper"
+                        className="ml-auto shrink-0 group-data-[collapsible=icon]:hidden"
+                      />
+                    </button>
                   </SidebarMenuItem>
                 )}
               </SidebarMenu>
@@ -286,7 +295,7 @@ export function AppSidebar({
               asChild
               isActive={view === "settings"}
               tooltip="Settings"
-              className="data-[active=true]:bg-ink data-[active=true]:text-paper data-[active=true]:hover:bg-ink"
+              className="data-[active=true]:bg-accent-soft data-[active=true]:text-accent data-[active=true]:hover:bg-accent-soft"
             >
               <Link
                 href={VIEW_HREF.settings}
@@ -299,7 +308,7 @@ export function AppSidebar({
                 <PlainIcon
                   name="settings"
                   size={17}
-                  tone={view === "settings" ? "paper" : "ink"}
+                  tone={view === "settings" ? "accent" : "ink"}
                 />
                 <span className="group-data-[collapsible=icon]:hidden">
                   Settings
@@ -307,24 +316,41 @@ export function AppSidebar({
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+            <div className="flex min-h-10 w-full items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-sm text-ink">
+              <span className="flex items-center gap-2.5">
+                <PlainIcon name="moon" size={16} tone="ink" />
+                Dark mode
+              </span>
+              <ThemeToggle className="size-7" />
+            </div>
+          </SidebarMenuItem>
         </SidebarMenu>
-        <div className="flex min-w-0 items-center gap-2.5 px-2 py-1.5">
-          <span
-            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
-            aria-hidden="true"
-          >
-            {initials(userName)}
-          </span>
-          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-xs font-medium">{userName || "My workspace"}</p>
-            <p className="truncate text-[10px] text-muted">
-              {userEmail || "Private account"}
-            </p>
+        <div className="mx-2 mb-1 rounded-panel border border-rule-soft bg-paper px-2.5 py-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span
+              className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
+              aria-hidden="true"
+            >
+              {initials(userName)}
+            </span>
+            <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+              <p className="truncate text-xs font-medium">{userName || "My workspace"}</p>
+              <p className="truncate text-[10px] text-muted">
+                {userEmail || "Private account"}
+              </p>
+            </div>
+            <PlainIcon
+              name="chevronRight"
+              size={13}
+              className="shrink-0 text-muted group-data-[collapsible=icon]:hidden"
+            />
           </div>
+          <p className="mt-2 flex items-center gap-1.5 border-t border-rule-soft pt-2 text-[10px] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
+            <PlainIcon name="calendar" size={11} />
+            SSC CGL Tier 2 · dates in IST
+          </p>
         </div>
-        <p className="px-2 pb-1 text-[10px] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
-          SSC CGL Tier 2 · dates in IST
-        </p>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
@@ -343,14 +369,19 @@ export function AppHeader({
   onOpenAi: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-rule bg-paper/95 px-3 backdrop-blur-sm md:px-5">
+    <header className="sticky top-0 z-30 mx-3 mt-3 flex h-13 shrink-0 items-center gap-2 rounded-panel border border-rule-soft bg-paper/95 px-3 py-2.5 backdrop-blur-sm md:mx-5 md:px-4">
       <SidebarTrigger className="size-8 shrink-0" />
-      <Separator orientation="vertical" className="mx-1 h-5 bg-rule-soft" />
-      <div className="flex min-w-0 items-baseline gap-2">
-        <span className="hidden text-[10px] font-semibold uppercase tracking-[0.12em] text-muted sm:inline">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="hidden text-[10px] font-semibold uppercase tracking-[0.14em] text-muted sm:inline">
           Workspace
         </span>
-        <span className="truncate text-xs font-medium text-ink">
+        <PlainIcon
+          name="chevronRight"
+          size={12}
+          className="hidden shrink-0 text-muted sm:inline"
+          aria-hidden="true"
+        />
+        <span className="truncate text-sm font-semibold text-ink">
           {VIEW_META[view].label}
         </span>
       </div>

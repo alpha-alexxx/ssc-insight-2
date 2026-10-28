@@ -1,10 +1,13 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
+import { ChevronDown, Clock, Flag } from "lucide-react";
 import { Panel } from "../dashboard-panels";
 import { PlainIcon } from "../icon";
 import { Button } from "../ui/button";
 import { CategoryChip } from "./plan-shared";
-import { shortDate } from "@/lib/format";
+import { longDate, shortDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   dayAssignmentStats,
   nextRecommendedAction,
@@ -35,60 +38,78 @@ export type PlanWithToday = PlanPayload & { today: string };
 export function TodayFocusPanel({
   plan,
   today,
+  date,
   planApi,
   onOpenDay,
 }: {
   plan: PlanWithToday;
   today: string;
+  /** The day this panel displays; defaults to today. */
+  date?: string;
   planApi: PlanApi;
   onOpenDay: (date: string) => void;
 }) {
-  const todayPlan = plan.days.find((day) => day.date === today);
-  const stats = todayPlan ? dayAssignmentStats(todayPlan) : null;
+  const [expanded, setExpanded] = useState(false);
+  const focusDate = date ?? today;
+  const shownDay = plan.days.find((day) => day.date === focusDate);
+  const stats = shownDay ? dayAssignmentStats(shownDay) : null;
   const focus = nextRecommendedAction(plan.days, today);
-  const phase = todayPlan
-    ? plan.phases.find((item) => item.phase === todayPlan.phase)
-    : null;
+  const visibleTasks = shownDay
+    ? expanded
+      ? shownDay.tasks
+      : shownDay.tasks.slice(0, 5)
+    : [];
+  const checklistDone = shownDay
+    ? shownDay.checklist.filter((item) => item.done).length
+    : 0;
+
+  function openTask(task: PlanTaskView) {
+    if (task.url) window.open(task.url, "_blank", "noopener,noreferrer");
+    else onOpenDay(task.date);
+  }
 
   return (
     <Panel
       dense
-      icon="fire"
+      icon="book"
       title="Study Plan"
-      description={
-        todayPlan
-          ? `Day ${todayPlan.day} of 50 · ${phase?.name ?? `Phase ${todayPlan.phase}`} · ${todayPlan.dayType}`
-          : "Today is outside the 50-day plan window."
-      }
       action={
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          onClick={() => onOpenDay(todayPlan?.date ?? plan.startDate)}
+          onClick={() => onOpenDay(shownDay?.date ?? plan.startDate)}
         >
-          {todayPlan ? "Open day" : "Calendar"}
+          Open day <PlainIcon name="arrowUpRight" size={12} />
         </Button>
       }
     >
       <div className="px-4 pb-3.5">
-        {todayPlan ? (
+        {shownDay ? (
           <>
-            <div className="mb-2 flex items-center justify-between gap-2 text-[10px] text-muted">
-              <span>
-                {stats?.completed ?? 0}/{stats?.total ?? 0} assignments done
-              </span>
-              <span className="tabular">
-                {todayPlan.checklist.filter((item) => item.done).length}/
-                {todayPlan.checklist.length} checklist
-              </span>
+            <div className="mb-3 flex items-center">
+              <div className="flex flex-1 items-center justify-center py-1">
+                <ProgressRing
+                  value={stats?.completed ?? 0}
+                  total={stats?.total ?? 0}
+                  caption="assignments done"
+                />
+              </div>
+              <div className="h-10 w-px bg-rule-soft" aria-hidden="true" />
+              <div className="flex flex-1 items-center justify-center py-1">
+                <ProgressRing
+                  value={checklistDone}
+                  total={shownDay.checklist.length}
+                  caption="checklist"
+                />
+              </div>
             </div>
-            {todayPlan.tasks.length === 0 ? (
+            {shownDay.tasks.length === 0 ? (
               <p className="py-2 text-xs text-muted">
-                Nothing is scheduled for today.
+                Nothing is scheduled for this day.
               </p>
             ) : (
               <ul className="divide-y divide-rule-soft overflow-hidden rounded-control border border-rule-soft">
-                {todayPlan.tasks.slice(0, 5).map((task) => (
+                {visibleTasks.map((task) => (
                   <li key={task.key} className="flex items-center gap-2.5 px-3 py-2">
                     <button
                       type="button"
@@ -116,14 +137,36 @@ export function TodayFocusPanel({
                       {task.name}
                     </span>
                     <CategoryChip type={task.type} />
+                    <button
+                      type="button"
+                      aria-label={`Open ${task.name}`}
+                      onClick={() => openTask(task)}
+                      className="shrink-0 text-muted transition-colors hover:text-accent"
+                    >
+                      <PlainIcon name="chevronRight" size={14} />
+                    </button>
                   </li>
                 ))}
               </ul>
             )}
-            {todayPlan.tasks.length > 5 && (
-              <p className="mt-1.5 text-[10px] text-muted">
-                +{todayPlan.tasks.length - 5} more on today&apos;s plan
-              </p>
+            {shownDay.tasks.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setExpanded(!expanded)}
+                aria-expanded={expanded}
+                className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-muted transition-colors hover:text-ink"
+              >
+                {expanded
+                  ? "Show fewer"
+                  : `+${shownDay.tasks.length - 5} more on ${focusDate === today ? "today's" : "this day's"} plan`}
+                <ChevronDown
+                  size={12}
+                  className={cn(
+                    "transition-transform",
+                    expanded && "rotate-180",
+                  )}
+                />
+              </button>
             )}
           </>
         ) : (
@@ -134,25 +177,78 @@ export function TodayFocusPanel({
         )}
 
         {focus && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-accent/35 bg-accent-soft px-3 py-2">
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-accent/35 bg-accent-soft px-3 py-2.5">
             <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">
               Next up
             </span>
+            <PlainIcon name="file" size={13} className="text-accent" />
             <span className="min-w-0 flex-1 truncate text-xs font-medium">
               {focus.task.name}
             </span>
             <button
               type="button"
               onClick={() => onOpenDay(focus.task.date)}
-              className="text-[10px] font-medium text-accent hover:text-accent-hover"
+              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-accent hover:text-accent-hover"
             >
+              <PlainIcon name="calendar" size={12} />
               {shortDate(focus.task.date)}
               {focus.overdue ? " · overdue" : ""}
             </button>
+            <PlainIcon name="chevronRight" size={13} className="text-accent" />
           </div>
         )}
       </div>
     </Panel>
+  );
+}
+
+function ProgressRing({
+  value,
+  total,
+  caption,
+}: {
+  value: number;
+  total: number;
+  caption: string;
+}) {
+  const ratio = total > 0 ? value / total : 0;
+  const radius = 15;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <svg
+        viewBox="0 0 40 40"
+        className="size-10 shrink-0 -rotate-90"
+        aria-hidden="true"
+      >
+        <circle
+          cx="20"
+          cy="20"
+          r={radius}
+          fill="none"
+          strokeWidth="4"
+          style={{ stroke: "var(--soft)" }}
+        />
+        <circle
+          cx="20"
+          cy="20"
+          r={radius}
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap="round"
+          style={{
+            stroke: "var(--accent)",
+            strokeDasharray: `${circumference * ratio} ${circumference}`,
+          }}
+        />
+      </svg>
+      <div className="min-w-0">
+        <p className="font-serif text-xl leading-none tabular">
+          {value}/{total}
+        </p>
+        <p className="mt-1 text-[10px] text-muted">{caption}</p>
+      </div>
+    </div>
   );
 }
 
@@ -169,16 +265,29 @@ export function StudyPipelinePanel({
   today: string;
   onOpenDay: (date: string) => void;
 }) {
+  const todayPlan = plan.days.find((day) => day.date === today);
   return (
     <Panel
       dense
       icon="trend"
       title="Study pipeline"
-      description="Progress, upcoming tests, and revision in one place."
+      description="Track your learning track and revision in one place."
       className="min-w-0"
+      action={
+        todayPlan ? (
+          <Button variant="outline" size="sm" onClick={() => onOpenDay(today)}>
+            <PlainIcon name="target" size={12} />
+            Plan day {todayPlan.day} of 50
+          </Button>
+        ) : null
+      }
     >
       <div className="px-4 pb-4">
-        <PipelineProgressSection plan={plan} today={today} />
+        <PipelineProgressSection
+          plan={plan}
+          today={today}
+          onOpenDay={onOpenDay}
+        />
         <PipelineUpcomingSection
           plan={plan}
           today={today}
@@ -193,12 +302,15 @@ export function StudyPipelinePanel({
 function PipelineProgressSection({
   plan,
   today,
+  onOpenDay,
 }: {
   plan: PlanWithToday;
   today: string;
+  onOpenDay: (date: string) => void;
 }) {
   const stats = planProgressStats(plan.days);
   const todayPlan = plan.days.find((day) => day.date === today);
+  const todayStats = todayPlan ? dayAssignmentStats(todayPlan) : null;
   const focus = nextRecommendedAction(plan.days, today);
   return (
     <section aria-label="Plan progress">
@@ -224,56 +336,123 @@ function PipelineProgressSection({
         <div className="mt-2 flex items-center justify-between text-[10px] text-muted">
           <span>{stats.completionPct}% complete</span>
           <span>
-            {stats.completedDays}/{stats.totalDays} full days
+            {todayStats
+              ? `${todayStats.completed}/${todayStats.total} on day ${todayPlan?.day}`
+              : "—"}
           </span>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           {(
             [
-              ["Done", `${stats.completedAssignments}`],
-              ["Left", `${stats.totalAssignments - stats.completedAssignments}`],
-              ["Days", `${todayPlan?.day ?? "—"}/50`],
+              ["success", "Done", `${stats.completedAssignments}`],
+              [
+                "file",
+                "Left",
+                `${stats.totalAssignments - stats.completedAssignments}`,
+              ],
+              ["calendar", "Days", `${todayPlan?.day ?? "—"}/50`],
             ] as const
-          ).map(([label, value]) => (
-            <div key={label} className="min-w-0">
-              <p className="font-serif text-lg leading-none tabular">{value}</p>
-              <p className="mt-1 text-[9px] uppercase tracking-[0.08em] text-muted">
-                {label}
-              </p>
+          ).map(([icon, label, value]) => (
+            <div key={label} className="flex min-w-0 items-center gap-2">
+              <PlainIcon
+                name={icon}
+                size={15}
+                className="shrink-0 text-accent"
+                aria-hidden="true"
+              />
+              <div className="min-w-0">
+                <p className="font-serif text-lg leading-none tabular">
+                  {value}
+                </p>
+                <p className="mt-0.5 text-[9px] uppercase tracking-[0.08em] text-muted">
+                  {label}
+                </p>
+              </div>
             </div>
           ))}
         </div>
-        <div className="mt-3 flex gap-1" aria-label="Plan phases">
-          {plan.phases.map((phase) => {
+        <div className="mt-3 flex gap-1.5" aria-label="Plan phases">
+          {plan.phases.map((phase, index) => {
             const active = todayPlan?.phase === phase.phase;
             const past = todayPlan
               ? todayPlan.day > Number(phase.days.split("-").at(-1))
               : false;
+            const first = index === 0;
+            const last = index === plan.phases.length - 1;
             return (
               <div
                 key={phase.phase}
-                className={`min-w-0 flex-1 rounded-control border px-2 py-1.5 text-[9px] ${
+                className={cn(
+                  "min-w-0 flex-1 py-2 pl-3 pr-4",
                   active
-                    ? "border-accent bg-accent-soft font-medium text-accent"
+                    ? "bg-accent-soft"
                     : past
-                      ? "border-positive/35 bg-positive-soft text-positive"
-                      : "border-rule-soft bg-canvas text-muted"
-                }`}
+                      ? "bg-positive-soft"
+                      : "bg-canvas",
+                )}
+                style={{
+                  clipPath: first
+                    ? "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)"
+                    : last
+                      ? "polygon(0 0, 100% 0, 100% 100%, 0 100%, 10px 50%)"
+                      : "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)",
+                }}
               >
-                <span className="block truncate">{phase.name}</span>
-                <span className="block opacity-75">Days {phase.days}</span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold tabular",
+                      active
+                        ? "bg-accent text-paper"
+                        : past
+                          ? "bg-positive text-paper"
+                          : "bg-soft text-muted",
+                    )}
+                    aria-hidden="true"
+                  >
+                    {phase.phase}
+                  </span>
+                  <span className="min-w-0">
+                    <span
+                      className={cn(
+                        "block truncate text-[10px] font-medium",
+                        active
+                          ? "text-accent"
+                          : past
+                            ? "text-positive"
+                            : "text-ink",
+                      )}
+                    >
+                      {phase.name}
+                    </span>
+                    <span className="block text-[9px] leading-tight text-muted">
+                      Days {phase.days}
+                    </span>
+                  </span>
+                </div>
               </div>
             );
           })}
         </div>
-        <div className="mt-3 border-t border-rule-soft pt-2 text-[10px] text-muted">
-          {focus ? (
-            <>
-              <span className="font-medium text-ink">Next milestone:</span>{" "}
-              {focus.task.name} · {shortDate(focus.task.date)}
-            </>
-          ) : (
-            "Every scheduled assignment is complete."
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-accent/35 bg-accent-soft px-3 py-2">
+          <Flag size={13} className="shrink-0 text-accent" aria-hidden="true" />
+          <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">
+            Next milestone
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs font-medium">
+            {focus
+              ? `${focus.task.name} · ${shortDate(focus.task.date)}`
+              : "Every scheduled assignment is complete."}
+          </span>
+          {focus && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[10px]"
+              onClick={() => onOpenDay(focus.task.date)}
+            >
+              View plan <PlainIcon name="arrowRight" size={12} />
+            </Button>
           )}
         </div>
       </div>
@@ -302,9 +481,9 @@ function PipelineUpcomingSection({
         </h3>
         <Link
           href="/calendar"
-          className="text-[10px] font-medium text-accent hover:text-accent-hover"
+          className="inline-flex items-center gap-1 text-[10px] font-medium text-accent hover:text-accent-hover"
         >
-          Calendar
+          View all <PlainIcon name="arrowRight" size={12} />
         </Link>
       </div>
       <div>
@@ -315,32 +494,36 @@ function PipelineUpcomingSection({
         ) : (
           <ul className="divide-y divide-rule-soft overflow-hidden rounded-control border border-rule-soft">
             {upcoming.map(({ task, day }) => (
-              <li key={task.key} className="flex items-center gap-2 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium">{task.name}</p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted">
-                    <span className="rounded-pill border border-rule-soft bg-soft px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.06em]">
-                      Scheduled
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onOpenDay(day.date)}
-                      className="tabular hover:text-accent"
-                    >
-                      {shortDate(day.date)}
-                    </button>
-                    <CategoryChip type={task.type} />
-                  </p>
-                </div>
-                <a
-                  href={task.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              <li key={task.key} className="flex items-center gap-2.5 px-3 py-2">
+                <PlainIcon
+                  name="file"
+                  size={14}
+                  className="shrink-0 text-muted"
+                  aria-hidden="true"
+                />
+                <p className="min-w-0 flex-1 truncate text-xs font-medium">
+                  {task.name}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onOpenDay(day.date)}
+                  className="shrink-0 text-[10px] tabular text-muted hover:text-accent"
+                >
+                  {longDate(day.date)}
+                </button>
+                <CategoryChip type={task.type} />
+                <button
+                  type="button"
                   aria-label={`Open ${task.name}`}
+                  onClick={() =>
+                    task.url
+                      ? window.open(task.url, "_blank", "noopener,noreferrer")
+                      : onOpenDay(day.date)
+                  }
                   className="shrink-0 text-muted transition-colors hover:text-accent"
                 >
-                  <PlainIcon name="arrowUpRight" size={14} />
-                </a>
+                  <PlainIcon name="chevronRight" size={14} />
+                </button>
               </li>
             ))}
           </ul>
@@ -392,12 +575,21 @@ function PipelineRevisionSection({
           ))}
         </div>
         {revision.total > 0 ? (
-          <ul className="mt-2 space-y-1 text-[10px] text-muted">
+          <ul className="mt-2 space-y-1.5 text-[10px] text-muted">
             {revision.items.slice(0, 2).map((item) => (
-              <li key={`${item.kind}:${item.id}`} className="truncate">
-                <span className="font-medium text-ink">{item.label}</span>
-                {" · "}
-                {shortDate(item.date)} · {item.kind}
+              <li
+                key={`${item.kind}:${item.id}`}
+                className="flex items-center gap-1.5"
+              >
+                <Clock
+                  size={11}
+                  className="shrink-0"
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="font-medium text-ink">{item.label}</span> ·{" "}
+                  {shortDate(item.date)} · {item.kind}
+                </span>
               </li>
             ))}
             {revision.total > 2 && <li>+{revision.total - 2} more pending</li>}

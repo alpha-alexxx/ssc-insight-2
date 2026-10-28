@@ -43,7 +43,7 @@ export function AiCoachCard({
   return (
     <Panel
       title="AI coach"
-      description="A read-only reading of your saved results, with one clear next step."
+      description="Get personalized guidance based on your recent mocks."
       className="mb-6"
       action={
         <Button

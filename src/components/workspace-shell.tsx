@@ -14,7 +14,8 @@ import {
   MotionConfig,
   useReducedMotion,
 } from "motion/react";
-import { PlainIcon } from "./icon";
+import { PlainIcon, DuotoneTile } from "./icon";
+import { DashboardClock } from "./dashboard-clock";
 import { AppFrame, VIEW_HREF, VIEW_META, type AppView } from "./app-shell";
 import { CompareView } from "./compare-view";
 import { DateRangeFilter } from "./date-range-filter";
@@ -414,6 +415,15 @@ function WorkspaceShellInner({
    * AddMockView on the next /add render, then cleared. The form stays the
    * sole save path; this only prefills it. */
   const [addPrefill, setAddPrefill] = useState<LogMockPayload | null>(null);
+  const [aiChatTab, setAiChatTab] = useState<"chat" | "log" | "todos">("chat");
+  /** Opens the shared AI sheet on a specific flow tab ("plan_todo" = todos). */
+  const openAiChat = useCallback(
+    (tab: "chat" | "log" | "todos") => {
+      setAiChatTab(tab);
+      ai.chat.setOpen(true);
+    },
+    [ai.chat],
+  );
   const handleLogMock = useCallback(
     (draft: LogMockPayload) => {
       setAddPrefill(draft);
@@ -514,7 +524,7 @@ function WorkspaceShellInner({
           aiEnabled={!!ai.aiStatus?.enabled}
           onRouteIntent={routeIntent}
           onAddMock={add}
-          onOpenAi={() => ai.chat.setOpen(true)}
+          onOpenAi={() => openAiChat("chat")}
         >
           <div className="mx-auto w-full max-w-[1560px] px-3 py-4 md:px-5 md:py-5">
             <AnimatePresence mode="wait" initial={false}>
@@ -550,15 +560,25 @@ function WorkspaceShellInner({
                       <PageHeader
                         title="Dashboard"
                         description="Today's work, plan progress, and the performance that matters."
+                        icon={
+                          <DuotoneTile name="dashboard" tile="accent" className="size-11" />
+                        }
                         meta={
                           <>
-                            <span>{longDate(istTodayIso())}</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <PlainIcon name="calendar" size={12} />
+                              {longDate(istTodayIso())}
+                            </span>
                             <span aria-hidden="true">·</span>
-                            <span>SSC CGL Tier 2</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <PlainIcon name="file" size={12} />
+                              SSC CGL Tier 2
+                            </span>
                             {planApi.plan ? (
                               <>
                                 <span aria-hidden="true">·</span>
-                                <span>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <PlainIcon name="target" size={12} />
                                   {planApi.plan.days.find(
                                     (day) => day.date === istTodayIso(),
                                   )?.day
@@ -574,9 +594,27 @@ function WorkspaceShellInner({
                           </>
                         }
                         actions={
-                          <Button size="sm" onClick={add}>
-                            <PlainIcon name="plus" size={14} /> Add mock
-                          </Button>
+                          <>
+                            <DashboardClock />
+                            <div className="flex items-center">
+                              <Button
+                                size="sm"
+                                className="rounded-r-none!"
+                                onClick={add}
+                              >
+                                <PlainIcon name="plus" size={14} /> Add mock
+                              </Button>
+                              <Button
+                                size="sm"
+                                aria-label="Create mock with AI"
+                                title="Create mock with AI"
+                                onClick={() => openAiChat("log")}
+                                className="rounded-l-none! border-l border-paper/40"
+                              >
+                                <PlainIcon name="sparkles" size={14} />
+                              </Button>
+                            </div>
+                          </>
                         }
                       />
                     )}
@@ -713,6 +751,7 @@ function WorkspaceShellInner({
                     ) : view === "dashboard" ? (
                       <DashboardView
                         planApi={planApi}
+                        onOpenPersonalAi={() => openAiChat("todos")}
                         analytics={analytics}
                         attempts={dashboardAttempts}
                         target={target}
@@ -770,6 +809,7 @@ function WorkspaceShellInner({
                             selected={selected}
                             onToggle={toggleCompare}
                             onClear={clearCompare}
+                            onOpen={openDetail}
                           />
                         ) : (
                           <HistoryPanel
@@ -876,6 +916,7 @@ function WorkspaceShellInner({
         <AiChatSheet
           open={ai.chat.open}
           onOpenChange={ai.chat.setOpen}
+          initialTab={aiChatTab}
           messages={ai.chat.messages}
           streaming={ai.chat.streaming}
           error={ai.chat.error}

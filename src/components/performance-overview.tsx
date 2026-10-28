@@ -1,8 +1,12 @@
 "use client";
+import Link from "next/link";
 import { useId, memo, useState } from "react";
+import { Lightbulb, Flag, Pencil } from "lucide-react";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -30,8 +34,6 @@ import {
   targetColor,
 } from "@/lib/chart-theme";
 import { Panel, EmptyChart } from "./dashboard-panels";
-import { AttemptOutcomeCard } from "./attempt-outcome-card";
-import outcomeStyles from "./attempt-outcome-card.module.css";
 import {
   type DashboardScope,
   type SectionId,
@@ -47,6 +49,7 @@ import {
   targetPercentage,
 } from "@/lib/analytics";
 import { mockTypeLabel, shortDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const dateLabel = shortDate;
 const typeLabel = mockTypeLabel;
@@ -57,22 +60,22 @@ const scopeCopy: Record<
   full: {
     trend: "Full mock performance",
     trendDescription:
-      "Every full mock, as a percentage of the 390-mark paper. Dates and platform filters apply.",
+      "Your trend based on percentage of the 390-mark paper across full mocks. Filters apply.",
   },
   subject: {
-    trend: "Subject performance",
+    trend: "Subject-wise performance trend",
     trendDescription:
-      "Every subject result from full, sectional and subject mocks, shown together.",
+      "Your average score in each subject across all mocks, shown together.",
   },
   sectional: {
-    trend: "Sectional performance",
+    trend: "Sectional performance trend",
     trendDescription:
       "Section I and Section II from sectional mocks and full mocks, shown together.",
   },
   all: {
-    trend: "All mock performance",
+    trend: "Overall performance trend",
     trendDescription:
-      "Every saved mock exactly once, scored as a percentage so different papers stay comparable.",
+      "Your score and accuracy trend across all mocks (full, subject-wise, sectional), scored as a percentage.",
   },
 };
 const seriesColor = (scope: DashboardScope, id: string) =>
@@ -116,8 +119,8 @@ function ViewData({
   if (!rows.length) return null;
   return (
     <details className="px-3 pb-3 text-[11px]">
-      <summary className="inline-flex cursor-pointer text-muted">
-        View data
+      <summary className="inline-flex cursor-pointer items-center gap-1 text-accent">
+        View detailed data <PlainIcon name="arrowRight" size={12} />
       </summary>
       <div className="mt-2 overflow-auto">
         <table className="w-full tabular">
@@ -216,6 +219,7 @@ function ScopeTrend({
       </>
     );
   }
+  const singleSeries = trend.series.length === 1;
   return (
     <>
       <ChartContainer
@@ -319,6 +323,16 @@ function ScopeTrend({
               fill={`url(#${uid}-${series.id})`}
               dot={{ r: 3, fill: `var(--color-${series.id})` }}
               connectNulls={false}
+              label={
+                singleSeries
+                  ? {
+                      position: "top",
+                      formatter: (value: unknown) => `${n(Number(value))}%`,
+                      fontSize: 10,
+                      fill: "var(--muted)",
+                    }
+                  : undefined
+              }
             />
           ))}
           {trend.series.length > 1 && (
@@ -326,6 +340,10 @@ function ScopeTrend({
           )}
         </AreaChart>
       </ChartContainer>
+      <p className="pb-1 text-right text-[10px] text-muted">
+        Showing {trend.points.length} recent result
+        {trend.points.length === 1 ? "" : "s"}
+      </p>
       {target != null && (
         <p className="pb-1 text-center text-[10px] muted">
           Dashed line marks your target at {n(target)}% ·{" "}
@@ -356,6 +374,27 @@ function ScopeTrend({
     </>
   );
 }
+function standInsight(rows: WhereYouStandRow[]): string | null {
+  const populated = rows.filter(
+    (row) => row.resultCount > 0 && row.averagePercentage != null,
+  );
+  if (populated.length < 2) return null;
+  const sorted = [...populated].sort(
+    (a, b) => (b.averagePercentage ?? 0) - (a.averagePercentage ?? 0),
+  );
+  const strongest = sorted[0]!;
+  const weakest = sorted.at(-1)!;
+  if (strongest.subjectId === weakest.subjectId) return null;
+  return `You are strong in ${strongest.label}. Focus more on ${weakest.label} to balance your score.`;
+}
+function InsightCallout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-control border border-accent/25 bg-accent-soft px-3.5 py-3">
+      <Lightbulb size={15} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+      <p className="text-xs leading-relaxed text-ink">{children}</p>
+    </div>
+  );
+}
 function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
   const populated = rows.filter(
     (row) => row.resultCount > 0 && row.averagePercentage != null,
@@ -370,6 +409,7 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
     accuracy: row.weightedAccuracy,
     count: row.resultCount,
   }));
+  const insight = standInsight(rows);
   return (
     <div className="px-4 pb-4">
       {data.length >= 3 ? (
@@ -458,6 +498,11 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
           ))}
         </div>
       )}
+      {insight && (
+        <div className="mt-3">
+          <InsightCallout>{insight}</InsightCallout>
+        </div>
+      )}
       {missing.length > 0 && (
         <p className="mt-3 text-[10px] muted">
           No data yet for {missing.map((row) => row.label).join(", ")}.
@@ -477,30 +522,746 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
     </div>
   );
 }
-function AttemptCards({ analytics }: { analytics: Analytics }) {
-  const stacks = analytics.radial;
+/* ---------- KPI strip ---------- */
+function KpiCard({
+  icon,
+  tile,
+  label,
+  value,
+  hint,
+}: {
+  icon: "history" | "target" | "award" | "success" | "user" | "trend";
+  tile: string;
+  label: string;
+  value: string;
+  hint: string;
+}) {
   return (
-    <section aria-labelledby="attempt-count-heading" className="mb-6">
-      <div className="mb-3 border-b border-rule pb-3">
-        <h2 id="attempt-count-heading" className="panel-title">
-          Make every attempt count
-        </h2>
+    <div className="flex items-center gap-3 rounded-panel border border-rule-soft bg-paper px-3.5 py-3">
+      <span
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-control",
+          tile,
+        )}
+        aria-hidden="true"
+      >
+        <PlainIcon name={icon} size={16} />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+          {label}
+        </p>
+        <p className="mt-0.5 truncate font-serif text-lg leading-none tabular text-ink">
+          {value}
+        </p>
+        <p className="mt-1 truncate text-[10px] text-muted">{hint}</p>
       </div>
-      {stacks.length ? (
-        <div className={outcomeStyles.grid}>
-          {stacks.map((stack) => (
-            <AttemptOutcomeCard key={stack.id} stack={stack} scope={analytics.scope} />
-          ))}
-        </div>
-      ) : (
-        <div className="max-w-[20rem] border border-rule-soft bg-paper p-5 text-sm muted">
-          No results in this analytical scope yet.
-        </div>
-      )}
-    </section>
+    </div>
   );
 }
-
+function KpiStrip({ analytics }: { analytics: Analytics }) {
+  const { scope, summary, trend } = analytics;
+  const points = trend.points;
+  const isFull = scope === "full";
+  const averageMarks = points.length
+    ? points.reduce((total, point) => total + point.score, 0) / points.length
+    : null;
+  const bestMarks = points.length
+    ? Math.max(...points.map((point) => point.score))
+    : null;
+  const delta =
+    summary.latestSnapshotPercentage != null &&
+    summary.previousSnapshotPercentage != null
+      ? summary.latestSnapshotPercentage - summary.previousSnapshotPercentage
+      : null;
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <KpiCard
+        icon="history"
+        tile="bg-accent-soft text-accent"
+        label="Mocks"
+        value={n(analytics.sourceAttemptCount)}
+        hint="Total attempted"
+      />
+      <KpiCard
+        icon="target"
+        tile="bg-accent-soft text-accent"
+        label="Average score"
+        value={
+          isFull && averageMarks != null
+            ? `${n(averageMarks)} / ${FULL_MOCK_MAX_SCORE}`
+            : summary.averagePercentage != null
+              ? `${n(summary.averagePercentage)}%`
+              : "—"
+        }
+        hint={
+          summary.averagePercentage != null
+            ? `${n(summary.averagePercentage)}%`
+            : "No results yet"
+        }
+      />
+      <KpiCard
+        icon="award"
+        tile="bg-warning-soft text-warning"
+        label="Best score"
+        value={
+          isFull && bestMarks != null
+            ? `${n(bestMarks)} / ${FULL_MOCK_MAX_SCORE}`
+            : summary.bestPercentage != null
+              ? `${n(summary.bestPercentage)}%`
+              : "—"
+        }
+        hint={
+          summary.bestPercentage != null
+            ? `${n(summary.bestPercentage)}%`
+            : "No results yet"
+        }
+      />
+      <KpiCard
+        icon="success"
+        tile="bg-positive-soft text-positive"
+        label="Accuracy"
+        value={
+          summary.weightedAccuracy != null
+            ? `${n(summary.weightedAccuracy)}%`
+            : "—"
+        }
+        hint={
+          summary.attemptRate != null
+            ? `${n(summary.attemptRate)}% attempted`
+            : "No attempts yet"
+        }
+      />
+      <KpiCard
+        icon="user"
+        tile="bg-accent-soft text-accent"
+        label="Results"
+        value={n(analytics.pointCount)}
+        hint="Scored data points"
+      />
+      {delta != null && (
+        <div className="flex items-center gap-3 rounded-panel border border-accent/30 bg-accent-soft px-3.5 py-3">
+          <span
+            className="flex size-9 shrink-0 items-center justify-center rounded-control bg-paper text-accent"
+            aria-hidden="true"
+          >
+            <PlainIcon name="trend" size={16} />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-accent">
+              {delta > 0.05 ? "You're improving!" : delta < -0.05 ? "Dipping" : "Steady"}
+            </p>
+            <p className="mt-0.5 truncate text-[10px] text-muted">
+              {delta > 0 ? "+" : ""}
+              {n(delta)}% avg. score vs the previous snapshot
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+/* ---------- Attempt breakdown (donut + bars + chips + tip) ---------- */
+function BreakdownDonut({ segments }: { segments: { value: number; color: string }[] }) {
+  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
+  const radius = 15.915;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  return (
+    <svg viewBox="0 0 40 40" className="size-32 shrink-0 -rotate-90" aria-hidden="true">
+      <circle cx="20" cy="20" r={radius} fill="none" strokeWidth="5.5" style={{ stroke: "var(--soft)" }} />
+      {total > 0 &&
+        segments.map((segment, index) => {
+          const fraction = segment.value / total;
+          const dash = `${circumference * fraction} ${circumference * (1 - fraction)}`;
+          const element = (
+            <circle
+              key={index}
+              cx="20"
+              cy="20"
+              r={radius}
+              fill="none"
+              strokeWidth="5.5"
+              strokeLinecap="butt"
+              style={{
+                stroke: segment.color,
+                strokeDasharray: dash,
+                strokeDashoffset: -offset * circumference,
+              }}
+            />
+          );
+          offset += fraction;
+          return element;
+        })}
+    </svg>
+  );
+}
+function AttemptBreakdown({ analytics }: { analytics: Analytics }) {
+  const { summary, trend } = analytics;
+  const points = trend.points;
+  const bestMarks = points.length
+    ? Math.max(...points.map((point) => point.score))
+    : null;
+  const bestPct = points.length
+    ? Math.max(...points.map((point) => point.percentage))
+    : null;
+  const rows = [
+    {
+      label: "Correct",
+      count: summary.correct,
+      color: "var(--chart-correct)",
+      bar: "bg-positive",
+    },
+    {
+      label: "Incorrect",
+      count: summary.incorrect,
+      color: "var(--chart-incorrect)",
+      bar: "bg-danger",
+    },
+    {
+      label: "Unattempted",
+      count: summary.unattempted,
+      color: "var(--outcome-unattempted)",
+      bar: "bg-soft",
+    },
+  ];
+  const rate = summary.attemptRate;
+  const tip =
+    rate == null
+      ? "Log a mock to see your attempt breakdown."
+      : rate >= 85
+        ? "Your attempt rate is excellent. Now push accuracy on every attempted question."
+        : rate >= 60
+          ? "Your attempt rate is good. Try to improve accuracy to cross 300+ consistently."
+          : "Attempt more questions — every unattempted question is a guaranteed zero.";
+  return (
+    <Panel
+      title="Make every attempt count"
+      description={
+        analytics.scope === "all"
+          ? "Breakdown of your attempts across all mocks."
+          : "Breakdown of your full mock attempts."
+      }
+      className="mb-4"
+    >
+      <div className="grid gap-5 px-5 pb-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="flex flex-wrap items-center justify-center gap-6 sm:justify-start">
+          <div className="relative shrink-0">
+            <BreakdownDonut
+              segments={[
+                { value: summary.correct, color: "var(--chart-correct)" },
+                { value: summary.incorrect, color: "var(--chart-incorrect)" },
+                { value: summary.unattempted, color: "var(--outcome-unattempted)" },
+              ]}
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <p className="font-serif text-xl leading-none tabular text-ink">
+                {rate == null ? "—" : `${n(rate)}%`}
+              </p>
+              <p className="mt-1 text-[9px] uppercase tracking-[0.08em] text-muted">
+                Overall
+              </p>
+            </div>
+          </div>
+          <div className="min-w-0 flex-1 space-y-3">
+            {rows.map((row) => (
+              <div key={row.label} className="flex items-center gap-3">
+                <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ background: row.color }}
+                  aria-hidden="true"
+                />
+                <span className="w-24 shrink-0 text-xs text-muted">
+                  {row.label}
+                </span>
+                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-pill bg-soft">
+                  <div
+                    className={cn("h-full rounded-pill", row.bar)}
+                    style={{
+                      width: `${
+                        summary.questions
+                          ? (row.count / summary.questions) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+                <span className="w-10 shrink-0 text-right text-xs font-medium tabular text-ink">
+                  {n(row.count)}
+                </span>
+                <span className="w-12 shrink-0 text-right text-[10px] tabular text-muted">
+                  {summary.questions
+                    ? `${n((row.count / summary.questions) * 100)}%`
+                    : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+            <div className="flex items-center gap-2.5 rounded-control border border-rule-soft px-3 py-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
+                <PlainIcon name="target" size={14} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate font-serif text-base leading-none tabular text-ink">
+                  {n(summary.questions)}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-muted">
+                  Total questions
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 rounded-control border border-rule-soft px-3 py-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-positive-soft text-positive" aria-hidden="true">
+                <PlainIcon name="success" size={14} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate font-serif text-base leading-none tabular text-ink">
+                  {summary.weightedAccuracy != null
+                    ? `${n(summary.weightedAccuracy)}%`
+                    : "—"}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-muted">Accuracy</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 rounded-control border border-rule-soft px-3 py-2.5">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning" aria-hidden="true">
+                <PlainIcon name="award" size={14} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate font-serif text-base leading-none tabular text-ink">
+                  {bestMarks != null ? `${n(bestMarks)} / 390` : bestPct != null ? `${n(bestPct)}%` : "—"}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-muted">
+                  Highest score
+                </p>
+              </div>
+            </div>
+          </div>
+          <InsightCallout>{tip}</InsightCallout>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+/* ---------- Per-subject / per-section donut cards ---------- */
+function AccuracyDonut({
+  value,
+  color,
+  size = 72,
+}: {
+  value: number | null;
+  color: string;
+  size?: number;
+}) {
+  const radius = 15.915;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = value == null ? 0 : Math.max(0, Math.min(1, value / 100));
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 40 40" className="size-full -rotate-90" aria-hidden="true">
+        <circle cx="20" cy="20" r={radius} fill="none" strokeWidth="4" style={{ stroke: "var(--soft)" }} />
+        <circle
+          cx="20"
+          cy="20"
+          r={radius}
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap="round"
+          style={{
+            stroke: color,
+            strokeDasharray: `${circumference * fraction} ${circumference}`,
+          }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <p className="font-serif text-base leading-none tabular text-ink">
+          {value == null ? "—" : `${n(value)}%`}
+        </p>
+        <p className="mt-0.5 text-[8px] uppercase tracking-[0.08em] text-muted">
+          Accuracy
+        </p>
+      </div>
+    </div>
+  );
+}
+function OverviewDonutCards({
+  analytics,
+}: {
+  analytics: Analytics;
+}) {
+  const stacks = analytics.radial.filter((stack) => stack.total > 0);
+  if (!stacks.length)
+    return (
+      <div className="mb-4">
+        <EmptyChart>No results in this scope yet.</EmptyChart>
+      </div>
+    );
+  const colorOf = (id: string) =>
+    analytics.scope === "subject"
+      ? subjectColors[id as SubjectId]
+      : sectionColors[id as SectionId];
+  return (
+    <Panel
+      title={
+        analytics.scope === "subject"
+          ? "Subject-wise overview"
+          : "Section-wise performance"
+      }
+      description={
+        analytics.scope === "subject"
+          ? "Questions attempted, accuracy and score in each subject."
+          : "Accuracy and score in each section."
+      }
+      className="mb-4"
+    >
+      <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
+        {stacks.map((stack) => (
+          <div
+            key={stack.id}
+            className="flex flex-col gap-3 rounded-panel border border-rule-soft p-4"
+          >
+            <p className="flex items-center gap-2 text-sm font-medium text-ink">
+              <span
+                className="size-2 rounded-full"
+                style={{ background: colorOf(stack.id) }}
+                aria-hidden="true"
+              />
+              {stack.label}
+            </p>
+            <div className="flex items-center gap-4">
+              <AccuracyDonut value={stack.accuracy} color={colorOf(stack.id)} />
+              <div className="min-w-0 flex-1 space-y-1.5 text-[11px]">
+                <p className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-muted">
+                    <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
+                    Attempted
+                  </span>
+                  <span className="font-medium tabular text-ink">
+                    {n(stack.correct + stack.incorrect)} / {n(stack.total)}
+                  </span>
+                </p>
+                <p className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-muted">
+                    <span className="size-1.5 rounded-full bg-positive" aria-hidden="true" />
+                    Correct
+                  </span>
+                  <span className="font-medium tabular text-ink">
+                    {n(stack.correct)}
+                  </span>
+                </p>
+                <p className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-muted">
+                    <span className="size-1.5 rounded-full bg-danger" aria-hidden="true" />
+                    Incorrect
+                  </span>
+                  <span className="font-medium tabular text-ink">
+                    {n(stack.incorrect)}
+                  </span>
+                </p>
+              </div>
+            </div>
+            <p className="flex items-center justify-between border-t border-rule-soft pt-2.5 text-[11px]">
+              <span className="text-muted">Score</span>
+              <span className="font-semibold tabular text-ink">
+                {n(stack.score)} / {n(stack.maxScore)}
+              </span>
+            </p>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+/* ---------- Grouped score bars (subject / sectional) ---------- */
+function GroupedScoreBars({ analytics }: { analytics: Analytics }) {
+  const { scope, trend } = analytics;
+  const rows = new Map<string, TrendRow & { label: string }>();
+  for (const point of trend.points) {
+    const row = rows.get(point.sourceAttemptId) ?? {
+      key: point.sourceAttemptId,
+      date: point.date,
+      name: point.name,
+      type: point.sourceType,
+      label: point.name,
+    };
+    row[point.seriesId] = point.percentage;
+    row[`${point.seriesId}__raw`] = `${n(point.score)} / ${point.maxScore}`;
+    rows.set(point.sourceAttemptId, row);
+  }
+  const data = [...rows.values()].sort((a, b) => a.date.localeCompare(b.date));
+  if (!data.length) return null;
+  const config: ChartConfig = Object.fromEntries(
+    trend.series.map((series) => [
+      series.id,
+      { label: series.label, color: seriesColor(scope, series.id) },
+    ]),
+  );
+  return (
+    <Panel
+      title={scope === "subject" ? "Subject-wise score trend" : "Section-wise score trend"}
+      description={`Your score in each ${scope === "subject" ? "subject" : "section"} across recent mocks, as a percentage of that paper.`}
+      className="mb-4"
+    >
+      <div className="px-5 pb-4">
+        <ChartContainer
+          config={config}
+          className="!aspect-auto h-[260px] w-full"
+        >
+          <BarChart
+            data={data}
+            margin={{ left: 0, right: 8, top: 12, bottom: 0 }}
+            accessibilityLayer
+          >
+            <CartesianGrid vertical={false} stroke="var(--rule-soft)" />
+            <XAxis
+              dataKey="date"
+              tickFormatter={dateLabel}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 10, fill: "var(--muted)" }}
+            />
+            <YAxis
+              domain={[0, 100]}
+              tickFormatter={(value) => `${value}%`}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 10, fill: "var(--muted)" }}
+              width={40}
+            />
+            <ChartTooltip
+              cursor={{ fill: "var(--soft)" }}
+              content={
+                <ChartTooltipContent
+                  formatter={(value, name, item) => {
+                    const row = item.payload as TrendRow;
+                    const seriesId = String(item.dataKey);
+                    return (
+                      <div className="flex w-full justify-between gap-4">
+                        <span className="text-muted">{name}</span>
+                        <span className="tabular font-medium text-ink">
+                          {n(Number(value))}% ·{" "}
+                          {String(row[`${seriesId}__raw`] ?? "")}
+                        </span>
+                      </div>
+                    );
+                  }}
+                />
+              }
+            />
+            {trend.series.map((series) => (
+              <Bar
+                key={series.id}
+                isAnimationActive={false}
+                dataKey={series.id}
+                name={series.label}
+                fill={`var(--color-${series.id})`}
+                radius={[3, 3, 0, 0]}
+                maxBarSize={26}
+              />
+            ))}
+            <ChartLegend content={<ChartLegendContent />} />
+          </BarChart>
+        </ChartContainer>
+        <ViewData
+          columns={["Mock", "Date", ...trend.series.map((s) => s.label)]}
+          rows={data.map((row) => [
+            row.name,
+            dateLabel(row.date),
+            ...trend.series.map((series) =>
+              row[series.id] == null ? "—" : `${n(Number(row[series.id]))}% · ${String(row[`${series.id}__raw`] ?? "")}`,
+            ),
+          ])}
+        />
+      </div>
+    </Panel>
+  );
+}
+/* ---------- Score distribution histogram (all / full) ---------- */
+function ScoreDistribution({ analytics }: { analytics: Analytics }) {
+  const points = analytics.trend.points;
+  if (points.length < 3) return null;
+  const buckets = Array.from({ length: 10 }, (_, index) => ({
+    label: index === 9 ? "90-100" : `${index * 10}-${index * 10 + 10}`,
+    from: index * 10,
+    to: index * 10 + 10,
+    count: 0,
+  }));
+  for (const point of points) {
+    const index = Math.min(9, Math.max(0, Math.floor(point.percentage / 10)));
+    buckets[index]!.count += 1;
+  }
+  const average =
+    points.reduce((total, point) => total + point.percentage, 0) / points.length;
+  const avgBucket = Math.min(9, Math.max(0, Math.floor(average / 10)));
+  return (
+    <Panel
+      title="Score distribution"
+      description="Distribution of scores across all attempted mocks."
+      className="mb-4"
+    >
+      <div className="px-5 pb-4">
+        <ChartContainer
+          config={{ count: { label: "Mocks", color: "var(--chart-score)" } }}
+          className="!aspect-auto h-[220px] w-full"
+        >
+          <BarChart
+            data={buckets}
+            margin={{ left: 0, right: 8, top: 12, bottom: 0 }}
+            accessibilityLayer
+          >
+            <CartesianGrid vertical={false} stroke="var(--rule-soft)" />
+            <XAxis
+              dataKey="label"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 10, fill: "var(--muted)" }}
+            />
+            <YAxis
+              allowDecimals={false}
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: 10, fill: "var(--muted)" }}
+              width={32}
+            />
+            <ChartTooltip
+              cursor={{ fill: "var(--soft)" }}
+              content={
+                <ChartTooltipContent
+                  hideLabel
+                  formatter={(value) => (
+                    <div className="flex w-full justify-between gap-4">
+                      <span className="text-muted">Mocks</span>
+                      <span className="tabular font-medium text-ink">
+                        {n(Number(value))}
+                      </span>
+                    </div>
+                  )}
+                />
+              }
+            />
+            <ReferenceLine
+              x={buckets[avgBucket]!.label}
+              stroke="var(--muted)"
+              strokeDasharray="4 4"
+              label={{
+                value: `Avg. ${n(average)}%`,
+                position: "insideTop",
+                fill: "var(--muted)",
+                fontSize: 10,
+              }}
+            />
+            <Bar
+              isAnimationActive={false}
+              dataKey="count"
+              name="Mocks"
+              fill="var(--chart-score)"
+              radius={[3, 3, 0, 0]}
+              maxBarSize={40}
+            />
+          </BarChart>
+        </ChartContainer>
+      </div>
+    </Panel>
+  );
+}
+/* ---------- Subject lines (subject scope: accuracy + time per subject) ---------- */
+function SubjectLines({ analytics }: { analytics: Analytics }) {
+  const { trend } = analytics;
+  const withAccuracy = trend.points.filter((point) => point.accuracy != null);
+  const withTime = trend.points.filter((point) => point.timeSeconds != null);
+  const group = (
+    points: typeof trend.points,
+    pick: (point: (typeof trend.points)[number]) => number,
+  ) => {
+    const rows = new Map<string, TrendRow>();
+    for (const point of points) {
+      const row = rows.get(point.sourceAttemptId) ?? {
+        key: point.sourceAttemptId,
+        date: point.date,
+        name: point.name,
+        type: point.sourceType,
+      };
+      row[point.seriesId] = pick(point);
+      rows.set(point.sourceAttemptId, row);
+    }
+    return [...rows.values()].sort((a, b) => a.date.localeCompare(b.date));
+  };
+  const accuracyRows = withAccuracy.length
+    ? group(withAccuracy, (point) => point.accuracy!)
+    : [];
+  const timeRows = withTime.length
+    ? group(withTime, (point) => Math.round(point.timeSeconds! / 60))
+    : [];
+  const config: ChartConfig = Object.fromEntries(
+    trend.series.map((series) => [
+      series.id,
+      { label: series.label, color: subjectColors[series.id as SubjectId] },
+    ]),
+  );
+  const renderLines = () =>
+    trend.series.map((series) => (
+      <Line
+        key={series.id}
+        isAnimationActive={false}
+        type="monotone"
+        dataKey={series.id}
+        name={series.label}
+        stroke={`var(--color-${series.id})`}
+        strokeWidth={2}
+        dot={{ r: 3, fill: `var(--color-${series.id})` }}
+        connectNulls={false}
+      />
+    ));
+  return (
+    <div className="mb-4 grid gap-4 xl:grid-cols-2">
+      <Panel
+        title="Accuracy over attempts (Subject wise)"
+        description="How accuracy changes with more attempts."
+      >
+        <div className="px-5 pb-4">
+          {accuracyRows.length ? (
+            <ChartContainer config={config} className="!aspect-auto h-[220px] w-full">
+              <LineChart data={accuracyRows} margin={{ left: 0, right: 10, top: 8, bottom: 0 }} accessibilityLayer>
+                <CartesianGrid vertical={false} stroke="var(--rule-soft)" />
+                <XAxis dataKey="date" tickFormatter={dateLabel} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} minTickGap={24} />
+                <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} width={40} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                {renderLines()}
+                <ChartLegend content={<ChartLegendContent />} />
+              </LineChart>
+            </ChartContainer>
+          ) : (
+            <EmptyChart>No accuracy data yet.</EmptyChart>
+          )}
+        </div>
+      </Panel>
+      <Panel
+        title="Time per attempt (Subject wise)"
+        description="Average minutes spent per attempt in each subject."
+      >
+        <div className="px-5 pb-4">
+          {timeRows.length ? (
+            <ChartContainer config={config} className="!aspect-auto h-[220px] w-full">
+              <LineChart data={timeRows} margin={{ left: 0, right: 10, top: 8, bottom: 0 }} accessibilityLayer>
+                <CartesianGrid vertical={false} stroke="var(--rule-soft)" />
+                <XAxis dataKey="date" tickFormatter={dateLabel} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} minTickGap={24} />
+                <YAxis tickFormatter={(value) => `${value}m`} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} width={40} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                {renderLines()}
+                <ChartLegend content={<ChartLegendContent />} />
+              </LineChart>
+            </ChartContainer>
+          ) : (
+            <EmptyChart>No timing recorded yet.</EmptyChart>
+          )}
+        </div>
+      </Panel>
+    </div>
+  );
+}
 function TargetPanel({
   analytics,
   target,
@@ -529,62 +1290,78 @@ function TargetPanel({
   return (
     <div className="px-5 pb-5">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 py-2">
-        <div>
-          <p className="text-[11px] muted">Your target</p>
-          <p className="font-semibold tabular mt-1">
-            {target == null ? "Not set" : `${n(target)} / 390`}
-          </p>
-          <p className="text-[10px] muted mt-1">
-            {targetPercent == null ? "Add one in Settings" : `${n(targetPercent)}% of the paper`}
-          </p>
+        <div className="flex items-start gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent" aria-hidden="true">
+            <Flag size={14} />
+          </span>
+          <div>
+            <p className="text-[11px] muted">Your target</p>
+            <p className="font-semibold tabular mt-1">
+              {target == null ? "Not set" : `${n(target)} / 390`}
+            </p>
+            <p className="text-[10px] muted mt-1">
+              {targetPercent == null ? "Add a score or percentage" : `${n(targetPercent)}% of the paper`}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-[11px] muted">Latest average</p>
-          <p className="font-semibold tabular mt-1">
-            {snapshots.length ? `${n(latest!.percentage)}%` : "—"}
-          </p>
-          <p className="text-[10px] muted mt-1">
-            {latest ? `${latest.pointCount} result${latest.pointCount === 1 ? "" : "s"} that day` : "No results yet"}
-          </p>
+        <div className="flex items-start gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent" aria-hidden="true">
+            <PlainIcon name="trend" size={14} />
+          </span>
+          <div>
+            <p className="text-[11px] muted">Latest average</p>
+            <p className="font-semibold tabular mt-1">
+              {snapshots.length ? `${n(latest!.percentage)}%` : "—"}
+            </p>
+            <p className="text-[10px] muted mt-1">
+              {latest ? `${latest.pointCount} result${latest.pointCount === 1 ? "" : "s"} that day` : "No results yet"}
+            </p>
+          </div>
         </div>
-        <div className="col-span-2 sm:col-span-1">
-          <p className="text-[11px] muted">Against target</p>
-          <p className="font-semibold tabular mt-1 flex items-center gap-1.5">
-            {gap == null ? (
-              "—"
-            ) : (
-              <>
-                {gap > 0 ? "+" : ""}
-                {n(gap)} pp
-                {gap >= 0 ? (
-                  <PlainIcon name="arrowUpRight" size={14} />
-                ) : (
-                  <PlainIcon name="arrowDownRight" size={14} />
-                )}
-              </>
-            )}
-          </p>
-          <p className="text-[10px] muted mt-1 flex items-center gap-1">
-            {direction === "up" ? (
-              <PlainIcon name="trend" size={12} />
-            ) : direction === "down" ? (
-              <PlainIcon name="arrowDownRight" size={12} />
-            ) : (
-              <PlainIcon name="minus" size={12} />
-            )}
-            {change == null
-              ? "Need two dated snapshots"
-              : direction === "flat"
-                ? "Flat since the previous snapshot"
-                : `${direction === "up" ? "Up" : "Down"} ${n(Math.abs(change))} pp since the previous snapshot`}
-          </p>
+        <div className="col-span-2 flex items-start gap-3 sm:col-span-1">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-positive-soft text-positive" aria-hidden="true">
+            <PlainIcon name="arrowUpRight" size={14} />
+          </span>
+          <div>
+            <p className="text-[11px] muted">Against target</p>
+            <p className="font-semibold tabular mt-1 flex items-center gap-1.5">
+              {gap == null ? (
+                "—"
+              ) : (
+                <>
+                  {gap > 0 ? "+" : ""}
+                  {n(gap)} pp
+                  {gap >= 0 ? (
+                    <PlainIcon name="arrowUpRight" size={14} />
+                  ) : (
+                    <PlainIcon name="arrowDownRight" size={14} />
+                  )}
+                </>
+              )}
+            </p>
+            <p className="text-[10px] muted mt-1 flex items-center gap-1">
+              {direction === "up" ? (
+                <PlainIcon name="trend" size={12} />
+              ) : direction === "down" ? (
+                <PlainIcon name="arrowDownRight" size={12} />
+              ) : (
+                <PlainIcon name="minus" size={12} />
+              )}
+              {change == null
+                ? "Need two dated snapshots"
+                : direction === "flat"
+                  ? "Flat since the previous snapshot"
+                  : `${direction === "up" ? "Up" : "Down"} ${n(Math.abs(change))} pp since the previous snapshot`}
+            </p>
+          </div>
         </div>
       </div>
       {snapshots.length > 1 ? (
-        <ChartContainer
-          config={config}
-          className="!aspect-auto mt-2 h-[150px] w-full px-1"
-        >
+        <>
+          <ChartContainer
+            config={config}
+            className="!aspect-auto mt-2 h-[150px] w-full px-1"
+          >
           <AreaChart
             data={rows}
             margin={{ left: 0, right: 14, top: 14, bottom: 0 }}
@@ -666,7 +1443,26 @@ function TargetPanel({
               dot={{ r: 3, fill: "var(--chart-score)" }}
             />
           </AreaChart>
-        </ChartContainer>
+          </ChartContainer>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+            <ViewData
+              columns={["Date", "Average", "Results"]}
+              rows={snapshots.map((snapshot) => [
+                dateLabel(snapshot.date),
+                `${n(snapshot.percentage)}%`,
+                snapshot.pointCount,
+              ])}
+            />
+            {snapshots.length > 1 && (
+              <p className="pb-3 text-[10px] text-muted">
+                Average (last {snapshots.length} snapshots):{" "}
+                <span className="font-medium tabular text-accent">
+                  {n(latest!.percentage)}%
+                </span>
+              </p>
+            )}
+          </div>
+        </>
       ) : snapshots.length === 1 ? (
         <p className="mt-3 rounded-control border border-rule-soft bg-canvas px-3 py-3 text-[11px] leading-relaxed text-muted">
           One dated snapshot is saved. Log another result to see the target
@@ -681,14 +1477,6 @@ function TargetPanel({
           reference on every dashboard tab.
         </p>
       )}
-      <ViewData
-        columns={["Date", "Average", "Results"]}
-        rows={snapshots.map((snapshot) => [
-          dateLabel(snapshot.date),
-          `${n(snapshot.percentage)}%`,
-          snapshot.pointCount,
-        ])}
-      />
     </div>
   );
 }
@@ -708,27 +1496,42 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
     <div className="px-5 pb-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap gap-6 pt-1">
-          <div>
-            <p className="text-[11px] muted">Average accuracy</p>
-            <p className="font-semibold tabular mt-1">
-              {n(current.accuracy)}%
-            </p>
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
+              <PlainIcon name="success" size={14} />
+            </span>
+            <div>
+              <p className="font-semibold tabular text-sm text-ink">
+                {n(current.accuracy)}%
+              </p>
+              <p className="text-[10px] muted">Average accuracy</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] muted">Average time</p>
-            <p className="font-semibold tabular mt-1">
-              {formatTime(
-                current.averageTime == null
-                  ? null
-                  : Math.round(current.averageTime),
-              )}
-            </p>
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
+              <PlainIcon name="clock" size={14} />
+            </span>
+            <div>
+              <p className="font-semibold tabular text-sm text-ink">
+                {formatTime(
+                  current.averageTime == null
+                    ? null
+                    : Math.round(current.averageTime),
+                )}
+              </p>
+              <p className="text-[10px] muted">Average time</p>
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] muted">Average score</p>
-            <p className="font-semibold tabular mt-1">
-              {n(current.percentage)}%
-            </p>
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
+              <PlainIcon name="file" size={14} />
+            </span>
+            <div>
+              <p className="font-semibold tabular text-sm text-ink">
+                {n(current.percentage)}%
+              </p>
+              <p className="text-[10px] muted">Average score</p>
+            </div>
           </div>
         </div>
         <select
@@ -816,6 +1619,16 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
               />
             </LineChart>
           </ChartContainer>
+          <ViewData
+            columns={["Date", "Score", "Maximum", "Accuracy", "Time"]}
+            rows={current.trend.map((point) => [
+              dateLabel(point.date),
+              n(point.score),
+              point.maxScore,
+              point.accuracy == null ? "—" : `${n(point.accuracy)}%`,
+              formatTime(point.timeSeconds),
+            ])}
+          />
         </div>
         <div>
           <p className="text-[11px] muted mb-1">Time per attempt (minutes)</p>
@@ -887,16 +1700,6 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
           draw accuracy and time trends.
         </p>
       )}
-      <ViewData
-        columns={["Date", "Score", "Maximum", "Accuracy", "Time"]}
-        rows={current.trend.map((point) => [
-          dateLabel(point.date),
-          n(point.score),
-          point.maxScore,
-          point.accuracy == null ? "—" : `${n(point.accuracy)}%`,
-          formatTime(point.timeSeconds),
-        ])}
-      />
     </div>
   );
 }
@@ -913,55 +1716,48 @@ export const PerformanceOverview = memo(function PerformanceOverview({
   target: number | null;
 }) {
   if (!analytics) return <EmptyChart>Loading your preparation…</EmptyChart>;
-  const { scope, summary } = analytics;
-  const points = analytics.trend.points;
-  const isFull = scope === "full";
-  const averageMarks = points.length
-    ? points.reduce((total, point) => total + point.score, 0) / points.length
-    : null;
-  const bestMarks = points.length
-    ? Math.max(...points.map((point) => point.score))
-    : null;
+  const { scope } = analytics;
   const copy = scopeCopy[scope];
+  const standPanel = (
+    <Panel
+      title={scope === "all" ? "Where you stand" : scope === "subject" ? "Subject-wise strengths" : "Where you stand"}
+      description="Your performance across different areas."
+    >
+      <WhereYouStand rows={analytics.whereYouStand} />
+    </Panel>
+  );
   return (
     <>
-      <dl className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1.5 text-[11px] text-muted">
-        {[
-          ["Mocks", n(analytics.sourceAttemptCount)],
-          [
-            isFull ? "Average full mock" : "Average score",
-            isFull ? `${n(averageMarks)} / 390` : `${n(summary.averagePercentage)}%`,
-          ],
-          [
-            "Best",
-            isFull ? `${n(bestMarks)} / 390` : `${n(summary.bestPercentage)}%`,
-          ],
-          ["Accuracy", `${n(summary.weightedAccuracy)}%`],
-          ["Results", n(analytics.pointCount)],
-        ].map(([label, value]) => (
-          <div key={label} className="flex items-baseline gap-1.5">
-            <dt>{label}</dt>
-            <dd className="font-medium tabular text-ink">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <KpiStrip analytics={analytics} />
       <div className="grid xl:grid-cols-[1.65fr_1fr] gap-4 mb-4">
         <Panel title={copy.trend} description={copy.trendDescription}>
           <ScopeTrend analytics={analytics} targetScore={target} />
         </Panel>
-        <Panel
-          title="Where you stand"
-          description="Average subject score across all mock types."
-        >
-          <WhereYouStand rows={analytics.whereYouStand} />
-        </Panel>
+        {standPanel}
       </div>
-      <AttemptCards analytics={analytics} />
+      {(scope === "subject" || scope === "sectional") && (
+        <OverviewDonutCards analytics={analytics} />
+      )}
+      {(scope === "subject" || scope === "sectional") && (
+        <GroupedScoreBars analytics={analytics} />
+      )}
+      {scope === "all" && <ScoreDistribution analytics={analytics} />}
+      {(scope === "full" || scope === "all") && (
+        <AttemptBreakdown analytics={analytics} />
+      )}
       {(target != null || analytics.target.snapshots.length > 0) && (
         <Panel
           title="My target"
-          description="One target, the same reference on every dashboard tab."
-          className="mb-6"
+          description="Set a target and track your progress with time."
+          action={
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-1.5 rounded-control border border-rule-soft px-2.5 py-1.5 text-[10px] font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent"
+            >
+              <Pencil size={11} /> Edit target
+            </Link>
+          }
+          className="mb-4"
         >
           <TargetPanel analytics={analytics} target={target} />
         </Panel>
@@ -970,11 +1766,12 @@ export const PerformanceOverview = memo(function PerformanceOverview({
         (analytics.deepDive ?? []).some((subject) => subject.count > 0) && (
           <Panel
             title="Subject deep dive"
-            description="Accuracy and time per attempt, with one axis per chart."
+            description="Analyze your strengths and weaknesses across subjects."
           >
             <DeepDive analytics={analytics} />
           </Panel>
         )}
+      {scope === "subject" && <SubjectLines analytics={analytics} />}
     </>
   );
 });

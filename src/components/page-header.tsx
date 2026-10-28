@@ -9,6 +9,7 @@ export function PageHeader({
   description,
   meta,
   actions,
+  icon,
   className,
 }: {
   title: string;
@@ -16,6 +17,8 @@ export function PageHeader({
   /** Optional contextual line (date, plan day, result count). */
   meta?: React.ReactNode;
   actions?: React.ReactNode;
+  /** Optional tile rendered before the title block. */
+  icon?: React.ReactNode;
   className?: string;
 }) {
   return (
@@ -25,18 +28,21 @@ export function PageHeader({
         className,
       )}
     >
-      <div className="min-w-0">
-        <h1 className="workspace-title">{title}</h1>
-        {description && (
-          <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-muted">
-            {description}
-          </p>
-        )}
-        {meta && (
-          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
-            {meta}
-          </p>
-        )}
+      <div className="flex min-w-0 items-start gap-3">
+        {icon && <div className="shrink-0 pt-0.5">{icon}</div>}
+        <div className="min-w-0">
+          <h1 className="workspace-title">{title}</h1>
+          {description && (
+            <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-muted">
+              {description}
+            </p>
+          )}
+          {meta && (
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+              {meta}
+            </p>
+          )}
+        </div>
       </div>
       {actions && (
         <div className="flex flex-wrap items-center gap-2">{actions}</div>

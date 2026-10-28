@@ -107,6 +107,8 @@ export function AiChatSheet({
   error,
   contextLabel,
   configured = true,
+  /** Tab to land on when the sheet opens; callers can deep-link a flow. */
+  initialTab = "chat",
   onSend,
   onStop,
   onClear,
@@ -124,6 +126,7 @@ export function AiChatSheet({
   contextLabel?: string;
   /** False when no AI provider is configured; shows the setup form instead. */
   configured?: boolean;
+  initialTab?: "chat" | "log" | "todos";
   onSend: (text: string) => void;
   onStop: () => void;
   onClear: () => void;
@@ -142,7 +145,7 @@ export function AiChatSheet({
   const [lastOpen, setLastOpen] = useState(false);
   if (open !== lastOpen) {
     setLastOpen(open);
-    if (open) setTab("chat");
+    if (open) setTab(initialTab);
   }
   const viewport = useOverlayViewport(open);
   const overlayFocus = useOverlayFocus();

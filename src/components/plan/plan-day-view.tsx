@@ -109,7 +109,7 @@ export function PlanDayView({
         </div>
       </div>
 
-      <header className="mb-5 border-b border-rule pb-4">
+      <header className="mb-5 border-b border-rule pb-5">
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
           {phase?.name ?? `Phase ${current.phase}`} · {longDate(current.date)}
           {current.date === today
@@ -118,16 +118,29 @@ export function PlanDayView({
               ? " · past"
               : " · upcoming"}
         </p>
-        <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="workspace-title">Day {current.day}</h1>
-          <p className="text-xs text-muted tabular" aria-live="polite">
-            {stats.completed}/{stats.total} assignments ·{" "}
-            {current.checklist.filter((item) => item.done).length}/
-            {current.checklist.length} checklist
-            {stats.dayCompleted ? " · day complete" : ""}
-          </p>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+          <div className="min-w-0">
+            <h1 className="workspace-title leading-none">Day {current.day}</h1>
+            <p className="mt-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-accent">
+              {current.dayType}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <DayRing value={stats.total ? stats.completed / stats.total : 0} />
+            <div className="text-xs text-muted tabular" aria-live="polite">
+              <p className="text-sm font-medium text-ink">
+                {stats.completed}/{stats.total} assignments
+              </p>
+              <p className="mt-0.5">
+                {current.checklist.filter((item) => item.done).length}/
+                {current.checklist.length} checklist
+              </p>
+              {stats.dayCompleted && (
+                <p className="mt-0.5 font-medium text-positive">Day complete</p>
+              )}
+            </div>
+          </div>
         </div>
-        <p className="mt-1 text-xs text-muted">{current.dayType}</p>
       </header>
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,1fr)]">
@@ -156,11 +169,36 @@ export function PlanDayView({
 
         <aside className="flex min-w-0 flex-col gap-4">
           <section className="panel p-4" aria-label="Daily checklist">
-            <h2 className="font-serif text-lg font-medium">Daily checklist</h2>
-            <p className="mb-3 mt-1 text-[10px] text-muted">
-              The plan&apos;s four habits for every study day.
-            </p>
-            <ul className="flex flex-col gap-2.5">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="font-serif text-lg font-medium">Daily checklist</h2>
+                <p className="mt-1 text-[10px] text-muted">
+                  The plan&apos;s four habits for every study day.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-[10px] tabular text-muted">
+                  {current.checklist.filter((item) => item.done).length}/
+                  {current.checklist.length}
+                </span>
+                <span className="h-1 w-14 overflow-hidden rounded-pill bg-soft">
+                  <span
+                    className="block h-full rounded-pill bg-accent"
+                    style={{
+                      width: `${
+                        current.checklist.length
+                          ? (current.checklist.filter((item) => item.done)
+                              .length /
+                              current.checklist.length) *
+                            100
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </span>
+              </div>
+            </div>
+            <ul className="mt-3 flex flex-col gap-2.5">
               {current.checklist.map((item) => (
                 <li key={item.id}>
                   <label className="check-row text-xs">
@@ -292,6 +330,64 @@ function PlanNotFound({ date }: { date: string }) {
   );
 }
 
+/** Day-completion ring shown beside the Day N display. */
+function DayRing({ value }: { value: number }) {
+  const radius = 15.915;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(1, value));
+  return (
+    <div className="relative size-16 shrink-0">
+      <svg viewBox="0 0 40 40" className="size-full -rotate-90" aria-hidden="true">
+        <circle cx="20" cy="20" r={radius} fill="none" strokeWidth="4" style={{ stroke: "var(--soft)" }} />
+        <circle
+          cx="20"
+          cy="20"
+          r={radius}
+          fill="none"
+          strokeWidth="4"
+          strokeLinecap="round"
+          style={{
+            stroke: "var(--accent)",
+            strokeDasharray: `${circumference * clamped} ${circumference}`,
+          }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <p className="font-serif text-base leading-none tabular text-ink">
+          {Math.round(clamped * 100)}%
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function taskIcon(type: PlanTaskView["type"]) {
+  if (isMockType(type)) return "file" as const;
+  switch (type) {
+    case "maths_sectional":
+    case "maths_topic":
+      return "quant" as const;
+    case "reasoning_sectional":
+      return "reasoning" as const;
+    case "english_sectional":
+      return "english" as const;
+    case "gk_sectional":
+      return "ga" as const;
+    case "computer_mock":
+    case "computer_pyq":
+      return "computer" as const;
+    default:
+      return "fileCheck" as const;
+  }
+}
+
+function taskTile(type: PlanTaskView["type"]): string {
+  if (isMockType(type)) return "bg-accent-soft text-accent";
+  if (type.endsWith("_sectional")) return "bg-positive-soft text-positive";
+  if (type === "maths_topic") return "bg-warning-soft text-warning";
+  return "bg-soft text-muted";
+}
+
 function PlanTaskRow({
   task,
   planApi,
@@ -305,7 +401,7 @@ function PlanTaskRow({
   const [open, setOpen] = useState(false);
   return (
     <li className="px-4 py-3">
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-3">
         <CompleteToggle
           completed={task.completed}
           label={`Mark ${task.name} ${task.completed ? "incomplete" : "complete"}`}
@@ -314,6 +410,12 @@ function PlanTaskRow({
             setOpen(!task.completed);
           }}
         />
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-control ${taskTile(task.type)}`}
+          aria-hidden="true"
+        >
+          <PlainIcon name={taskIcon(task.type)} size={15} />
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className={`text-[13px] font-medium ${task.completed ? "muted line-through" : ""}`}>
@@ -328,13 +430,26 @@ function PlanTaskRow({
           </p>
         </div>
         {onLogResult && !task.completed && (
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             onClick={onLogResult}
-            className="shrink-0 whitespace-nowrap text-[10px] font-medium text-accent hover:text-accent-hover"
+            className="shrink-0"
           >
             Log attempt
-          </button>
+          </Button>
+        )}
+        {!onLogResult && !task.completed && task.url && (
+          <a
+            href={task.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0"
+          >
+            <Button variant="outline" size="sm">
+              Start <PlainIcon name="arrowUpRight" size={12} />
+            </Button>
+          </a>
         )}
         <a
           href={task.url}
@@ -342,8 +457,9 @@ function PlanTaskRow({
           rel="noopener noreferrer"
           aria-label={`Open ${task.name} on RBE`}
           className="shrink-0 text-muted transition-colors hover:text-accent"
+          onClick={(e) => e.stopPropagation()}
         >
-          <PlainIcon name="arrowUpRight" size={14} />
+          <PlainIcon name="chevronRight" size={14} />
         </a>
       </div>
       {task.completed && (

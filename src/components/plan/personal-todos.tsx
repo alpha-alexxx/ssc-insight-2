@@ -5,6 +5,7 @@ import {
   CalendarClock,
   ChevronRight,
   Info,
+  List,
   Plus,
   Search,
   Sparkles,
@@ -33,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { shortDate as dateLabel } from "@/lib/format";
 import { useOverlayViewport, useOverlayFocus } from "../use-overlay-viewport";
+import { PlainIcon } from "../icon";
 import { Panel } from "../dashboard-panels";
 import { PersonalCalendar } from "./personal-calendar";
 import { useTodoQuery, mutateTodoRequest } from "../use-todos-data";
@@ -85,16 +87,26 @@ export function PersonalTodos({
   aiAction,
   compact = false,
   dashboardColumn = false,
+  focusDate,
+  onOpenAi,
 }: {
   initialDate?: string;
   compact?: boolean;
   /** Renders as a single self-contained Panel for the dashboard column. */
   dashboardColumn?: boolean;
+  /** When provided (dashboard), the selected date follows the section's day stepper. */
+  focusDate?: string;
+  /** Opens the shell AI chat sheet on its Plan-todos tab (no local AI UI). */
+  onOpenAi?: () => void;
   onChanged?: () => void;
   aiAction?: React.ReactNode;
 }) {
   const overlayFocus = useOverlayFocus();
-  const [date, setDate] = useState(initialDate ?? istTodayIso());
+  const [internalDate, setInternalDate] = useState(
+    initialDate ?? istTodayIso(),
+  );
+  /** Controlled when the dashboard's day stepper drives this panel. */
+  const date = focusDate ?? internalDate;
   const [view, setView] = useState<View>("day");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -164,7 +176,7 @@ export function PersonalTodos({
   }
   function selectDate(next: string) {
     if (!next) return;
-    setDate(next);
+    setInternalDate(next);
     setView("day");
     setPage(1);
   }
@@ -198,20 +210,39 @@ export function PersonalTodos({
         </div>
       )}
       {!compact && (
-        <dl className="grid grid-cols-3 divide-x divide-rule-soft border-y border-rule-soft py-3">
-          {[
-            ["Pending", "pending"],
-            ["Completed", "completed"],
-            ["Overdue", "overdue"],
-          ].map(([label, key]) => (
-            <div key={key} className="px-3 first:pl-0">
-              <dt className="text-xs text-muted">{label}</dt>
-              <dd className="mt-1 font-serif text-2xl tabular-nums">
-                {data?.counts[key] ?? "—"}
-              </dd>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          {(
+            [
+              ["clock", "bg-accent-soft text-accent", "Pending", data?.counts.pending],
+              ["success", "bg-positive-soft text-positive", "Completed", data?.counts.completed],
+              ["warning", "bg-danger-soft text-danger", "Overdue", data?.counts.overdue],
+              ["calendar", "bg-accent-soft text-accent", "Focus today", data?.counts.today],
+            ] as const
+          ).map(([icon, tile, label, count]) => (
+            <div
+              key={label}
+              className="flex items-center gap-3 rounded-panel border border-rule-soft bg-paper px-3.5 py-3"
+            >
+              <span
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-control",
+                  tile,
+                )}
+                aria-hidden="true"
+              >
+                <PlainIcon name={icon} size={15} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                  {label}
+                </p>
+                <p className="mt-0.5 font-serif text-xl leading-none tabular text-ink">
+                  {count ?? "—"}
+                </p>
+              </div>
             </div>
           ))}
-        </dl>
+        </div>
       )}
       <div
         className={cn(
@@ -219,27 +250,69 @@ export function PersonalTodos({
           !dashboardColumn && "lg:grid-cols-[minmax(0,1fr)_300px]",
         )}
       >
-        <aside
-          className={cn(
-            "min-w-0 border-b border-rule-soft pb-4",
-            !dashboardColumn &&
-              "lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:border-l lg:pb-0 lg:pl-5",
-          )}
-        >
-          <PersonalCalendar
-            selected={date}
-            onSelect={selectDate}
-            onAdd={() => setCreating(true)}
-          />
-          {compact && !dashboardColumn && (
-            <a
-              href="/my-tasks"
-              className="mt-4 block text-xs text-accent underline underline-offset-4"
+        {!dashboardColumn && (
+          <aside className="min-w-0 border-b border-rule-soft pb-4 lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:border-l lg:pb-0 lg:pl-5">
+            <PersonalCalendar
+              selected={date}
+              onSelect={selectDate}
+              onAdd={() => setCreating(true)}
+            />
+            {data && (
+              <section
+                className="mt-5 rounded-panel border border-rule-soft p-4"
+                aria-label="Tasks summary"
+              >
+                <p className="text-xs font-medium text-ink">Tasks summary</p>
+                <ul className="mt-3 space-y-2.5 text-xs">
+                  {(
+                    [
+                      ["Pending", data.counts.pending, "bg-warning"],
+                      ["Completed", data.counts.completed, "bg-positive"],
+                      ["Overdue", data.counts.overdue, "bg-danger"],
+                      ["Total tasks", data.counts.all, "bg-accent"],
+                    ] as const
+                  ).map(([label, count, dot]) => (
+                    <li
+                      key={label}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="flex items-center gap-2 text-muted">
+                        <span
+                          className={cn("size-1.5 rounded-full", dot)}
+                          aria-hidden="true"
+                        />
+                        {label}
+                      </span>
+                      <span className="font-medium tabular text-ink">
+                        {count ?? "—"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            <section
+              className="mt-4 rounded-panel border border-rule-soft p-4"
+              aria-label="Focus tools"
             >
-              Manage all personal tasks
-            </a>
-          )}
-        </aside>
+              <p className="text-xs font-medium text-ink">Focus tools</p>
+              <div className="mt-3 grid gap-2">
+                <a
+                  href="/calendar"
+                  className="inline-flex items-center gap-2 rounded-control border border-rule-soft px-3 py-2 text-xs font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent"
+                >
+                  <PlainIcon name="calendar" size={13} /> View study plan
+                </a>
+                <a
+                  href="/dashboard"
+                  className="inline-flex items-center gap-2 rounded-control border border-rule-soft px-3 py-2 text-xs font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent"
+                >
+                  <PlainIcon name="dashboard" size={13} /> Open dashboard
+                </a>
+              </div>
+            </section>
+          </aside>
+        )}
         <div
           className={cn(
             "flex min-w-0 flex-col gap-4",
@@ -262,21 +335,65 @@ export function PersonalTodos({
           <div className="overflow-hidden">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="font-serif text-lg">{dateLabel(date)}</h3>
-              {!compact && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setGroupsOpen(!groupsOpen)}
-                  aria-expanded={groupsOpen}
-                >
-                  Manage groups
-                </Button>
+              {dashboardColumn ? (
+                <div className="flex shrink-0 items-center gap-2.5">
+                  {data ? (
+                    <p className="text-[10px] tabular text-muted">
+                      {data.total} {data.total === 1 ? "task" : "tasks"}
+                    </p>
+                  ) : null}
+                  <a
+                    href="/my-tasks"
+                    className="inline-flex items-center gap-1 text-[10px] font-medium text-accent hover:text-accent-hover"
+                  >
+                    <List size={11} /> All tasks
+                  </a>
+                </div>
+              ) : (
+                !compact && (
+                  <div className="flex shrink-0 items-center gap-3">
+                    <div className="flex items-center gap-2 text-[10px] tabular text-muted">
+                      <span>
+                        {data?.items.filter((t) => t.status === "completed")
+                          .length ?? 0}
+                        /{data?.total ?? 0} completed
+                      </span>
+                      <span className="h-1 w-16 overflow-hidden rounded-pill bg-soft">
+                        <span
+                          className="block h-full rounded-pill bg-accent"
+                          style={{
+                            width: `${
+                              data?.total
+                                ? (data.items.filter(
+                                    (t) => t.status === "completed",
+                                  ).length /
+                                    data.total) *
+                                  100
+                                : 0
+                            }%`,
+                          }}
+                        />
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setGroupsOpen(!groupsOpen)}
+                      aria-expanded={groupsOpen}
+                    >
+                      Manage groups
+                    </Button>
+                  </div>
+                )
               )}
             </div>
             <div className="flex flex-col gap-2">
               <form
-                className="flex flex-wrap gap-2"
+                className={cn(
+                  "flex items-center gap-2",
+                  !dashboardColumn && "flex-wrap",
+                )}
                 onSubmit={async (e) => {
                   e.preventDefault();
                   if (!title.trim()) return;
@@ -296,23 +413,40 @@ export function PersonalTodos({
                 <label className="sr-only" htmlFor="quick-todo-title">
                   New todo title
                 </label>
-                <input
-                  ref={input}
-                  id="quick-todo-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  maxLength={200}
-                  required
-                  placeholder={`Add a todo for ${dateLabel(date)}…`}
-                  className="min-w-0 flex-1 basis-48"
-                  disabled={busy}
-                />
+                <div
+                  className={cn(
+                    "relative min-w-0 flex-1",
+                    !dashboardColumn && "basis-48",
+                  )}
+                >
+                  {dashboardColumn && (
+                    <List
+                      size={14}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                    />
+                  )}
+                  <input
+                    ref={input}
+                    id="quick-todo-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    maxLength={200}
+                    required
+                    placeholder={`Add a todo for ${dateLabel(date)}…`}
+                    className={cn("min-w-0 w-full", dashboardColumn && "pl-9!")}
+                    disabled={busy}
+                  />
+                </div>
                 <label className="sr-only" htmlFor="quick-todo-group">
                   Todo group
                 </label>
                 <select
                   id="quick-todo-group"
-                  className="w-auto! max-w-40"
+                  className={cn(
+                    "w-auto!",
+                    dashboardColumn ? "max-w-36 text-xs" : "max-w-40",
+                  )}
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
                   disabled={busy}
@@ -323,15 +457,29 @@ export function PersonalTodos({
                     </option>
                   ))}
                 </select>
-                <Button disabled={busy || !title.trim()}>
-                  <Plus size={16} />
-                  Add todo
-                </Button>
+                {dashboardColumn ? (
+                  <Button
+                    type="submit"
+                    size="icon"
+                    aria-label="Add todo"
+                    disabled={busy || !title.trim()}
+                    className="shrink-0 rounded-full"
+                  >
+                    <Plus size={16} />
+                  </Button>
+                ) : (
+                  <Button disabled={busy || !title.trim()}>
+                    <Plus size={16} />
+                    Add todo
+                  </Button>
+                )}
               </form>
-              <p className="text-xs text-muted">
-                Press Enter to add another. Add notes, priority, or subtasks
-                using Edit.
-              </p>
+              {!dashboardColumn && (
+                <p className="text-xs text-muted">
+                  Press Enter to add another. Add notes, priority, or subtasks
+                  using Edit.
+                </p>
+              )}
             </div>
           </div>
           {groupsOpen && (
@@ -478,12 +626,13 @@ export function PersonalTodos({
               </div>
             </SheetContent>
           </Sheet>
-          <div className="flex flex-wrap items-center gap-3">
-            <div
-              role="group"
-              aria-label="Personal todo views"
-              className="flex flex-wrap gap-1"
-            >
+          {!dashboardColumn && (
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                role="group"
+                aria-label="Personal todo views"
+                className="flex flex-wrap gap-1"
+              >
               {(compact
                 ? VIEWS.filter((item) => item.id === "day")
                 : VIEWS
@@ -494,10 +643,10 @@ export function PersonalTodos({
                   aria-pressed={view === item.id}
                   onClick={() => selectView(item.id)}
                   className={cn(
-                    "min-h-9 rounded-control px-3 text-xs",
+                    "min-h-9 border-b-2 px-3 text-xs font-medium transition-colors",
                     view === item.id
-                      ? "bg-ink text-paper"
-                      : "text-muted hover:bg-soft hover:text-ink",
+                      ? "border-accent text-ink"
+                      : "border-transparent text-muted hover:text-ink",
                   )}
                 >
                   {item.label}
@@ -524,7 +673,8 @@ export function PersonalTodos({
                 />
               </div>
             )}
-          </div>
+            </div>
+          )}
           {(error || loadError) && (
             <div
               role="alert"
@@ -545,26 +695,35 @@ export function PersonalTodos({
               Loading your todos…
             </p>
           ) : !data?.items.length ? (
-            <div className="border-y border-rule-soft px-4 py-8 text-center">
-              <h3 className="font-serif text-xl">
-                {view === "trash"
-                  ? "Trash is empty"
-                  : view === "needsdate"
-                    ? "Every todo has a date"
-                    : search
-                      ? "No matching todos"
-                      : "A clear page for your work"}
-              </h3>
-              <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
-                {view === "trash"
-                  ? "Deleted todos appear here and can be restored with their subtasks."
-                  : view === "needsdate"
-                    ? "Older tasks without a date will appear here. Assign a date to bring them into your planner."
-                    : search
-                      ? "Try another search or choose a different view."
-                      : "Add a title above to begin your checklist, or ask AI to prepare a draft for review."}
-              </p>
-            </div>
+            dashboardColumn ? null : (
+              <div className="border-y border-rule-soft px-4 py-8 text-center">
+                <h3 className="font-serif text-xl">
+                  {view === "trash"
+                    ? "Trash is empty"
+                    : view === "needsdate"
+                      ? "Every todo has a date"
+                      : search
+                        ? "No matching todos"
+                        : "A clear page for your work"}
+                </h3>
+                <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
+                  {view === "trash"
+                    ? "Deleted todos appear here and can be restored with their subtasks."
+                    : view === "needsdate"
+                      ? "Older tasks without a date will appear here. Assign a date to bring them into your planner."
+                      : search
+                        ? "Try another search or choose a different view."
+                        : "Add a task to begin your checklist, or use AI to plan your study schedule for revision."}
+                </p>
+                {!search && view !== "trash" && view !== "needsdate" && (
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <Button size="sm" onClick={() => setCreating(true)}>
+                      <Plus size={14} /> Add your first task
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )
           ) : (
             <div className="space-y-5">
               {[...buckets.entries()].map(([key, items]) => {
@@ -807,15 +966,20 @@ export function PersonalTodos({
           dense
           icon="check"
           title="Personal Tasks"
-          description="Personal work outside the study plan."
           action={
-            <div className="flex shrink-0 items-center gap-2.5">
-              <a
-                href="/my-tasks"
-                className="text-[10px] font-medium text-accent hover:text-accent-hover"
-              >
-                All tasks
-              </a>
+            <div className="flex shrink-0 items-center gap-2">
+              {onOpenAi && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Create task with AI"
+                  title="Create task with AI"
+                  onClick={onOpenAi}
+                >
+                  <Sparkles size={15} />
+                </Button>
+              )}
               <Button type="button" size="sm" onClick={() => setCreating(true)}>
                 <Plus size={14} /> Add task
               </Button>

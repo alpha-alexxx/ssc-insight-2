@@ -1,8 +1,8 @@
 "use client";
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Panel } from "./dashboard-panels";
-import { PlainIcon } from "./icon";
+import { PlainIcon, DuotoneTile } from "./icon";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { DashboardOverview } from "./dashboard-overview";
@@ -14,12 +14,18 @@ import {
   TodayFocusPanel,
   type PlanWithToday,
 } from "./plan/dashboard-plan-sections";
-import { WeekStrip, WeekStripSkeleton } from "./plan/week-strip";
+import { WeekStripPanel, WeekStripSkeleton } from "./plan/week-strip";
 import type { usePlanData } from "./use-plan-data";
 import type { Analytics } from "@/lib/analytics";
 import type { Attempt } from "@/lib/domain";
 import { PersonalTodos } from "./plan/personal-todos";
-import { istTodayIso } from "@/lib/plan/view-model";
+import {
+  addIsoDays,
+  dayAssignmentStats,
+  istTodayIso,
+  isoWeekdayName,
+} from "@/lib/plan/view-model";
+import { longDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,6 +47,7 @@ export function DashboardView({
   onAdd,
   onViewAll,
   onOpenDay,
+  onOpenPersonalAi,
 }: {
   planApi: ReturnType<typeof usePlanData>;
   analytics: Analytics | null;
@@ -53,10 +60,21 @@ export function DashboardView({
   onAdd: () => void;
   onViewAll: () => void;
   onOpenDay: (date: string) => void;
+  /** Opens the shell AI chat on the Plan-todos tab. */
+  onOpenPersonalAi?: () => void;
 }) {
   const plan = planApi.plan as PlanWithToday | null;
   const today = plan?.today ?? istTodayIso();
   const [mobilePane, setMobilePane] = useState<"study" | "personal">("study");
+  const [focusDate, setFocusDate] = useState<string | null>(null);
+  const activeDate = focusDate ?? today;
+  const shiftFocus = (delta: number) => {
+    if (!plan) return;
+    const next = addIsoDays(activeDate, delta);
+    if (next >= plan.startDate && next <= plan.endDate) setFocusDate(next);
+  };
+  const heroDay = plan?.days.find((day) => day.date === activeDate);
+  const heroStats = heroDay ? dayAssignmentStats(heroDay) : null;
   const personalOverdue =
     planApi.personalTasks?.filter(
       (task) =>
@@ -71,15 +89,82 @@ export function DashboardView({
         target={target}
         loading={loading}
         personalOverdue={personalOverdue}
+        onOpenToday={() => onOpenDay(today)}
+        onViewAll={onViewAll}
       />
 
       <section
         className="mt-5 border-t border-rule pt-4"
         aria-labelledby="today-plan-heading"
       >
-        <h2 id="today-plan-heading" className="mb-4 font-serif text-2xl">
-          Today&apos;s Plan
-        </h2>
+        <div className="flex min-w-0 items-center gap-3">
+          <DuotoneTile name="book" tile="accent" className="size-10" />
+          <div className="min-w-0">
+            <h2 id="today-plan-heading" className="font-serif text-2xl">
+              Today&apos;s Plan
+            </h2>
+            <p className="mt-0.5 text-xs text-muted">
+              Stay consistent. Complete your study plan and personal tasks for
+              today.
+            </p>
+          </div>
+        </div>
+        {plan && (
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-10"
+              aria-label="Previous day"
+              disabled={activeDate <= plan.startDate}
+              onClick={() => shiftFocus(-1)}
+            >
+              <ChevronLeft size={17} />
+            </Button>
+            <div className="min-w-0 flex-1">
+              <p className="text-balance font-serif text-2xl leading-tight tracking-[-0.02em] sm:text-[28px]">
+                {isoWeekdayName(activeDate)}, {longDate(activeDate)}
+              </p>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
+                {heroDay ? (
+                  <>
+                    <span>
+                      Day {heroDay.day} of 50 ·{" "}
+                      {plan.phases.find((item) => item.phase === heroDay.phase)
+                        ?.name ?? `Phase ${heroDay.phase}`}{" "}
+                      · {heroDay.dayType}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="tabular">
+                      {heroStats?.completed ?? 0}/{heroStats?.total ?? 0} done
+                    </span>
+                  </>
+                ) : (
+                  <span>Outside the plan window</span>
+                )}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-10"
+              aria-label="Next day"
+              disabled={activeDate >= plan.endDate}
+              onClick={() => shiftFocus(1)}
+            >
+              <ChevronRight size={17} />
+            </Button>
+            {activeDate !== today && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFocusDate(null)}
+              >
+                Today
+              </Button>
+            )}
+          </div>
+        )}
         <div
           role="group"
           aria-label="Switch between the study plan and personal tasks"
@@ -121,8 +206,10 @@ export function DashboardView({
               </div>
             ) : (
               <TodayFocusPanel
+                key={activeDate}
                 plan={plan}
                 today={today}
+                date={activeDate}
                 planApi={planApi}
                 onOpenDay={onOpenDay}
               />
@@ -134,33 +221,20 @@ export function DashboardView({
               mobilePane !== "personal" && "hidden lg:block",
             )}
           >
-            <PersonalTodos compact dashboardColumn initialDate={today} />
+            <PersonalTodos
+              compact
+              dashboardColumn
+              initialDate={today}
+              focusDate={activeDate}
+              onOpenAi={onOpenPersonalAi}
+            />
           </div>
         </div>
       </section>
 
-      <section
-        className="mt-6 border-t border-rule pt-4"
-        aria-labelledby="this-week-heading"
-      >
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="this-week-heading" className="font-serif text-2xl">
-              This week
-            </h2>
-            <p className="mt-1 text-xs text-muted">
-              Three days around today. Pick a day to open its plan.
-            </p>
-          </div>
-          <Link
-            href="/calendar"
-            className="text-[10px] font-medium text-accent hover:text-accent-hover"
-          >
-            Full calendar
-          </Link>
-        </div>
+      <section className="mt-6" aria-label="This week">
         {plan ? (
-          <WeekStrip plan={plan} today={today} onOpenDay={onOpenDay} />
+          <WeekStripPanel plan={plan} today={today} onOpenDay={onOpenDay} />
         ) : (
           <WeekStripSkeleton />
         )}
@@ -219,7 +293,7 @@ function RecentAttemptsPanel({
       dense
       icon="history"
       title="Recent attempts"
-      description="Actual attempt dates, newest first."
+      description="Actual attempt data from your latest mocks."
       action={
         <button
           type="button"

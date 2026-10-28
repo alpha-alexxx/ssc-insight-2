@@ -2,9 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Lightbulb } from "lucide-react";
 import { Panel } from "../dashboard-panels";
 import { PlainIcon } from "../icon";
 import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
 import { AttemptRecordCard } from "../attempt-outcome-card";
 import {
   CategoryChip,
@@ -29,6 +31,7 @@ import {
   istTodayIso,
   isMockType,
   personalTasksByDate,
+  upcomingMocks,
   weekRange,
   type PersonalTaskView,
   type PlanDayView,
@@ -52,6 +55,30 @@ const MODES: { id: CalendarMode; label: string }[] = [
   { id: "day", label: "Day" },
   { id: "agenda", label: "Agenda" },
 ];
+
+/** Category → chip tint, so a day's mix of work is readable at a glance. */
+export function taskChipClass(task: PlanTaskView): string {
+  if (task.completed) return "bg-positive-soft text-positive line-through";
+  if (isMockType(task.type)) return "bg-accent-soft text-accent";
+  if (task.type.endsWith("_sectional")) return "bg-positive-soft text-positive";
+  if (task.type === "maths_topic") return "bg-warning-soft text-warning";
+  return "bg-soft text-muted";
+}
+
+const CHIP_LEGEND: { label: string; cls: string }[] = [
+  { label: "Mock test", cls: "bg-accent-soft text-accent" },
+  { label: "Sectional test", cls: "bg-positive-soft text-positive" },
+  { label: "Topic test", cls: "bg-warning-soft text-warning" },
+  { label: "Other", cls: "bg-soft text-muted" },
+];
+
+function barColor(type: PlanTaskView["type"], completed: boolean): string {
+  if (completed) return "bg-positive";
+  if (isMockType(type)) return "bg-accent";
+  if (type.endsWith("_sectional")) return "bg-positive";
+  if (type === "maths_topic") return "bg-warning";
+  return "bg-rule-soft";
+}
 
 function clampToPlan(
   plan: { startDate: string; endDate: string },
@@ -92,6 +119,11 @@ export function CalendarView({
     void updatePersonalTask(task.id, { status: nextStatus(status) });
   };
   const openMyTasks = () => router.push("/my-tasks");
+  const markAllDone = (day: PlanDayView) => {
+    day.tasks
+      .filter((task) => !task.completed)
+      .forEach((task) => updateTask(task.key, { completed: true }));
+  };
 
   useEffect(() => {
     onSelectedDateChange?.(selected);
@@ -124,6 +156,51 @@ export function CalendarView({
         ? `${shortDate(weekRange(selected).from)} – ${shortDate(weekRange(selected).to)}`
         : shortDate(selected);
 
+  /* Planner KPIs: planned days, completed days, this week's load, next mock. */
+  const plannedDays = plan.days.filter((day) => day.tasks.length > 0);
+  const completedDays = plannedDays.filter((day) =>
+    dayAssignmentStats(day).dayCompleted,
+  ).length;
+  const week = weekRange(today);
+  const weekDays = plan.days.filter(
+    (day) =>
+      day.date >= week.from && day.date <= week.to && day.tasks.length > 0,
+  );
+  const weekTotal = weekDays.reduce((sum, day) => sum + day.tasks.length, 0);
+  const weekDone = weekDays.reduce(
+    (sum, day) => sum + dayAssignmentStats(day).completed,
+    0,
+  );
+  const nextMock = upcomingMocks(plan.days, today, 1_000).find(({ task }) =>
+    isMockType(task.type),
+  );
+  const kpis = [
+    {
+      icon: "calendar" as const,
+      tile: "bg-accent-soft text-accent",
+      label: "Total mocks",
+      value: `${plannedDays.length}`,
+    },
+    {
+      icon: "success" as const,
+      tile: "bg-positive-soft text-positive",
+      label: "Completed",
+      value: `${completedDays} (${Math.round((completedDays / Math.max(1, plannedDays.length)) * 100)}%)`,
+    },
+    {
+      icon: "clock" as const,
+      tile: "bg-accent-soft text-accent",
+      label: "This week",
+      value: `${weekDone}/${weekTotal}`,
+    },
+    {
+      icon: "calendar" as const,
+      tile: "bg-warning-soft text-warning",
+      label: "Next mock",
+      value: nextMock ? shortDate(nextMock.task.date) : "—",
+    },
+  ];
+
   const step = (direction: 1 | -1) => {
     const next =
       mode === "month"
@@ -139,6 +216,29 @@ export function CalendarView({
 
   return (
     <div>
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {kpis.map((kpi) => (
+          <div
+            key={kpi.label}
+            className="flex items-center gap-2.5 rounded-panel border border-rule-soft bg-paper px-3 py-2.5"
+          >
+            <span
+              className={`flex size-9 shrink-0 items-center justify-center rounded-control ${kpi.tile}`}
+              aria-hidden="true"
+            >
+              <PlainIcon name={kpi.icon} size={15} />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+                {kpi.label}
+              </p>
+              <p className="mt-0.5 truncate font-serif text-lg leading-none tabular text-ink">
+                {kpi.value}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div role="group" aria-label="Calendar view" className="segment-group">
           {MODES.map((m) => (
@@ -248,6 +348,9 @@ export function CalendarView({
               personalTasks={personalByDate.get(selected) ?? []}
               onCyclePersonal={cyclePersonalStatus}
               onEditPersonal={openMyTasks}
+              onMarkAllDone={
+                selectedDay ? () => markAllDone(selectedDay) : undefined
+              }
             />
           )}
           {mode !== "day" && mode !== "agenda" && (
@@ -271,6 +374,9 @@ export function CalendarView({
               personalTasks={personalByDate.get(selected) ?? []}
               onCyclePersonal={cyclePersonalStatus}
               onEditPersonal={openMyTasks}
+              onMarkAllDone={
+                selectedDay ? () => markAllDone(selectedDay) : undefined
+              }
             />
           </aside>
         )}
@@ -401,13 +507,7 @@ function MonthView({
                   {day?.tasks.slice(0, 3).map((task) => (
                     <span
                       key={task.key}
-                      className={`truncate text-[10px] leading-tight rounded-[3px] px-1 py-0.5 ${
-                        task.completed
-                          ? "bg-positive-soft text-positive line-through"
-                          : isMockType(task.type)
-                            ? "bg-accent-soft text-accent"
-                            : "bg-soft text-muted"
-                      }`}
+                      className={`truncate text-[10px] leading-tight rounded-[3px] px-1 py-0.5 ${taskChipClass(task)}`}
                     >
                       {task.name}
                     </span>
@@ -447,13 +547,7 @@ function MonthView({
                   {day.tasks.slice(0, 4).map((task) => (
                     <span
                       key={task.key}
-                      className={`h-1 flex-1 rounded-pill ${
-                        task.completed
-                          ? "bg-positive"
-                          : isMockType(task.type)
-                            ? "bg-accent"
-                            : "bg-rule-soft"
-                      }`}
+                      className={`h-1 flex-1 rounded-pill ${barColor(task.type, task.completed)}`}
                     />
                   ))}
                 </span>
@@ -476,11 +570,31 @@ function MonthView({
           );
         })}
       </div>
-      <p className="mt-2 text-[11px] muted">
-        Solid chips are plan assignments; dashed chips are your personal tasks
-        with status dots (grey to do · accent in progress · green done · red
-        overdue). Days outside 26 Oct – 14 Dec are inactive.
-      </p>
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted">
+        {CHIP_LEGEND.map((item) => (
+          <span key={item.label} className="inline-flex items-center gap-1.5">
+            <span
+              className={cn("inline-block size-2 rounded-[3px]", item.cls)}
+              aria-hidden="true"
+            />
+            {item.label}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block size-2 rounded-[3px] border border-dashed border-rule"
+            aria-hidden="true"
+          />
+          Personal task
+        </span>
+      </div>
+      <div className="mt-2.5 flex items-start gap-2.5 rounded-control border border-accent/25 bg-accent-soft px-3.5 py-3">
+        <Lightbulb size={15} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />
+        <p className="text-xs leading-relaxed text-ink">
+          Click on any date to view or add mock tests, sectional tests, topic
+          tests or revision tasks.
+        </p>
+      </div>
     </div>
   );
 }
@@ -560,13 +674,7 @@ function WeekView({
                 {day.tasks.slice(0, 5).map((task) => (
                   <div
                     key={task.key}
-                    className={`h-1.5 rounded-pill ${
-                      task.completed
-                        ? "bg-positive"
-                        : isMockType(task.type)
-                          ? "bg-accent"
-                          : "bg-rule-soft"
-                    }`}
+                    className={`h-1.5 rounded-pill ${barColor(task.type, task.completed)}`}
                   />
                 ))}
               </div>
@@ -592,6 +700,7 @@ function SelectedDayAgenda({
   personalTasks = [],
   onCyclePersonal,
   onEditPersonal,
+  onMarkAllDone,
 }: {
   day: PlanDayView | undefined;
   today: string;
@@ -603,6 +712,7 @@ function SelectedDayAgenda({
   personalTasks?: PersonalTaskView[];
   onCyclePersonal?: (task: PersonalTaskView) => void;
   onEditPersonal?: () => void;
+  onMarkAllDone?: () => void;
 }) {
   if (!day)
     return (
@@ -622,11 +732,23 @@ function SelectedDayAgenda({
     <Panel
       dense
       title={`Day ${day.day} · ${shortDate(day.date)}`}
-      description={`${day.weekday} · ${day.dayType}`}
+      description={`${day.weekday}, ${day.date} · ${day.tasks.length} task${day.tasks.length === 1 ? "" : "s"}`}
       action={
-        <span className="text-[10px] text-muted tabular whitespace-nowrap">
-          {stats.completed}/{stats.total} done
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-[10px] text-muted tabular whitespace-nowrap">
+            {stats.completed}/{stats.total} done
+          </span>
+          {onMarkAllDone && stats.completed < stats.total && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onMarkAllDone}
+              title="Mark every assignment for this day complete"
+            >
+              Mark all done
+            </Button>
+          )}
+        </div>
       }
     >
       <ul className="divide-y divide-rule-soft">

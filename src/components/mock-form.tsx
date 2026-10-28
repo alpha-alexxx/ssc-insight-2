@@ -730,7 +730,7 @@ export function MockForm({
                       Correct
                       <input
                         type="number"
-                        className="no-spin"
+                        className="no-spin bg-positive-soft/50"
                         min={0}
                         max={s.questions}
                         required
@@ -744,7 +744,7 @@ export function MockForm({
                       Incorrect
                       <input
                         type="number"
-                        className="no-spin"
+                        className="no-spin bg-danger-soft/50"
                         min={0}
                         max={s.questions}
                         required
