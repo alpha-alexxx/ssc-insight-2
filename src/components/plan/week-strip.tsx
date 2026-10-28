@@ -71,15 +71,17 @@ export function WeekStripPanel({
         </div>
       }
     >
-      <div className="px-6 pb-6">
-        <div
-          className="grid grid-cols-7 gap-2 sm:gap-3"
-          aria-label="Week around today"
-        >
+      <div className="dashboard-week-scroll px-4 pb-4 sm:px-5 sm:pb-5">
+        <div className="dashboard-week-grid" aria-label="Week around today">
           {dates.map((date) => {
             const day = byDate.get(date);
             return day ? (
-              <WeekCell key={date} day={day} today={today} onOpenDay={onOpenDay} />
+              <WeekCell
+                key={date}
+                day={day}
+                today={today}
+                onOpenDay={onOpenDay}
+              />
             ) : (
               <EmptyCell key={date} date={date} />
             );
@@ -108,7 +110,7 @@ function WeekCell({
       onClick={() => onOpenDay(day.date)}
       aria-current={isToday ? "date" : undefined}
       aria-label={`${day.weekday} ${day.date}: ${stats.completed} of ${stats.total} assignments done${hasMock ? ", includes a mock test" : ""}`}
-      className={`flex min-w-0 flex-col items-center gap-2 rounded-card border px-2 py-5 transition-colors sm:px-3 ${
+      className={`dashboard-week-cell flex min-w-0 flex-col items-center gap-1.5 rounded-card border px-2 py-3 transition-colors sm:px-3 ${
         isToday
           ? "border-accent bg-accent-soft"
           : "border-rule-soft bg-paper hover:border-accent/60 hover:bg-soft"
@@ -149,7 +151,7 @@ function EmptyCell({ date }: { date: string }) {
   return (
     <div
       aria-hidden="true"
-      className="flex min-w-0 flex-col items-center gap-2 rounded-card border border-rule-soft/60 bg-canvas px-2 py-5 text-muted sm:px-3"
+      className="dashboard-week-cell flex min-w-0 flex-col items-center gap-1.5 rounded-card border border-rule-soft/60 bg-canvas px-2 py-3 text-muted sm:px-3"
     >
       <span className="text-[11px] uppercase tracking-[0.12em]">
         {shortWeekday(date)}
@@ -175,13 +177,15 @@ function DoneDot({ className = "" }: { className?: string }) {
 export function WeekStripSkeleton() {
   return (
     <div
-      className="grid grid-cols-7 gap-1.5 sm:gap-2.5"
+      className="dashboard-week-scroll"
       aria-busy="true"
       aria-label="Loading the week"
     >
-      {Array.from({ length: 7 }).map((_, index) => (
-        <Skeleton key={index} className="h-[128px] w-full" />
-      ))}
+      <div className="dashboard-week-grid">
+        {Array.from({ length: 7 }).map((_, index) => (
+          <Skeleton key={index} className="h-[112px] w-full" />
+        ))}
+      </div>
     </div>
   );
 }

@@ -82,7 +82,7 @@ export function DashboardView({
     ).length ?? null;
 
   return (
-    <div aria-busy={loading}>
+    <div className="dashboard-command" aria-busy={loading}>
       <DashboardOverview
         plan={plan}
         analytics={analytics}
@@ -93,82 +93,82 @@ export function DashboardView({
         onViewAll={onViewAll}
       />
 
-      <section
-        className="mt-5 border-t border-rule pt-4"
-        aria-labelledby="today-plan-heading"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <DuotoneTile name="book" tile="accent" className="size-10" />
-          <div className="min-w-0">
-            <h2 id="today-plan-heading" className="font-serif text-2xl">
-              Today&apos;s Plan
-            </h2>
-            <p className="mt-0.5 text-xs text-muted">
-              Stay consistent. Complete your study plan and personal tasks for
-              today.
-            </p>
-          </div>
-        </div>
-        {plan && (
-          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-10"
-              aria-label="Previous day"
-              disabled={activeDate <= plan.startDate}
-              onClick={() => shiftFocus(-1)}
-            >
-              <ChevronLeft size={17} />
-            </Button>
-            <div className="min-w-0 flex-1">
-              <p className="text-balance font-serif text-2xl leading-tight tracking-[-0.02em] sm:text-[28px]">
-                {isoWeekdayName(activeDate)}, {longDate(activeDate)}
-              </p>
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
-                {heroDay ? (
-                  <>
-                    <span>
-                      Day {heroDay.day} of 50 ·{" "}
-                      {plan.phases.find((item) => item.phase === heroDay.phase)
-                        ?.name ?? `Phase ${heroDay.phase}`}{" "}
-                      · {heroDay.dayType}
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span className="tabular">
-                      {heroStats?.completed ?? 0}/{heroStats?.total ?? 0} done
-                    </span>
-                  </>
-                ) : (
-                  <span>Outside the plan window</span>
-                )}
+      <section className="dashboard-today" aria-labelledby="today-plan-heading">
+        <div className="dashboard-today-head">
+          <div className="flex min-w-0 items-center gap-3">
+            <DuotoneTile name="book" tile="accent" className="size-10" />
+            <div className="min-w-0">
+              <h2 id="today-plan-heading" className="font-serif text-2xl">
+                Today&apos;s Plan
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Stay consistent. Complete your study plan and personal tasks for
+                today.
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-10"
-              aria-label="Next day"
-              disabled={activeDate >= plan.endDate}
-              onClick={() => shiftFocus(1)}
-            >
-              <ChevronRight size={17} />
-            </Button>
-            {activeDate !== today && (
+          </div>
+          {plan && (
+            <div className="dashboard-day-nav">
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => setFocusDate(null)}
+                size="icon"
+                className="size-10"
+                aria-label="Previous day"
+                disabled={activeDate <= plan.startDate}
+                onClick={() => shiftFocus(-1)}
               >
-                Today
+                <ChevronLeft size={17} />
               </Button>
-            )}
-          </div>
-        )}
+              <div className="dashboard-day-copy">
+                <p className="text-balance font-serif text-xl leading-tight tracking-[-0.02em] sm:text-2xl">
+                  {isoWeekdayName(activeDate)}, {longDate(activeDate)}
+                </p>
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
+                  {heroDay ? (
+                    <>
+                      <span>
+                        Day {heroDay.day} of 50 ·{" "}
+                        {plan.phases.find(
+                          (item) => item.phase === heroDay.phase,
+                        )?.name ?? `Phase ${heroDay.phase}`}{" "}
+                        · {heroDay.dayType}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular">
+                        {heroStats?.completed ?? 0}/{heroStats?.total ?? 0} done
+                      </span>
+                    </>
+                  ) : (
+                    <span>Outside the plan window</span>
+                  )}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-10"
+                aria-label="Next day"
+                disabled={activeDate >= plan.endDate}
+                onClick={() => shiftFocus(1)}
+              >
+                <ChevronRight size={17} />
+              </Button>
+              {activeDate !== today && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFocusDate(null)}
+                >
+                  Today
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
         <div
           role="group"
           aria-label="Switch between the study plan and personal tasks"
-          className="segment-group mb-3 lg:hidden"
+          className="segment-group mb-3 mt-3 lg:hidden"
         >
           <button
             type="button"
@@ -187,7 +187,7 @@ export function DashboardView({
             Personal
           </button>
         </div>
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="dashboard-today-grid">
           <div
             className={cn(
               "min-w-0",
@@ -232,7 +232,7 @@ export function DashboardView({
         </div>
       </section>
 
-      <section className="mt-6" aria-label="This week">
+      <section className="dashboard-week" aria-label="This week">
         {plan ? (
           <WeekStripPanel plan={plan} today={today} onOpenDay={onOpenDay} />
         ) : (
@@ -241,7 +241,7 @@ export function DashboardView({
       </section>
 
       {plan && (
-        <div className="mt-6 grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        <div className="dashboard-support-grid">
           <StudyPipelinePanel plan={plan} today={today} onOpenDay={onOpenDay} />
           <div className="flex min-w-0 flex-col gap-4">
             <RecentAttemptsPanel
@@ -255,8 +255,11 @@ export function DashboardView({
         </div>
       )}
 
-      <section className="mt-6" aria-labelledby="performance-heading">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3 border-b border-rule pb-3">
+      <section
+        className="dashboard-performance"
+        aria-labelledby="performance-heading"
+      >
+        <div className="dashboard-performance-head">
           <div>
             <h2
               id="performance-heading"
@@ -268,7 +271,7 @@ export function DashboardView({
               Saved results, trends, and answer breakdowns. Filters apply below.
             </p>
           </div>
-          <div className="min-w-0 max-w-full">{scopeControls}</div>
+          <div className="dashboard-scope-controls">{scopeControls}</div>
         </div>
         <PerformanceOverview analytics={analytics} target={target} />
       </section>
