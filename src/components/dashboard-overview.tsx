@@ -41,13 +41,15 @@ export function DashboardOverview({
   if (loading && !plan) {
     return (
       <div
-        className="dashboard-overview"
-        role="region"
+        className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4"
         aria-busy="true"
         aria-label="Loading overview"
       >
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="dashboard-kpi min-h-28">
+          <div
+            key={index}
+            className="rounded-panel border border-rule-soft bg-paper p-4"
+          >
             <Skeleton className="h-2.5 w-20" />
             <Skeleton className="mt-3 h-7 w-24" />
             <Skeleton className="mt-3 h-1.5 w-full" />
@@ -131,11 +133,11 @@ export function DashboardOverview({
   ];
 
   return (
-    <section className="dashboard-overview" aria-label="Dashboard overview">
+    <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
       {metrics.map(({ key, ...metric }) => (
         <KpiCard key={key} {...metric} />
       ))}
-    </section>
+    </div>
   );
 }
 
@@ -162,16 +164,26 @@ function KpiCard({
 }: KpiMetric) {
   const inner = (
     <>
-      <div className="dashboard-kpi-main">
-        <span className={cn("dashboard-kpi-icon", tile)} aria-hidden="true">
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-control",
+            tile,
+          )}
+          aria-hidden="true"
+        >
           <PlainIcon name={icon} size={18} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
             {label}
           </p>
-          <p className="dashboard-kpi-value tabular">{value}</p>
-          <p className="dashboard-kpi-hint">{hint}</p>
+          <p className="mt-1.5 font-serif text-2xl leading-none tabular">
+            {value}
+          </p>
+          <p className="mt-1.5 text-pretty text-[11px] leading-snug text-muted">
+            {hint}
+          </p>
         </div>
         <PlainIcon
           name="chevronRight"
@@ -180,7 +192,7 @@ function KpiCard({
         />
       </div>
       {pct != null && (
-        <div className="dashboard-kpi-progress">
+        <div className="mt-3 flex items-center gap-2">
           <div
             className="h-1.5 flex-1 overflow-hidden rounded-pill bg-soft"
             role="progressbar"
@@ -201,7 +213,8 @@ function KpiCard({
       )}
     </>
   );
-  const className = "dashboard-kpi block w-full text-left";
+  const className =
+    "block w-full rounded-panel border border-rule-soft bg-paper p-4 text-left transition-colors hover:border-accent/50 hover:bg-soft/40";
   if (href) {
     return (
       <Link

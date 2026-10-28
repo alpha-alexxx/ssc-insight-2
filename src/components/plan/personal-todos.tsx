@@ -213,30 +213,10 @@ export function PersonalTodos({
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
           {(
             [
-              [
-                "clock",
-                "bg-accent-soft text-accent",
-                "Pending",
-                data?.counts.pending,
-              ],
-              [
-                "success",
-                "bg-positive-soft text-positive",
-                "Completed",
-                data?.counts.completed,
-              ],
-              [
-                "warning",
-                "bg-danger-soft text-danger",
-                "Overdue",
-                data?.counts.overdue,
-              ],
-              [
-                "calendar",
-                "bg-accent-soft text-accent",
-                "Focus today",
-                data?.counts.today,
-              ],
+              ["clock", "bg-accent-soft text-accent", "Pending", data?.counts.pending],
+              ["success", "bg-positive-soft text-positive", "Completed", data?.counts.completed],
+              ["warning", "bg-danger-soft text-danger", "Overdue", data?.counts.overdue],
+              ["calendar", "bg-accent-soft text-accent", "Focus today", data?.counts.today],
             ] as const
           ).map(([icon, tile, label, count]) => (
             <div
@@ -411,9 +391,8 @@ export function PersonalTodos({
             <div className="flex flex-col gap-2">
               <form
                 className={cn(
-                  dashboardColumn
-                    ? "dashboard-todo-form"
-                    : "flex flex-wrap items-center gap-2",
+                  "flex items-center gap-2",
+                  !dashboardColumn && "flex-wrap",
                 )}
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -654,49 +633,46 @@ export function PersonalTodos({
                 aria-label="Personal todo views"
                 className="flex flex-wrap gap-1"
               >
-                {(compact
-                  ? VIEWS.filter((item) => item.id === "day")
-                  : VIEWS
-                ).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-pressed={view === item.id}
-                    onClick={() => selectView(item.id)}
-                    className={cn(
-                      "min-h-9 border-b-2 px-3 text-xs font-medium transition-colors",
-                      view === item.id
-                        ? "border-accent text-ink"
-                        : "border-transparent text-muted hover:text-ink",
-                    )}
-                  >
-                    {item.label}
-                    {data?.counts[item.id] != null && item.id !== "day" ? (
-                      <span className="ml-1 tabular-nums">
-                        {data.counts[item.id]}
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
+              {(compact
+                ? VIEWS.filter((item) => item.id === "day")
+                : VIEWS
+              ).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-pressed={view === item.id}
+                  onClick={() => selectView(item.id)}
+                  className={cn(
+                    "min-h-9 border-b-2 px-3 text-xs font-medium transition-colors",
+                    view === item.id
+                      ? "border-accent text-ink"
+                      : "border-transparent text-muted hover:text-ink",
+                  )}
+                >
+                  {item.label}
+                  {data?.counts[item.id] != null && item.id !== "day" ? (
+                    <span className="ml-1 tabular-nums">
+                      {data.counts[item.id]}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            {!dashboardColumn && (
+              <div className="relative ml-auto min-w-40">
+                <Search size={14} className="absolute left-3 top-3 text-muted" />
+                <input
+                  aria-label="Search personal todos"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search todos…"
+                  className="pl-9!"
+                />
               </div>
-              {!dashboardColumn && (
-                <div className="relative ml-auto min-w-40">
-                  <Search
-                    size={14}
-                    className="absolute left-3 top-3 text-muted"
-                  />
-                  <input
-                    aria-label="Search personal todos"
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(1);
-                    }}
-                    placeholder="Search todos…"
-                    className="pl-9!"
-                  />
-                </div>
-              )}
+            )}
             </div>
           )}
           {(error || loadError) && (
@@ -947,34 +923,32 @@ export function PersonalTodos({
               })}
             </div>
           )}
-          {data &&
-            !dashboardColumn &&
-            (data.total > data.limit || page > 1) && (
-              <div className="flex items-center justify-between border-t border-rule-soft pt-4 text-xs text-muted">
-                <span>
-                  {data.total} todos · Page {page} of{" "}
-                  {Math.ceil(data.total / data.limit)}
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page * data.limit >= data.total}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
+          {data && !dashboardColumn && (data.total > data.limit || page > 1) && (
+            <div className="flex items-center justify-between border-t border-rule-soft pt-4 text-xs text-muted">
+              <span>
+                {data.total} todos · Page {page} of{" "}
+                {Math.ceil(data.total / data.limit)}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page * data.limit >= data.total}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next
+                </Button>
               </div>
-            )}
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -1852,9 +1826,7 @@ export function TodoAiComposer({
             </p>
             <Button
               className={
-                compact
-                  ? "relative min-h-11 w-full justify-center gap-2 px-10"
-                  : undefined
+                compact ? "relative min-h-11 w-full justify-center gap-2 px-10" : undefined
               }
               disabled={busy || !prompt.trim()}
             >
@@ -1864,9 +1836,7 @@ export function TodoAiComposer({
                 : draft
                   ? "Generate new draft"
                   : "Prepare draft"}
-              {compact && (
-                <ChevronRight size={17} className="absolute right-3" />
-              )}
+              {compact && <ChevronRight size={17} className="absolute right-3" />}
             </Button>
             <p className="flex items-start gap-2 text-xs leading-relaxed text-muted">
               {compact && <Info size={16} className="mt-0.5 shrink-0" />}

@@ -33,12 +33,12 @@ export function Panel({
   dense?: boolean;
 }) {
   return (
-    <section className={`panel dashboard-panel ${className}`}>
+    <section className={`panel ${className}`}>
       <div
         className={
           dense
             ? "flex items-start justify-between gap-3 px-4 pb-2.5 pt-3.5"
-            : "flex items-start justify-between gap-3 px-5 pb-3 pt-4.5"
+            : "flex items-start justify-between gap-3 px-6 pb-3 pt-5"
         }
       >
         <div className="flex min-w-0 items-start gap-3">
@@ -61,13 +61,7 @@ export function Panel({
               {title}
             </h2>
             {description && (
-              <p
-                className={
-                  dense
-                    ? "mt-1 text-[10px] text-muted"
-                    : "mt-1.5 text-xs text-muted"
-                }
-              >
+              <p className={dense ? "mt-1 text-[10px] text-muted" : "mt-1.5 text-xs text-muted"}>
                 {description}
               </p>
             )}
