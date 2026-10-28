@@ -412,6 +412,8 @@
     font-family: var(--font-body);
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
+    text-size-adjust: 100%;
+    overflow-wrap: break-word;
   }
   button,
   input,
@@ -423,6 +425,7 @@
   a,
   select {
     -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
   button:not(:disabled),
   select,
@@ -758,7 +761,8 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
-  .task-editor-dialog, .task-confirm-dialog {
+  .task-editor-dialog,
+  .task-confirm-dialog {
     position: fixed;
     z-index: 50;
     left: 50%;
@@ -774,7 +778,9 @@
     background: var(--paper);
     padding: 20px;
   }
-  .task-confirm-dialog { max-width: 28rem; }
+  .task-confirm-dialog {
+    max-width: 28rem;
+  }
   @media (max-width: 639px) {
     .task-editor-dialog {
       top: auto;
@@ -783,12 +789,23 @@
       transform: none;
       width: 100%;
       max-height: min(90dvh, calc(var(--task-viewport-height, 100dvh) - 24px));
-      bottom: max(0px, calc(100dvh - var(--task-viewport-height, 100dvh) - var(--task-viewport-top, 0px)));
+      bottom: max(
+        0px,
+        calc(
+          100dvh - var(--task-viewport-height, 100dvh) -
+            var(--task-viewport-top, 0px)
+        )
+      );
       padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
       scroll-padding-bottom: 24px;
     }
-    .task-editor-dialog input, .task-editor-dialog textarea, .ai-composer textarea,
-    .personal-workspace input, .personal-workspace select { font-size: 16px; }
+    .task-editor-dialog input,
+    .task-editor-dialog textarea,
+    .ai-composer textarea,
+    .personal-workspace input,
+    .personal-workspace select {
+      font-size: 16px;
+    }
   }
   .sheet-content[data-state="closed"] {
     animation: sheet-out-right 160ms ease;
@@ -1047,7 +1064,11 @@
       linear-gradient(to right, var(--rule-soft) 1px, transparent 1px),
       linear-gradient(to bottom, var(--rule-soft) 1px, transparent 1px);
     background-size: 56px 56px;
-    mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 75%);
+    mask-image: radial-gradient(
+      ellipse 90% 70% at 50% 0%,
+      black 30%,
+      transparent 75%
+    );
   }
   .landing-wordmark {
     font-family: var(--font-heading);
@@ -1114,11 +1135,32 @@ html {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  .animate-spin,
+  .animate-pulse,
+  .dialog-overlay,
+  .dialog-content,
+  .popover-content,
+  .sheet-overlay,
+  .sheet-content {
+    animation: none !important;
+  }
+  .duotone .duotone-echo,
+  .duotone:hover .duotone-echo,
+  .duotone-tile,
+  .duotone-tile:hover {
+    transform: none;
+    transition: none;
+    box-shadow: none;
+  }
+}
+
+/* Preserve compact desktop density while giving coarse pointers comfortable
+   hit areas. WCAG 2.2's 24px floor is exceeded without stretching text links. */
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [data-sidebar="menu-button"],
+  .segment {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

@@ -41,7 +41,7 @@ export function DashboardOverview({
   if (loading && !plan) {
     return (
       <div
-        className="grid grid-cols-2 gap-3 xl:grid-cols-4"
+        className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4"
         aria-busy="true"
         aria-label="Loading overview"
       >
@@ -133,7 +133,7 @@ export function DashboardOverview({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
       {metrics.map(({ key, ...metric }) => (
         <KpiCard key={key} {...metric} />
       ))}
@@ -152,7 +152,16 @@ type KpiMetric = {
   href?: "/calendar" | "/my-tasks";
 };
 
-function KpiCard({ label, value, hint, icon, tile, pct, onClick, href }: KpiMetric) {
+function KpiCard({
+  label,
+  value,
+  hint,
+  icon,
+  tile,
+  pct,
+  onClick,
+  href,
+}: KpiMetric) {
   const inner = (
     <>
       <div className="flex items-start gap-3">
@@ -166,13 +175,15 @@ function KpiCard({ label, value, hint, icon, tile, pct, onClick, href }: KpiMetr
           <PlainIcon name={icon} size={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
             {label}
           </p>
           <p className="mt-1.5 font-serif text-2xl leading-none tabular">
             {value}
           </p>
-          <p className="mt-1.5 truncate text-[10px] text-muted">{hint}</p>
+          <p className="mt-1.5 text-pretty text-[11px] leading-snug text-muted">
+            {hint}
+          </p>
         </div>
         <PlainIcon
           name="chevronRight"
@@ -182,7 +193,14 @@ function KpiCard({ label, value, hint, icon, tile, pct, onClick, href }: KpiMetr
       </div>
       {pct != null && (
         <div className="mt-3 flex items-center gap-2">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-pill bg-soft">
+          <div
+            className="h-1.5 flex-1 overflow-hidden rounded-pill bg-soft"
+            role="progressbar"
+            aria-label={`${label} progress`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(pct * 100)}
+          >
             <div
               className="h-full rounded-pill bg-accent"
               style={{ width: `${Math.round(pct * 100)}%` }}
@@ -199,14 +217,23 @@ function KpiCard({ label, value, hint, icon, tile, pct, onClick, href }: KpiMetr
     "block w-full rounded-panel border border-rule-soft bg-paper p-4 text-left transition-colors hover:border-accent/50 hover:bg-soft/40";
   if (href) {
     return (
-      <Link href={href} className={className} aria-label={label}>
+      <Link
+        href={href}
+        className={className}
+        aria-label={`${label}: ${value}. ${hint}`}
+      >
         {inner}
       </Link>
     );
   }
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={className} aria-label={label}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={className}
+        aria-label={`${label}: ${value}. ${hint}`}
+      >
         {inner}
       </button>
     );

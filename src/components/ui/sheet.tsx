@@ -25,10 +25,7 @@ const SheetOverlay = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
-    className={cn(
-      "sheet-overlay fixed inset-0 z-50 bg-ink/25",
-      className,
-    )}
+    className={cn("sheet-overlay fixed inset-0 z-50 bg-ink/25", className)}
     {...props}
     ref={ref}
   />
@@ -44,8 +41,9 @@ const sideClasses: Record<SheetSide, string> = {
   right: "inset-y-0 right-0 h-dvh w-[86vw] border-l sm:max-w-[460px]",
 };
 
-interface SheetContentProps
-  extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content> {
+interface SheetContentProps extends React.ComponentPropsWithoutRef<
+  typeof SheetPrimitive.Content
+> {
   side?: SheetSide;
   showCloseButton?: boolean;
   overlayClassName?: string;
@@ -80,7 +78,7 @@ const SheetContent = React.forwardRef<
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close className="absolute right-3 top-3 z-10 inline-flex size-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none">
+          <SheetPrimitive.Close className="absolute right-2 top-2 z-10 inline-flex size-10 touch-manipulation items-center justify-center rounded-control text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none">
             <X className="size-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
@@ -119,7 +117,10 @@ const SheetTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Title
     ref={ref}
-    className={cn("font-serif text-xl font-semibold text-foreground", className)}
+    className={cn(
+      "font-serif text-xl font-semibold text-foreground",
+      className,
+    )}
     {...props}
   />
 ));

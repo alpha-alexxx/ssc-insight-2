@@ -1,5 +1,5 @@
 "use client";
-import { motion, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import { useSpring, animated } from "@react-spring/web";
 import { AuthControl } from "./auth-control";
 import { DuotoneIcon, DuotoneTile } from "./icon";
@@ -40,56 +40,32 @@ export function SignInCard({ authEnabled }: { authEnabled: boolean }) {
           style={glow}
           className="landing-blob size-40 bg-accent-soft top-[-30px]"
         />
-        <motion.div
-          initial={reduced ? false : { opacity: 0, y: 18, scale: 0.94 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ type: "spring", stiffness: 120, damping: 16 }}
-          className="relative"
-        >
+        <div className="relative">
           <DuotoneTile name="history" tile="accent" size={28} />
-        </motion.div>
+        </div>
       </div>
 
-      <motion.div
-        initial={reduced ? false : { opacity: 0, y: 22 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.12, type: "spring", stiffness: 110, damping: 18 }}
-      >
+      <div>
         <h1 className="font-serif text-4xl text-center mt-8 tracking-tight text-balance">
           Your preparation.
           <br />
           <span className="text-accent">Your space.</span>
         </h1>
-      </motion.div>
+      </div>
 
-      <motion.p
-        initial={reduced ? false : { opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.22, type: "spring", stiffness: 110, damping: 18 }}
-        className="muted text-center mt-4 text-[15px] leading-relaxed"
-      >
+      <p className="muted text-center mt-4 text-[15px] leading-relaxed">
         Sign in with Google to access your private mocks, progress, and
         settings. One account, one workspace — nothing shared.
-      </motion.p>
+      </p>
 
-      <motion.div
-        initial={reduced ? false : { opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, type: "spring", stiffness: 110, damping: 18 }}
-        className="mt-8 flex justify-center"
-      >
+      <div className="mt-8 flex justify-center">
         <AuthControl enabled={authEnabled} />
-      </motion.div>
+      </div>
 
-      <motion.div
-        initial={reduced ? false : { opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.45 }}
-        className="mt-12 flex items-center justify-center gap-2 text-xs muted"
-      >
+      <div className="mt-12 flex items-center justify-center gap-2 text-xs muted">
         <DuotoneIcon name="shield" size={15} tone="accent" />
         <span>Private by account · Export everything, anytime</span>
-      </motion.div>
+      </div>
     </main>
   );
 }
