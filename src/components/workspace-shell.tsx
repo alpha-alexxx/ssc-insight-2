@@ -560,8 +560,13 @@ function WorkspaceShellInner({
                       <PageHeader
                         title="Dashboard"
                         description="Today's work, plan progress, and the performance that matters."
+                        className="dashboard-page-header"
                         icon={
-                          <DuotoneTile name="dashboard" tile="accent" className="size-11" />
+                          <DuotoneTile
+                            name="dashboard"
+                            tile="accent"
+                            className="size-11"
+                          />
                         }
                         meta={
                           <>
