@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PrivateWorkspace } from "@/components/private-workspace";
 import { WorkspaceShell } from "@/components/workspace-shell";
@@ -32,9 +33,12 @@ export default async function WorkspaceLayout({
       redirect("/sign-in");
     redirect("/sign-in?error=unavailable");
   }
+  const defaultSidebarOpen =
+    (await cookies()).get("sidebar_state")?.value !== "false";
   return (
     <PrivateWorkspace key={user.id} userId={user.id}>
       <WorkspaceShell
+        defaultSidebarOpen={defaultSidebarOpen}
         authEnabled={process.env.GOOGLE_AUTH_ENABLED === "true"}
         userEmail={user.email ?? ""}
         userName={user.name ?? ""}
