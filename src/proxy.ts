@@ -25,11 +25,11 @@ import {
  *     logs, route logs and audit events can be tied together.
  *  2. Maintenance mode — MAINTENANCE_MODE=1 answers API calls with 503 and
  *     sends browsers to /maintenance, while keeping /api/health, the auth
- *     flow and sign-in reachable.
+ *     flow and the landing (the only sign-in surface) reachable.
  *  3. CSRF defense in depth — cross-origin state-changing API calls are
  *     rejected at the edge (route handlers re-check when they read bodies).
  *  4. Authentication — private pages go through the Neon Auth middleware;
- *     signed-in visitors are bounced away from /sign-in.
+ *     anonymous visitors are sent to the landing (the only sign-in surface).
  *  5. Structured access logging — gate decisions are logged via waitUntil
  *     so they never delay the response.
  *
@@ -43,7 +43,12 @@ import {
  * bypass the matcher).
  */
 
-const LOGIN_URL = "/sign-in";
+/**
+ * The landing is the only sign-in surface, so it is also the Neon Auth login
+ * URL. The SDK matches the login path exactly (not as a prefix), so private
+ * routes stay protected while "/" passes through.
+ */
+const LOGIN_URL = "/";
 
 /**
  * Next dev binds to 0.0.0.0, so the middleware's request URL and OAuth
@@ -219,20 +224,15 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
-  // ── 6. Sign-in page: always reachable ─────────────────────────────────
-  // The page itself verifies the session (requireUser) and bounces
-  // signed-in visitors to "/dashboard", so the proxy never needs to probe
-  // here. Neon Auth's middleware always ALLOWS the login path (it
-  // special-cases the loginUrl), so probing it can never distinguish
-  // anonymous from signed-in visitors — doing so previously bounced every
-  // /sign-in request to "/" while "/" redirected anonymous users back, an
-  // infinite loop.
-  if (pathname === LOGIN_URL) return passThrough("sign-in");
-
-  // ── 6b. Public landing page ───────────────────────────────────────────
-  // Anonymous visitors browse the landing; signed-in visitors are sent to
-  // /dashboard by the page's own requireUser check.
-  if (pathname === "/") return passThrough("landing");
+  // ── 6. Public landing page (also the login URL): always reachable ─────
+  // The page itself verifies the session (requireUser), bounces signed-in
+  // visitors to "/dashboard", and renders the Google sign-in affordance for
+  // everyone else. So the proxy never needs to probe here. Neon Auth's
+  // middleware always ALLOWS the login path (it special-cases the loginUrl),
+  // so probing it can never distinguish anonymous from signed-in visitors —
+  // doing so previously bounced every login-path request back to itself, an
+  // infinite loop. Keep this pass-through ABOVE the private-page gate.
+  if (pathname === LOGIN_URL) return passThrough("landing");
 
   // ── 7. Private pages: session guard ───────────────────────────────────
   try {

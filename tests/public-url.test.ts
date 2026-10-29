@@ -13,8 +13,8 @@ test("redirects preserve the browser host instead of the bind address", () => {
   assert.equal(publicOrigin(local), "http://localhost:3000");
   assert.equal(publicUrl("/", local).toString(), "http://localhost:3000/");
   assert.equal(
-    publicUrl("/sign-in?error=unavailable", local).toString(),
-    "http://localhost:3000/sign-in?error=unavailable",
+    publicUrl("/?error=unavailable", local).toString(),
+    "http://localhost:3000/?error=unavailable",
   );
 
   const lan = request("http://0.0.0.0:3000/", {

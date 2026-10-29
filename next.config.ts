@@ -63,9 +63,15 @@ const nextConfig: NextConfig = {
   async redirects() {
     // Legacy/alias paths keep old links working. Real-world apps centralize
     // these in config so marketing emails, bookmarks and old docs never 404.
+    // The landing is the only sign-in surface, so the retired /sign-in route
+    // and its aliases all collapse onto "/". Next passes query values through,
+    // so a stale "/sign-in?error=oauth" still arrives as "/?error=oauth".
     return [
-      { source: "/login", destination: "/sign-in", permanent: true },
-      { source: "/signin", destination: "/sign-in", permanent: true },
+      { source: "/login", destination: "/", permanent: true },
+      { source: "/signin", destination: "/", permanent: true },
+      // ":path*" also covers the bare "/sign-in", so stale sub-paths collapse
+      // onto the landing instead of falling into the private-page gate.
+      { source: "/sign-in/:path*", destination: "/", permanent: true },
       { source: "/home", destination: "/dashboard", permanent: false },
     ];
   },

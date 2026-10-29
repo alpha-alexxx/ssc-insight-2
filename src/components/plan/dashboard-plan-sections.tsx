@@ -10,7 +10,6 @@ import { longDate, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   dayAssignmentStats,
-  dayTypeLabel,
   nextRecommendedAction,
   planProgressStats,
   revisionQueue,
@@ -54,6 +53,11 @@ export function TodayFocusPanel({
   const focusDate = date ?? today;
   const shownDay = plan.days.find((day) => day.date === focusDate);
   const stats = shownDay ? dayAssignmentStats(shownDay) : null;
+  // The dashboard head already states the day position and day type, so the
+  // panel names the phase instead of repeating them.
+  const phaseName = shownDay
+    ? plan.phases.find((phase) => phase.phase === shownDay.phase)?.name
+    : undefined;
   const focus = nextRecommendedAction(plan.days, today);
   const visibleTasks = shownDay
     ? expanded
@@ -76,7 +80,9 @@ export function TodayFocusPanel({
       title="Study Plan"
       description={
         shownDay
-          ? `Day ${shownDay.day} of 50 · ${dayTypeLabel(shownDay.dayType).toUpperCase()}`
+          ? phaseName
+            ? `Phase ${shownDay.phase} · ${phaseName}`
+            : "Today's scheduled work."
           : "Browse the calendar to revisit the plan."
       }
       action={

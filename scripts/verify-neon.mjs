@@ -228,10 +228,18 @@ try {
   assert.equal(session.status, 200);
   assert.equal(session.headers.get("cache-control"), "private, no-store");
   assert.equal(await session.json(), null);
-  const unauthorizedPage = await fetch(base + "/");
-  assert.equal(unauthorizedPage.url, base + "/sign-in");
+  // The landing is public and is the only sign-in surface; the workspace is
+  // what anonymous visitors get bounced away from.
+  const landing = await fetch(base + "/", { redirect: "manual" });
+  assert.equal(landing.status, 200);
+  assert.match(landing.headers.get("content-type") ?? "", /text\/html/);
+  const unauthorizedPage = await fetch(base + "/dashboard", {
+    redirect: "manual",
+  });
+  assert.ok([302, 303, 307, 308].includes(unauthorizedPage.status));
+  assert.equal(unauthorizedPage.headers.get("location"), base + "/");
   console.log(
-    "PASS: Neon persistence, ordered subject replacement, 245/390 sample, Computer exclusion, cross-type analytics, literal filters, CSV/JSON backup round trip, duplicate imports, settings, 404/400/403 responses, anonymous redirect, Neon Auth session endpoint.",
+    "PASS: Neon persistence, ordered subject replacement, 245/390 sample, Computer exclusion, cross-type analytics, literal filters, CSV/JSON backup round trip, duplicate imports, settings, 404/400/403 responses, anonymous workspace redirect, Neon Auth session endpoint.",
   );
 } finally {
   const remaining = await api(`/api/mock-attempts?${query}`).catch(() => []);

@@ -308,6 +308,12 @@
 [data-style="sera"] .dialog-content {
   border-color: var(--ink);
 }
+/* Sera's flat ink-outline language: the active thumb trades the soft drop
+   shadow for a bold ink hairline that matches the outlined track. */
+[data-style="sera"] .segment[aria-pressed="true"],
+[data-style="sera"] .segment[aria-pressed="true"]:hover {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
 [data-style="sera"] .duotone-tile:hover {
   box-shadow: -3px 3px 0 0 var(--ink);
 }
@@ -598,7 +604,7 @@
   }
   .panel-title {
     font-family: var(--font-heading);
-    font-size: 22px;
+    font-size: 16px;
     line-height: 1.2;
     font-weight: 500;
     letter-spacing: -0.025em;
@@ -695,50 +701,76 @@
     color: var(--paper);
   }
 
-  /* ---------- Segmented controls (one pattern, three views) ----------
-     Scope tabs (dashboard/history/compare), the mock-form entry-mode
-     toggle, and the backup import-mode toggle share this treatment. */
+  /* ---------- Segmented controls (one pattern, nine views) ----------
+     A pill track holds the options; the active option is a raised paper
+     thumb. Scope tabs (dashboard/history/compare), the mock-form and
+     backup toggles, the planner tabs and the task/todo filters all share
+     this treatment, so they upgrade together. The soft track sits between
+     canvas and paper in every palette, so the control reads on both
+     surfaces it appears on (inside panels and on the page canvas). */
   .segment-group {
     display: inline-flex;
     align-items: stretch;
     flex-wrap: wrap;
+    gap: 2px;
+    padding: 3px;
     border: 1px solid var(--rule-soft);
-    border-radius: var(--radius-control);
-    background: var(--paper);
+    border-radius: var(--radius-pill);
+    background: var(--soft);
     max-width: 100%;
-  }
-  /* Hairline dividers between options (the mockup's joined bar), not gaps. */
-  .segment-group .segment + .segment {
-    border-left: 1px solid var(--rule-soft);
   }
   .segment {
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 14px;
+    justify-content: center;
+    gap: 6px;
+    padding: var(--segment-pad-y) var(--segment-pad-x);
+    border-radius: var(--radius-pill);
     font-size: 12.5px;
     font-weight: 500;
     color: var(--muted);
     transition:
       color var(--dur-quick) ease,
-      background-color var(--dur-quick) ease;
+      background-color var(--dur-quick) ease,
+      box-shadow var(--dur-quick) ease;
   }
   .segment:hover {
-    background: var(--soft);
+    background: var(--canvas);
     color: var(--ink);
   }
   .segment[aria-pressed="true"],
   .segment[aria-pressed="true"]:hover {
-    background: var(--ink);
-    color: var(--paper);
+    background: var(--paper);
+    color: var(--ink);
+    /* The inset hairline stands in for a border so toggling never shifts
+       layout; the drop shadow lifts the thumb off the track. */
+    box-shadow:
+      inset 0 0 0 1px var(--rule-soft),
+      0 1px 2px rgba(0, 0, 0, 0.06),
+      0 3px 8px -3px rgba(0, 0, 0, 0.16);
   }
   .segment[aria-pressed="true"] svg {
-    color: var(--paper);
+    color: var(--accent);
   }
   .segment:disabled {
     opacity: 0.5;
     pointer-events: none;
+  }
+  /* Rings live inside the pill: an outside ring detaches from the rounded
+     shape and gets clipped by any scroll container. */
+  .segment:focus-visible {
+    outline-offset: -2px;
+  }
+
+  /* Scope tabs (the four-option analytical scope, shared by three views):
+     phones get a deterministic 2×2 pill grid — every option visible, no
+     scrolling, no ragged 3+1 wrap — while sm-and-up keeps one shared row. */
+  @media (max-width: 639.98px) {
+    .segment-group.scope-tabs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   /* ---------- Tables in scroll containers ----------
@@ -1345,6 +1377,48 @@
     pointer-events: none;
     filter: blur(90px);
   }
+
+  /* PrivateWorkspace guard screens — one staggered entrance on mount.
+     The only loop is the verifying arc (.animate-spin, frozen below). */
+  .guard-rise {
+    animation: guard-rise 0.45s var(--ease-out-soft) both;
+  }
+  @keyframes guard-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  /* Typed command + blinking caret on the guard screens' verification log.
+     Duration/steps come in as vars so the CSS owns the animation. */
+  .guard-type {
+    animation: guard-type var(--guard-type-dur, 400ms)
+      steps(var(--guard-type-steps, 12), end) 200ms both;
+  }
+  .guard-blink {
+    animation: guard-blink 1s step-end infinite;
+  }
+  @keyframes guard-type {
+    from {
+      width: 0;
+    }
+    to {
+      width: var(--guard-cmd-len, 100%);
+    }
+  }
+  @keyframes guard-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
   .landing-grid-lines {
     background-image:
       linear-gradient(to right, var(--rule-soft) 1px, transparent 1px),
@@ -1443,14 +1517,19 @@ html {
 }
 /* Very narrow phones: tighten segmented controls so four options fit. */
 @media (max-width: 420px) {
+  :root {
+    --segment-pad-x: 10px;
+  }
   .segment {
-    padding-inline: 8px;
-    font-size: 11px;
+    font-size: 11.5px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-spin,
   .animate-pulse,
+  .guard-rise,
+  .guard-type,
+  .guard-blink,
   .dialog-overlay,
   .dialog-content,
   .popover-content,

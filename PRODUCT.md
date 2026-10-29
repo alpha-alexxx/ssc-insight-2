@@ -1,6 +1,6 @@
 # SSC Insight
 
-SSC Insight is a personal SSC CGL Tier 2 mock tracker. It helps an aspirant record results, understand performance over time, and decide what to practice next. The public `/` route explains the product; verified accounts redirect to `/dashboard`, and `/sign-in` handles account access.
+SSC Insight is a personal SSC CGL Tier 2 mock tracker. It helps an aspirant record results, understand performance over time, and decide what to practice next. The public `/` route explains the product and carries the only Google sign-in entry; verified accounts redirect to `/dashboard`. There is no separate sign-in page.
 
 ## Audience and access
 

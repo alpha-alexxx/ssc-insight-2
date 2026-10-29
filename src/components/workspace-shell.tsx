@@ -952,12 +952,13 @@ function ScopeFilters({
 }) {
   return (
     <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
-      {/* Scope tabs scroll rather than wrap: four options must stay one row,
-          and at 320–420px the group would otherwise spill out of its border. */}
+      {/* The four scope options share one row from sm up; on phones they
+          become a 2×2 pill grid (.scope-tabs) so every option stays visible
+          with no scrolling and no ragged wrap point. */}
       <div
         role="group"
         aria-label="Analytical scope"
-        className="segment-group min-w-0 max-w-full overflow-x-auto"
+        className="segment-group scope-tabs w-full sm:w-auto"
       >
         {(
           [
@@ -976,7 +977,7 @@ function ScopeFilters({
               key={t.id}
               type="button"
               aria-pressed={active}
-              className="segment whitespace-nowrap"
+              className="segment"
               onClick={() =>
                 view === "dashboard"
                   ? setScope(t.id as DashboardScope)

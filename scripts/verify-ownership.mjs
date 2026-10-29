@@ -215,14 +215,20 @@ try {
     assert.equal(r.status, 401);
     assert.equal((await r.json()).error.code, "UNAUTHENTICATED");
   }
-  const page = await fetch(base + "/", { redirect: "manual" });
+  // The landing is public and carries the only sign-in affordance; the
+  // workspace redirects anonymous visitors back to it.
+  const landing = await fetch(base + "/", { redirect: "manual" });
+  assert.equal(landing.status, 200);
+  const page = await fetch(base + "/dashboard", { redirect: "manual" });
   assert.ok([302, 303, 307, 308].includes(page.status));
-  assert.match(page.headers.get("location"), /sign-in/);
-  const signIn = await fetch(base + "/sign-in", {
+  assert.equal(page.headers.get("location"), base + "/");
+  // Signed-in visitors are bounced from the landing into the workspace.
+  const signedInLanding = await fetch(base + "/", {
     headers: { Cookie: cookies[0] },
     redirect: "manual",
   });
-  assert.ok([302, 303, 307, 308].includes(signIn.status));
+  assert.ok([302, 303, 307, 308].includes(signedInLanding.status));
+  assert.match(signedInLanding.headers.get("location"), /\/dashboard$/);
   for (const u of [0, 1]) {
     for (const id of created[u])
       await api(u, `/api/mock-attempts/${id}`, "DELETE", {});

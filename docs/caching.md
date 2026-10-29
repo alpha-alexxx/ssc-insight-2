@@ -29,7 +29,7 @@ whenever a data source's policy changes.
 | AI coach / chat / extract | per-user | never cached | `private, no-store` (chat is an NDJSON stream) | — | Read-only subsystem; nothing persisted. |
 | Backup export (`GET /api/backup`) | per-user | on attempts change | raw file response, no-store | — | The one envelope exception: returns a downloadable file. |
 | Health (`/api/health`) | public | constant | not cached by the app; probe freshness controlled by the prober | — | Rate-limit-exempt infrastructure endpoint. |
-| Landing `/`, `/sign-in`, maintenance | public / auth-adjacent | — | `force-dynamic` server pages; `requireUser()` decides the redirect | — | No caching: an anonymous/signed-in flip must render immediately. |
+| Landing `/` (the only sign-in surface), maintenance | public / auth-adjacent | — | `force-dynamic` server pages; `requireUser()` decides the redirect | — | No caching: an anonymous/signed-in flip must render immediately. `/` also reads `?error` for its failure toast, so a cached document would show a stale or missing message. |
 
 ## Deliberate decisions
 

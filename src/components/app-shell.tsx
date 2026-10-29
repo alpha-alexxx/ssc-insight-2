@@ -76,7 +76,7 @@ export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "ME";
   const first = parts[0]![0] ?? "";
-  const last = parts.length > 1 ? parts.at(-1)![0] ?? "" : "";
+  const last = parts.length > 1 ? (parts.at(-1)![0] ?? "") : "";
   return (first + last).toUpperCase() || "ME";
 }
 
@@ -236,7 +236,12 @@ export function AppSidebar({
                   <span className="grid size-8 shrink-0 place-items-center rounded-control border border-rule-soft bg-canvas">
                     <PlainIcon name="book" size={17} tone="accent" />
                   </span>
-                  <span className={cn("grid min-w-0 flex-1 text-left", COLLAPSED_TEXT_SPAN)}>
+                  <span
+                    className={cn(
+                      "grid min-w-0 flex-1 text-left",
+                      COLLAPSED_TEXT_SPAN,
+                    )}
+                  >
                     <span className="truncate font-serif text-[21px] font-semibold leading-none tracking-[-0.035em]">
                       ssc<span className="text-accent">insight.</span>
                     </span>
@@ -367,7 +372,12 @@ export function AppSidebar({
                 >
                   {initials(userName)}
                 </span>
-                <span className={cn("grid min-w-0 flex-1 text-left leading-tight", COLLAPSED_TEXT_SPAN)}>
+                <span
+                  className={cn(
+                    "grid min-w-0 flex-1 text-left leading-tight",
+                    COLLAPSED_TEXT_SPAN,
+                  )}
+                >
                   <span className="truncate text-xs font-medium">
                     {userName || "My workspace"}
                   </span>
@@ -393,35 +403,60 @@ export function AppSidebar({
     </Sidebar>
   );
 }
+/** Props for {@link AppHeader}. */
+export interface AppHeaderProps {
+  view: AppView;
+  authEnabled: boolean;
+  aiEnabled: boolean;
+  onOpenAi: () => void;
+}
 
+/** Shared styles for icon-only action buttons in the header. */
+const iconActionClass =
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-control text-muted " +
+  "transition-colors hover:bg-soft hover:text-ink " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+
+/**
+ * Top-of-app navigation bar. Contains the sidebar trigger, the current
+ * workspace location, and the global action cluster (AI, theme, settings,
+ * auth).
+ */
+/** Props for {@link AppHeader}. */
+export interface AppHeaderProps {
+  view: AppView;
+  authEnabled: boolean;
+  aiEnabled: boolean;
+  onOpenAi: () => void;
+}
+
+/**
+ * Top-of-app navigation bar. Full-bleed: pinned to the top, left, and right
+ * of the viewport with no surrounding margin. Only the bottom edge carries a
+ * hairline — the other three edges are the viewport itself.
+ */
 export function AppHeader({
   view,
   authEnabled,
   aiEnabled,
   onOpenAi,
-}: {
-  view: AppView;
-  authEnabled: boolean;
-  aiEnabled: boolean;
-  onOpenAi: () => void;
-}) {
+}: AppHeaderProps) {
+  const { label } = VIEW_META[view];
+
   return (
-    <header className="sticky top-0 z-30 mx-3 mt-3 flex h-13 shrink-0 items-center gap-2 rounded-panel border border-rule-soft bg-paper/95 px-3 py-2.5 backdrop-blur-sm md:mx-5 md:px-4">
+    <header
+      className="
+        sticky inset-x-0 top-0 z-30
+        flex h-13 w-full shrink-0 items-center gap-2
+        border-b border-rule-soft
+        bg-paper/95 px-4 backdrop-blur-sm
+        md:px-6
+      "
+    >
       <SidebarTrigger className="size-8 shrink-0" />
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="hidden text-[10px] font-semibold uppercase tracking-[0.14em] text-muted sm:inline">
-          Workspace
-        </span>
-        <PlainIcon
-          name="chevronRight"
-          size={12}
-          className="hidden shrink-0 text-muted sm:inline"
-          aria-hidden="true"
-        />
-        <span className="truncate text-sm font-semibold text-ink">
-          {VIEW_META[view].label}
-        </span>
-      </div>
+
+      <HeaderLocation label={label} />
+
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
         {aiEnabled && (
           <Button
@@ -429,23 +464,48 @@ export function AppHeader({
             size="sm"
             onClick={onOpenAi}
             className="h-8 px-2.5"
-            aria-label="Open AI coach"
+            aria-label="Ask AI"
           >
-            <PlainIcon name="sparkles" size={15} tone="accent" />
-            <span className="hidden md:inline">Ask coach</span>
+            <PlainIcon
+              name="sparkles"
+              size={15}
+              tone="accent"
+              aria-hidden="true"
+            />
+            <span className="hidden md:inline">Ask AI</span>
           </Button>
         )}
+
         <ThemeToggle className="size-8" />
-        <Link
-          href={VIEW_HREF.settings}
-          aria-label="Settings and account"
-          title="Settings and account"
-          className="inline-flex size-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-soft hover:text-ink"
-        >
-          <PlainIcon name="settings" size={17} />
-        </Link>
+
         <AuthControl enabled={authEnabled} />
       </div>
     </header>
+  );
+}
+
+/**
+ * Current-location indicator. Rendered as a breadcrumb landmark so assistive
+ * technologies announce it consistently with the rest of the app.
+ */
+function HeaderLocation({ label }: { label: string }) {
+  return (
+    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2">
+      <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted sm:inline">
+        Workspace
+      </span>
+      <PlainIcon
+        name="chevronRight"
+        size={12}
+        className="hidden shrink-0 text-muted sm:inline"
+        aria-hidden="true"
+      />
+      <span
+        className="truncate text-sm font-semibold text-ink"
+        aria-current="page"
+      >
+        {label}
+      </span>
+    </nav>
   );
 }

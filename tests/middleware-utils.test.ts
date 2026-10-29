@@ -12,18 +12,23 @@ import {
 } from "../src/lib/middleware-utils";
 
 test("classifyPath separates pages from APIs and assigns access levels", () => {
-  // Private workspace page
-  assert.deepEqual(classifyPath("/"), { area: "page", route: "private" });
-
-  // Public pages
-  assert.deepEqual(classifyPath("/sign-in"), { area: "page", route: "public" });
-  assert.deepEqual(classifyPath("/sign-in/extra"), {
-    area: "page",
-    route: "public",
-  });
+  // Public pages — "/" is the landing and the only sign-in surface
+  assert.deepEqual(classifyPath("/"), { area: "page", route: "public" });
   assert.deepEqual(classifyPath("/maintenance"), {
     area: "page",
     route: "public",
+  });
+
+  // Private workspace pages
+  assert.deepEqual(classifyPath("/dashboard"), {
+    area: "page",
+    route: "private",
+  });
+  // The retired /sign-in route is a next.config redirect; it classifies as
+  // private like any other unmatched path.
+  assert.deepEqual(classifyPath("/sign-in"), {
+    area: "page",
+    route: "private",
   });
 
   // Auth flow: API handler and completion page are never gated
@@ -112,19 +117,23 @@ test("maintenance Retry-After honors config and falls back to one hour", () => {
   assert.equal(maintenanceRetryAfter({ MAINTENANCE_RETRY_AFTER: "1.9" }), 1);
 });
 
-test("maintenance bypass keeps health, auth flow, sign-in and the page itself reachable", () => {
+test("maintenance bypass keeps health, auth flow, landing and the page itself reachable", () => {
   for (const path of [
     "/maintenance",
     "/maintenance/",
     "/api/health",
     "/api/auth/get-session",
     "/auth/complete",
-    "/sign-in",
-    "/sign-in/",
+    "/",
   ]) {
     assert.equal(bypassesMaintenance(path), true, `${path} should bypass`);
   }
-  for (const path of ["/", "/api/mock-attempts", "/api/analytics", "/anything"]) {
+  for (const path of [
+    "/dashboard",
+    "/api/mock-attempts",
+    "/api/analytics",
+    "/anything",
+  ]) {
     assert.equal(bypassesMaintenance(path), false, `${path} should be gated`);
   }
 });

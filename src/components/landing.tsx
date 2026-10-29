@@ -1,6 +1,5 @@
 "use client";
-import Link from "next/link";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { animated, useSprings, useSpring } from "@react-spring/web";
 import {
   motion,
@@ -9,16 +8,18 @@ import {
   useTransform,
 } from "motion/react";
 
-import { DuotoneIcon, DuotoneTile, PlainIcon, type IconName } from "./icon";
+import { GoogleSignInButton } from "./google-sign-in-button";
+import { DuotoneIcon, DuotoneTile, type IconName } from "./icon";
 import { ThemeToggle } from "./theme-toggle";
-import { Button } from "./ui/button";
+import { useToast } from "./toast";
 
 /**
  * Animated public landing page for SSC Insight.
  *
- * Every call to action links to the sign-in route (`signInHref`); signed-in
- * visitors never see this page — the root route redirects them to the
- * workspace.
+ * This page is the only sign-in surface: every call to action starts Google
+ * OAuth in place. Signed-in visitors never see it — the root route redirects
+ * them to the workspace. A failed round trip returns with `?error=`, which
+ * raises a toast and is then stripped from the address bar.
  * Motion stack, by design:
  *  - @react-spring/web  → physics: hero trail entrance, floating icon loops,
  *    count-up numbers, magnetic CTA tilt
@@ -91,6 +92,27 @@ const STEPS = [
   title: string;
   body: string;
 }>;
+
+/**
+ * Failure copy for the `?error=` codes the landing can receive. Unknown
+ * values fall back to the OAuth copy — better-auth appends its own provider
+ * codes (`access_denied`, `invalid_code`, …) — but the value itself is never
+ * rendered, since the query arrives from a URL anyone can type.
+ */
+const ERROR_COPY: Record<string, { title: string; detail: string }> = {
+  oauth: {
+    title: "Sign-in didn't complete",
+    detail: "Google sign-in didn't finish. Please try again.",
+  },
+  unavailable: {
+    title: "Sign-in unavailable",
+    detail: "Sign-in is temporarily unavailable. Please retry shortly.",
+  },
+  session: {
+    title: "Session ended",
+    detail: "Your session ended. Sign in again to continue.",
+  },
+};
 
 const FLOATERS = [
   { icon: "target", x: "6%", y: "18%", size: 44, drift: 16 },
@@ -189,9 +211,30 @@ function CountUp({
   );
 }
 
-export function Landing({ signInHref = "/sign-in" }: { signInHref?: string }) {
+export function Landing({
+  authEnabled,
+  errorCode,
+}: {
+  authEnabled: boolean;
+  errorCode?: string;
+}) {
   const reduced = useReducedMotion();
+  const toast = useToast();
   const heroRef = useRef<HTMLElement>(null);
+  const announced = useRef(false);
+
+  // Announce a failed OAuth/session round trip exactly once, then drop the
+  // query so a reload (or a shared link) does not re-toast.
+  useEffect(() => {
+    if (announced.current || !errorCode) return;
+    announced.current = true;
+    const copy = ERROR_COPY[errorCode] ?? ERROR_COPY.oauth!;
+    toast.error(copy.title, copy.detail);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("error");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  }, [errorCode, toast]);
+
   // Scroll parallax on the hero art (motion) — drifts the whole floater field.
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -207,7 +250,7 @@ export function Landing({ signInHref = "/sign-in" }: { signInHref?: string }) {
     config: { tension: 220, friction: 16 },
   }));
 
-  function handleCtaMove(e: React.PointerEvent<HTMLAnchorElement>) {
+  function handleCtaMove(e: React.PointerEvent<HTMLSpanElement>) {
     if (reduced) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const dx = e.clientX - (rect.left + rect.width / 2);
@@ -236,24 +279,27 @@ export function Landing({ signInHref = "/sign-in" }: { signInHref?: string }) {
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
-      {/* ---------- Nav ---------- */}
+      {/* ---------- Masthead ---------- */}
       <header className="sticky top-0 z-40 border-b border-rule-soft bg-canvas/85 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5">
           <a
             href="#top"
-            className="landing-wordmark text-2xl"
+            className="landing-wordmark text-[23px] md:text-2xl"
             aria-label="SSC Insight — back to top"
           >
             ssc<span className="text-accent">insight</span>
             <span className="text-accent">.</span>
           </a>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-3">
             <ThemeToggle />
-            <Button asChild size="sm" className="gap-2">
-              <Link href={signInHref}>
-                Open workspace <PlainIcon name="arrowRight" size={15} />
-              </Link>
-            </Button>
+            <GoogleSignInButton
+              enabled={authEnabled}
+              variant="outline"
+              size="sm"
+              label="Sign in with Google"
+              compactLabel="Sign in"
+              ariaLabel="Sign in with Google"
+            />
           </div>
         </div>
       </header>
@@ -299,21 +345,18 @@ export function Landing({ signInHref = "/sign-in" }: { signInHref?: string }) {
                   insights panel that finds the pattern before exam day does.
                 </p>
                 <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
-                  <Link
-                    href={signInHref}
+                  <animated.span
+                    style={ctaSpring}
                     className="inline-flex"
                     onPointerMove={handleCtaMove}
                     onPointerLeave={handleCtaLeave}
                   >
-                    <animated.span
-                      style={ctaSpring}
-                      className="inline-flex items-center gap-2.5 bg-accent px-7 py-3.5 text-paper text-[15px] font-medium hover:bg-accent-hover transition-colors"
-                    >
-                      <DuotoneIcon name="history" size={17} tone="paper" />
-                      Open your workspace
-                      <PlainIcon name="arrowRight" size={16} />
-                    </animated.span>
-                  </Link>
+                    <GoogleSignInButton
+                      enabled={authEnabled}
+                      label="Sign in with Google"
+                      className="h-auto gap-2.5 px-7 py-3.5 text-[15px]"
+                    />
+                  </animated.span>
                   <a
                     href="#features"
                     className="inline-flex items-center gap-2 border border-rule px-6 py-3 text-sm font-medium hover:bg-soft transition-colors"
@@ -504,12 +547,11 @@ export function Landing({ signInHref = "/sign-in" }: { signInHref?: string }) {
                 score you&apos;re chasing.
               </p>
               <div className="mt-9">
-                <Button asChild className="gap-2.5 px-7 py-3.5 text-[15px]">
-                  <Link href={signInHref}>
-                    Open your workspace{" "}
-                    <PlainIcon name="arrowRight" size={17} />
-                  </Link>
-                </Button>
+                <GoogleSignInButton
+                  enabled={authEnabled}
+                  label="Sign in with Google"
+                  className="h-auto gap-2.5 px-7 py-3.5 text-[15px]"
+                />
               </div>
             </motion.div>
           </div>

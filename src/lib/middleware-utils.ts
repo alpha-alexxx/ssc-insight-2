@@ -45,7 +45,7 @@ export type RouteClass = {
   area: RouteArea;
   /**
    * private — requires a signed-in session (dashboard, data APIs).
-   * public  — reachable unauthenticated (sign-in, maintenance, legacy aliases).
+   * public  — reachable unauthenticated (the landing, maintenance).
    * auth    — part of the auth flow itself (Neon Auth handler/complete).
    * health  — liveness probe, must never be gated.
    */
@@ -70,9 +70,11 @@ export function classifyPath(pathname: string): RouteClass {
   if (pathname === "/auth/complete" || pathname.startsWith("/auth/complete/"))
     return { area: "page", route: "auth" };
 
-  // Public pages
-  if (pathname === "/sign-in" || pathname.startsWith("/sign-in/"))
-    return { area: "page", route: "public" };
+  // Public pages. "/" is the landing and the only sign-in surface, so it is
+  // public even though every other unmatched page is a private workspace
+  // route. (The retired "/sign-in" path is a next.config redirect and falls
+  // through to the private class on its way out.)
+  if (pathname === "/") return { area: "page", route: "public" };
   if (pathname === "/maintenance" || pathname.startsWith("/maintenance/"))
     return { area: "page", route: "public" };
 
@@ -103,7 +105,9 @@ export function maintenanceRetryAfter(env: EnvLike = process.env): number {
 /**
  * Paths that stay reachable during maintenance: the maintenance page itself,
  * the health probe (LBs must be able to see the app is in maintenance),
- * the auth flow (a user mid sign-in must not be trapped), and sign-in.
+ * the auth flow (a user mid sign-in must not be trapped), and the landing —
+ * which is the only place to start sign-in, so gating it would leave no way
+ * back in. The workspace itself stays gated.
  */
 export function bypassesMaintenance(pathname: string): boolean {
   return (
@@ -114,8 +118,7 @@ export function bypassesMaintenance(pathname: string): boolean {
     pathname.startsWith("/api/auth/") ||
     pathname === "/auth/complete" ||
     pathname.startsWith("/auth/complete/") ||
-    pathname === "/sign-in" ||
-    pathname.startsWith("/sign-in/")
+    pathname === "/"
   );
 }
 

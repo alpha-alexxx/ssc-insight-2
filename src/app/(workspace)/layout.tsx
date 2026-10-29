@@ -30,8 +30,8 @@ export default async function WorkspaceLayout({
     user = await requireUser();
   } catch (error) {
     if (error instanceof SessionError && error.status === 401)
-      redirect("/sign-in");
-    redirect("/sign-in?error=unavailable");
+      redirect("/");
+    redirect("/?error=unavailable");
   }
   const defaultSidebarOpen =
     (await cookies()).get("sidebar_state")?.value !== "false";
