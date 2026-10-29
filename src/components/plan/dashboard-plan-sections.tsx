@@ -116,7 +116,10 @@ export function TodayFocusPanel({
             ) : (
               <ul className="divide-y divide-rule-soft overflow-hidden rounded-control border border-rule-soft">
                 {visibleTasks.map((task) => (
-                  <li key={task.key} className="flex items-center gap-2.5 px-3 py-2">
+                  <li
+                    key={task.key}
+                    className="flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-soft motion-reduce:transition-none"
+                  >
                     <button
                       type="button"
                       role="checkbox"
@@ -183,7 +186,7 @@ export function TodayFocusPanel({
         )}
 
         {focus && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-accent/35 bg-accent-soft px-3 py-2.5">
+          <div className="callout-accent mt-3">
             <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">
               Next up
             </span>
@@ -233,7 +236,7 @@ function ProgressRing({
           r={radius}
           fill="none"
           strokeWidth="4"
-          style={{ stroke: "var(--soft)" }}
+          style={{ stroke: "var(--rule-soft)" }}
         />
         <circle
           cx="20"
@@ -330,18 +333,17 @@ function PipelineProgressSection({
         </h3>
       </div>
       <div>
+        {/* Same square 2px progress rule as the metric strip — the pill
+            progress bar was the one off-idiom gauge left on the dashboard. */}
         <div
-          className="h-1.5 overflow-hidden rounded-pill bg-soft"
+          className="metric-rule"
           role="progressbar"
           aria-valuenow={stats.completionPct}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label="Plan completion"
         >
-          <div
-            className="h-full bg-accent"
-            style={{ width: `${stats.completionPct}%` }}
-          />
+          <span style={{ width: `${stats.completionPct}%` }} />
         </div>
         <div className="mt-2 flex items-center justify-between text-[10px] text-muted">
           <span>{stats.completionPct}% complete</span>
@@ -496,7 +498,7 @@ function PipelineProgressSection({
             );
           })}
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-accent/35 bg-accent-soft px-3 py-2">
+        <div className="callout-accent mt-3">
           <Flag size={13} className="shrink-0 text-accent" aria-hidden="true" />
           <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">
             Next milestone

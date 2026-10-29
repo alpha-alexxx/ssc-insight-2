@@ -47,9 +47,9 @@ export function DashboardOverview({
         {Array.from({ length: 4 }).map((_, index) => (
           <div key={index} className="metric-cell">
             <Skeleton className="h-2.5 w-20" />
-            <Skeleton className="mt-2.5 h-7 w-16" />
+            <Skeleton className="mt-2.5 h-8 w-20" />
             <Skeleton className="mt-2 h-2.5 w-24" />
-            <Skeleton className="mt-2.5 h-0.5 w-full" />
+            <Skeleton className="mt-3 h-0.5 w-full" />
           </div>
         ))}
       </div>
@@ -60,7 +60,21 @@ export function DashboardOverview({
   const todayPlan = plan?.days.find((day) => day.date === today);
   const todayStats = todayPlan ? dayAssignmentStats(todayPlan) : null;
   const stats = plan ? planProgressStats(plan.days) : null;
-  const latest = analytics?.trend.points.at(-1) ?? null;
+  const trend = analytics?.trend.points ?? [];
+  const latest = trend.at(-1) ?? null;
+  const previous = trend.length >= 2 ? trend.at(-2) ?? null : null;
+  /* Score movement between the two most recent mocks in scope: the delta is
+     only shown when both points exist, never fabricated from a single result. */
+  const deltaPts =
+    latest && previous ? latest.percentage - previous.percentage : null;
+  const latestDelta =
+    deltaPts == null
+      ? null
+      : deltaPts > 0
+        ? { tone: "is-up", label: `+${n(deltaPts)} pts` }
+        : deltaPts < 0
+          ? { tone: "is-down", label: `−${n(Math.abs(deltaPts))} pts` }
+          : { tone: "is-flat", label: "±0 pts" };
 
   const metrics: {
     key: string;
@@ -69,6 +83,8 @@ export function DashboardOverview({
     value: string;
     hint: string;
     pct: number | null;
+    tone?: "danger";
+    delta?: { tone: string; label: string } | null;
     onClick?: () => void;
     href?: "/calendar" | "/my-tasks";
   }[] = [
@@ -115,6 +131,7 @@ export function DashboardOverview({
             ? "Personal tasks past due"
             : "Nothing overdue in My Tasks",
       pct: null,
+      tone: personalOverdue ? "danger" : undefined,
       href: "/my-tasks" as const,
     },
     {
@@ -128,6 +145,7 @@ export function DashboardOverview({
           ? "No saved result in this scope"
           : "Results unavailable",
       pct: latest ? latest.percentage / 100 : 0,
+      delta: latestDelta,
       onClick: onViewAll,
     },
   ];
@@ -147,6 +165,8 @@ function MetricCell({
   value,
   hint,
   pct,
+  tone,
+  delta,
   onClick,
   href,
 }: {
@@ -155,13 +175,16 @@ function MetricCell({
   value: string;
   hint: string;
   pct: number | null;
+  /** Semantic tone for the figure itself (danger when work is overdue). */
+  tone?: "danger";
+  delta?: { tone: string; label: string } | null;
   onClick?: () => void;
   href?: "/calendar" | "/my-tasks";
 }) {
   const inner = (
     <>
       <span className="metric-head">
-        <PlainIcon name={icon} size={13} className="shrink-0 text-muted" />
+        <PlainIcon name={icon} size={13} className="shrink-0 text-accent" />
         <span className="metric-label truncate">{label}</span>
         <PlainIcon
           name="chevronRight"
@@ -169,7 +192,14 @@ function MetricCell({
           className="metric-go ml-auto shrink-0 text-muted"
         />
       </span>
-      <span className="metric-value block">{value}</span>
+      <span className="metric-figure">
+        <span className={cn("metric-value", tone === "danger" && "text-danger")}>
+          {value}
+        </span>
+        {delta && (
+          <span className={cn("metric-delta", delta.tone)}>{delta.label}</span>
+        )}
+      </span>
       <span className="metric-hint block truncate">{hint}</span>
       <span
         className="metric-rule block"

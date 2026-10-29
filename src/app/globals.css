@@ -311,6 +311,11 @@
 [data-style="sera"] .duotone-tile:hover {
   box-shadow: -3px 3px 0 0 var(--ink);
 }
+/* Sera's flat ink-outline language: the accent callout's 35% hairline reads
+   washed out next to 2px ink panels, so it takes a full accent edge. */
+[data-style="sera"] .callout-accent {
+  border-color: var(--accent);
+}
 
 /* ---------- style: mira — compact ----------
    Information-dense: softened radii, tighter controls, shorter rows,
@@ -352,6 +357,12 @@
 }
 [data-style="mira"] .chart-empty {
   min-height: 170px;
+}
+[data-style="mira"] .metric-cell {
+  padding: 10px 14px;
+}
+[data-style="mira"] .metric-value {
+  font-size: 24px;
 }
 
 /* ---------- sidebar: style-adaptive chrome ----------
@@ -1058,15 +1069,16 @@
   .metric-strip {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    border: 1px solid var(--rule-soft);
-    border-radius: var(--radius-panel);
+    /* Editorial ink band: strong rules above and below the figures, hairlines
+       between cells. --stat-rule-width lets sera double the rule weight. */
+    border-block: var(--stat-rule-width) solid var(--ink);
     background: var(--paper);
     overflow: hidden;
   }
   .metric-cell {
     display: block;
     min-width: 0;
-    padding: 13px 15px;
+    padding: 16px 18px;
     text-align: left;
     transition: background-color var(--dur-quick) ease;
   }
@@ -1112,14 +1124,38 @@
     text-transform: uppercase;
     transition: color var(--dur-quick) ease;
   }
-  .metric-value {
+  .metric-figure {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 8px;
     margin-top: 4px;
+  }
+  .metric-value {
     font-family: var(--font-heading);
-    font-size: clamp(23px, 2.1vw, 28px);
+    font-size: clamp(28px, 2.6vw, 34px);
     line-height: 1.15;
     font-weight: 550;
     letter-spacing: -0.025em;
     white-space: nowrap;
+  }
+  /* Trend delta beside the figure: the sign carries the direction, the tone
+     carries the meaning (up reads positive). No icon, no chip — type only. */
+  .metric-delta {
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+  .metric-delta.is-up {
+    color: var(--positive);
+  }
+  .metric-delta.is-down {
+    color: var(--danger);
+  }
+  .metric-delta.is-flat {
+    color: var(--muted);
   }
   .metric-hint {
     margin-top: 3px;
@@ -1139,6 +1175,19 @@
     height: 100%;
     background: var(--accent);
     transition: width var(--dur-enter) var(--ease-out-soft);
+  }
+  /* Accent callout: the "Next up" / "Next milestone" strips. One wash and
+     one border for every accent callout on the dashboard, so they upgrade
+     together and sera can trade the hairline for a full accent edge. */
+  .callout-accent {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+    border-radius: var(--radius-control);
+    background: var(--accent-soft);
+    padding: 10px 12px;
   }
   /* Quiet metadata row under a section heading — labels, values, and
      hairline dividers instead of a second headline stat strip. */
