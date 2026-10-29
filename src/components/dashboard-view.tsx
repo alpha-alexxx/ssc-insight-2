@@ -114,7 +114,7 @@ export function DashboardView({
             <div className="min-w-0">
               <h2
                 id="today-plan-heading"
-                className="font-serif text-[22px] font-medium leading-[1.2] tracking-[-0.025em] text-ink"
+                className="font-serif text-[1.2rem] font-medium leading-[1.2] tracking-[-0.025em] text-ink"
               >
                 Today&apos;s Plan
               </h2>

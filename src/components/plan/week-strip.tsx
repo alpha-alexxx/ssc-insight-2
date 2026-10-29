@@ -1,7 +1,5 @@
 "use client";
-import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Panel } from "../dashboard-panels";
 import { PlainIcon } from "../icon";
 import { Skeleton } from "../ui/skeleton";
@@ -20,11 +18,13 @@ const SIDE_DAYS = 3;
 
 /**
  * The dashboard's week card: a rolling "3 before + today + 3 after" window
- * titled by its date range, with week-stepping arrows and a row of left-
- * aligned day cells (weekday · big date · dot cluster · count). Every cell
- * derives from the same merged plan payload as the rest of the dashboard;
- * dates outside the 50-day window render muted. This is a rolling window
- * around a focus day, not a calendar week, so the description says so.
+ * titled by its date range, with a row of left-aligned day cells (weekday ·
+ * big date · dot cluster · count). Every cell derives from the same merged
+ * plan payload as the rest of the dashboard; dates outside the 50-day window
+ * render muted. This is a rolling window around today, not a calendar week,
+ * so the description says so. Week-stepping was removed: with only a 50-day
+ * plan the arrows could only ever show out-of-window days; /calendar covers
+ * browsing beyond this week.
  */
 export function WeekStripPanel({
   plan,
@@ -36,23 +36,19 @@ export function WeekStripPanel({
   onOpenDay: (date: string) => void;
 }) {
   const byDate = new Map(plan.days.map((day) => [day.date, day]));
-  const [offset, setOffset] = useState(0);
-  // The window steps in whole weeks; offset counts weeks from "around today".
-  const anchor = addIsoDays(today, offset * 7);
   const dates = Array.from({ length: SIDE_DAYS * 2 + 1 }, (_, index) =>
-    addIsoDays(anchor, index - SIDE_DAYS),
+    addIsoDays(today, index - SIDE_DAYS),
   );
   const first = dates[0];
   const last = dates[dates.length - 1];
   const rangeLabel = `${shortDate(first)} – ${shortDate(last)}`;
   const sameMonth = first.slice(0, 7) === last.slice(0, 7);
-  const todayInRange = offset === 0;
   return (
     <Panel
       icon="calendar"
       eyebrow="This week"
       title={sameMonth ? rangeLabel : `${longDate(first)} – ${longDate(last)}`}
-      description="Three days around the marked date. Pick a day to open its plan."
+      description="Three days around today. Pick a day to open its plan."
       action={
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-x-4">
           <div className="order-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted sm:order-1">
@@ -68,35 +64,6 @@ export function WeekStripPanel({
             <span className="inline-flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-accent" /> mock day
             </span>
-          </div>
-          <div className="order-3 flex items-center gap-2">
-            <div className="day-nav">
-              <button
-                type="button"
-                className="day-nav-step"
-                aria-label="Previous week"
-                onClick={() => setOffset((value) => value - 1)}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                type="button"
-                className="day-nav-step"
-                aria-label="Next week"
-                onClick={() => setOffset((value) => value + 1)}
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-            {!todayInRange && (
-              <button
-                type="button"
-                className="day-nav-today"
-                onClick={() => setOffset(0)}
-              >
-                This week
-              </button>
-            )}
           </div>
           <Link
             href="/calendar"
@@ -125,7 +92,7 @@ export function WeekStripPanel({
                 key={date}
                 day={day}
                 today={today}
-                isToday={todayInRange && date === today}
+                isToday={date === today}
                 onOpenDay={onOpenDay}
               />
             ) : (
