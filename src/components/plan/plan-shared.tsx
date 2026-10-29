@@ -145,6 +145,37 @@ export function ResultLine({ task }: { task: PlanTaskView }) {
   return <span className="text-[11px] muted tabular">{parts.join(" · ")}</span>;
 }
 
+/**
+ * The 2px square progress rule — the same gauge the metric strip uses. Round
+ * shapes are reserved for status dots and the answer-distribution ring, so a
+ * planner percentage is always a rule, never a ring.
+ */
+export function ProgressRule({
+  done,
+  total,
+  label,
+  className,
+}: {
+  done: number;
+  total: number;
+  label: string;
+  className?: string;
+}) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return (
+    <div
+      className={`metric-rule block ${className ?? ""}`}
+      role="progressbar"
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`${label} progress`}
+    >
+      <span style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 export function PlanErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div
