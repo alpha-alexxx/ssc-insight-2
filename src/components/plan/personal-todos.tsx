@@ -38,7 +38,6 @@ import { cn } from "@/lib/utils";
 import { shortDate as dateLabel, longDate } from "@/lib/format";
 import { useOverlayViewport, useOverlayFocus } from "../use-overlay-viewport";
 import { DuotoneTile, PlainIcon } from "../icon";
-import { Panel } from "../dashboard-panels";
 import { PersonalCalendar } from "./personal-calendar";
 import { useTodoQuery, mutateTodoRequest } from "../use-todos-data";
 
@@ -218,6 +217,11 @@ export function PersonalTodos({
     bucket.push(task);
     buckets.set(key, bucket);
   }
+  const dashboardCompleted =
+    data?.items.filter((task) => task.status === "completed").length ?? 0;
+  const dashboardProgress = data?.total
+    ? Math.round((dashboardCompleted / data.total) * 100)
+    : 0;
   const body = (
     <>
       {!dashboardColumn && (
@@ -496,9 +500,20 @@ export function PersonalTodos({
           ) : (
           <>
           <div className="overflow-hidden">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div
+              className={cn(
+                "flex flex-wrap items-center justify-between gap-2",
+                dashboardColumn ? "mb-4" : "mb-3",
+              )}
+            >
               <div className="flex min-w-0 items-center gap-2">
-                <h3 className="font-serif text-xl">
+                <h3
+                  id={dashboardColumn ? "dashboard-personal-date" : undefined}
+                  className={cn(
+                    "font-serif",
+                    dashboardColumn ? "text-[19px]" : "text-xl",
+                  )}
+                >
                   {dashboardColumn
                     ? dateLabel(date)
                     : `Tasks for ${longDate(date)}`}
@@ -516,7 +531,7 @@ export function PersonalTodos({
                 )}
               </div>
               {dashboardColumn ? (
-                <p className="text-[10px] tabular text-muted">
+                <p className="text-xs tabular text-muted">
                   {data
                     ? `${data.total} ${data.total === 1 ? "task" : "tasks"}`
                     : "…"}
@@ -573,8 +588,9 @@ export function PersonalTodos({
             <div className="flex flex-col gap-2">
               <form
                 className={cn(
-                  "flex items-center gap-2",
-                  !dashboardColumn && "flex-wrap",
+                  dashboardColumn
+                    ? "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(7rem,9rem)_auto]"
+                    : "flex flex-wrap items-center gap-2",
                 )}
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -598,6 +614,7 @@ export function PersonalTodos({
                 <div
                   className={cn(
                     "relative min-w-0 flex-1",
+                    dashboardColumn && "col-span-2 sm:col-span-1",
                     !dashboardColumn && "basis-48",
                   )}
                 >
@@ -626,8 +643,9 @@ export function PersonalTodos({
                 <select
                   id="quick-todo-group"
                   className={cn(
-                    "w-auto!",
-                    dashboardColumn ? "max-w-36 text-xs" : "max-w-40",
+                    dashboardColumn
+                      ? "w-full! min-w-0 text-xs"
+                      : "w-auto! max-w-40",
                   )}
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
@@ -644,9 +662,9 @@ export function PersonalTodos({
                     type="submit"
                     size="sm"
                     disabled={busy || !title.trim()}
-                    className="shrink-0"
+                    className="shrink-0 px-3"
                   >
-                    <Plus size={14} /> Add todo
+                    <Plus size={14} /> Add
                   </Button>
                 ) : (
                   <Button disabled={busy || !title.trim()}>
@@ -655,21 +673,11 @@ export function PersonalTodos({
                   </Button>
                 )}
               </form>
-              {dashboardColumn && title.trim() && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => setTitle("")}
-                  >
-                    Cancel
-                  </Button>
-                  <p className="text-[10px] text-muted">
-                    Press Enter to add another.
-                  </p>
-                </div>
+              {dashboardColumn && (
+                <p className="text-[10px] leading-relaxed text-muted">
+                  Press Enter to add. Open a task to add notes, priority, or
+                  subtasks.
+                </p>
               )}
               {!dashboardColumn && (
                 <p className="text-xs text-muted">
@@ -913,7 +921,12 @@ export function PersonalTodos({
               Loading your todos…
             </p>
           ) : !data?.items.length ? (
-            <div className="border-y border-rule-soft px-4 py-8 text-center">
+            <div
+              className={cn(
+                "border-y border-rule-soft text-center",
+                dashboardColumn ? "px-4 py-7" : "px-4 py-8",
+              )}
+            >
               <h3 className="font-serif text-lg">
                 {view === "trash"
                   ? "Trash is empty"
@@ -921,7 +934,9 @@ export function PersonalTodos({
                     ? "Every todo has a date"
                     : search
                       ? "No matching todos"
-                      : "A clear page for your work"}
+                      : dashboardColumn
+                        ? "No personal tasks for this day"
+                        : "A clear page for your work"}
               </h3>
               <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-muted">
                 {view === "trash"
@@ -930,7 +945,9 @@ export function PersonalTodos({
                     ? "Older tasks without a date will appear here. Assign a date to bring them into your planner."
                     : search
                       ? "Try another search or choose a different view."
-                      : "Add a title above to begin your checklist, or ask AI to prepare a draft for review."}
+                      : dashboardColumn
+                        ? "Use the quick-add field above, or open the full task workspace for more options."
+                        : "Add a title above to begin your checklist, or ask AI to prepare a draft for review."}
               </p>
               {!search && view !== "trash" && view !== "needsdate" && !compact && (
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -963,10 +980,23 @@ export function PersonalTodos({
                 return (
                   <section
                     key={key}
-                    className="overflow-hidden border-y border-rule-soft"
+                    className={cn(
+                      "overflow-hidden border-y border-rule-soft",
+                      dashboardColumn && "first:border-t-0",
+                    )}
                   >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule-soft bg-canvas px-4 py-3">
-                      <h3 className="font-serif text-lg">
+                    <div
+                      className={cn(
+                        "flex flex-wrap items-baseline justify-between gap-2 border-b border-rule-soft bg-canvas",
+                        dashboardColumn ? "px-3 py-2.5" : "px-4 py-3",
+                      )}
+                    >
+                      <h3
+                        className={cn(
+                          "font-serif",
+                          dashboardColumn ? "text-[15px]" : "text-lg",
+                        )}
+                      >
                         {group?.name ?? "Ungrouped"}
                       </h3>
                       <p className="text-xs text-muted">
@@ -979,7 +1009,10 @@ export function PersonalTodos({
                     {items.map((todo) => (
                       <article
                         key={todo.id}
-                        className="border-b border-rule-soft py-3 last:border-b-0"
+                        className={cn(
+                          "group/task border-b border-rule-soft last:border-b-0",
+                          dashboardColumn ? "px-3 py-3" : "py-3",
+                        )}
                       >
                         <div className="flex items-start gap-3">
                           {!todo.deletedAt && (
@@ -998,15 +1031,32 @@ export function PersonalTodos({
                             />
                           )}
                           <div className="min-w-0 flex-1">
-                            <h4
-                              className={cn(
-                                "break-words text-sm font-medium",
-                                todo.status === "completed" &&
-                                  "text-muted line-through",
-                              )}
-                            >
-                              {todo.title}
-                            </h4>
+                            {dashboardColumn ? (
+                              <button
+                                type="button"
+                                onClick={() => setEditing(todo)}
+                                className={cn(
+                                  "block w-full break-words text-left text-sm font-medium leading-snug underline-offset-4 hover:text-accent hover:underline",
+                                  todo.status === "completed" &&
+                                    "text-muted line-through",
+                                )}
+                              >
+                                {todo.title}
+                                <span className="sr-only">
+                                  {" "}— open task details
+                                </span>
+                              </button>
+                            ) : (
+                              <h4
+                                className={cn(
+                                  "break-words text-sm font-medium",
+                                  todo.status === "completed" &&
+                                    "text-muted line-through",
+                                )}
+                              >
+                                {todo.title}
+                              </h4>
+                            )}
                             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
                               <span>
                                 {todo.priority === "high"
@@ -1047,6 +1097,7 @@ export function PersonalTodos({
                               </p>
                             )}
                           </div>
+                          {!dashboardColumn && (
                           <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
                             {todo.deletedAt ? (
                               <Button
@@ -1103,6 +1154,7 @@ export function PersonalTodos({
                               </>
                             )}
                           </div>
+                          )}
                         </div>
                         {todo.subtasks.length > 0 && (
                           <ul className="mt-3 space-y-2 pl-7">
@@ -1193,45 +1245,84 @@ export function PersonalTodos({
       )}
     >
       {dashboardColumn ? (
-        <Panel
-          dense
-          icon="check"
-          title="Personal Tasks"
-          description="Personal work outside the study plan."
-          action={
-            <div className="flex shrink-0 items-center gap-1.5">
+        <section
+          className="panel overflow-hidden"
+          aria-labelledby="dashboard-personal-tasks-heading"
+        >
+          <header className="flex flex-wrap items-start justify-between gap-3 border-b border-rule-soft px-4 py-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <DuotoneTile
+                name="check"
+                size={16}
+                tile="accent"
+                className="size-9"
+              />
+              <div className="min-w-0">
+                <h2
+                  id="dashboard-personal-tasks-heading"
+                  className="font-serif text-[19px] font-medium leading-tight tracking-[-0.02em]"
+                >
+                  Personal tasks
+                </h2>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                  Your own work for the selected day.
+                </p>
+              </div>
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
               {onOpenAi && (
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   className="size-8"
-                  aria-label="Create task with AI"
-                  title="Create task with AI"
+                  aria-label="Plan personal tasks with AI"
+                  title="Plan personal tasks with AI"
                   onClick={onOpenAi}
                 >
                   <Sparkles size={14} />
                 </Button>
               )}
-              <a
-                href="/my-tasks"
-                className="inline-flex h-8 items-center gap-1.5 rounded-control border border-rule bg-paper px-2.5 text-xs font-medium text-ink transition-colors hover:bg-canvas"
-              >
-                <List size={12} /> All tasks
-              </a>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 px-2.5"
-                onClick={() => setCreating(true)}
-              >
-                <Plus size={13} /> Add task
+              <Button asChild variant="outline" size="sm" className="h-8">
+                <a href="/my-tasks">
+                  <List size={13} />
+                  All tasks
+                </a>
               </Button>
             </div>
-          }
-        >
-          <div className="px-4 pb-4">{body}</div>
-        </Panel>
+          </header>
+
+          <div className="border-b border-rule-soft bg-canvas/60 px-4 py-3">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <p className="font-medium text-ink" aria-live="polite">
+                {data
+                  ? `${dashboardCompleted} of ${data.total} complete`
+                  : "Loading task progress…"}
+              </p>
+              <p className="tabular text-muted">{dashboardProgress}%</p>
+            </div>
+            <div
+              className="mt-2 h-1.5 overflow-hidden bg-soft"
+              role="progressbar"
+              aria-label="Selected day task completion"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={dashboardProgress}
+            >
+              <span
+                className="block h-full bg-accent transition-[width] duration-[var(--dur-enter)] motion-reduce:transition-none"
+                style={{ width: `${dashboardProgress}%` }}
+              />
+            </div>
+          </div>
+
+          <div
+            className="px-4 py-4"
+            aria-labelledby="dashboard-personal-date"
+          >
+            {body}
+          </div>
+        </section>
       ) : (
         body
       )}
@@ -1528,37 +1619,50 @@ function OverdueTodoPreview({
   );
   if (error)
     return (
-      <p role="alert" className="text-xs text-danger">
-        {error}{" "}
-        <button type="button" onClick={refresh} className="underline">
-          Retry overdue tasks
-        </button>
-      </p>
+      <div
+        role="alert"
+        className="flex flex-wrap items-center justify-between gap-2 border-y border-danger/30 bg-danger-soft px-3 py-2.5 text-xs text-danger"
+      >
+        <p>{error}</p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 text-danger hover:bg-danger/10 hover:text-danger"
+          onClick={refresh}
+        >
+          Retry
+        </Button>
+      </div>
     );
   if (!data?.total) return null;
   return (
     <section
       aria-label="Overdue personal tasks"
-      className="border-b border-rule-soft pb-3"
+      className="border-y border-danger/30 bg-danger-soft/50 px-3 py-3"
     >
-      <div className="flex justify-between gap-2">
-        <h3 className="text-sm font-medium text-danger">
-          Overdue · {data.total}
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-xs font-semibold text-danger">
+          <PlainIcon name="warning" size={13} />
+          {data.total} overdue {data.total === 1 ? "task" : "tasks"}
         </h3>
-        <a href="/my-tasks" className="text-xs text-accent underline">
-          Review tasks
+        <a
+          href="/my-tasks"
+          className="text-xs font-medium text-danger underline underline-offset-4"
+        >
+          Review all
         </a>
       </div>
-      <ul className="mt-2 divide-y divide-rule-soft">
+      <ul className="mt-2 divide-y divide-danger/20">
         {data.items.map((todo) => (
           <li key={todo.id}>
             <button
               type="button"
               onClick={() => onEdit(todo)}
-              className="flex w-full items-start justify-between gap-3 py-2 text-left text-xs hover:text-accent"
+              className="flex min-h-10 w-full items-center justify-between gap-3 py-2 text-left text-xs text-ink hover:text-danger"
             >
               <span className="min-w-0 break-words">{todo.title}</span>
-              <span className="shrink-0 text-muted">
+              <span className="shrink-0 tabular text-danger">
                 {todo.dueDate && dateLabel(todo.dueDate)}
               </span>
             </button>
