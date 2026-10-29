@@ -49,7 +49,7 @@ function ChartContainer({
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-[var(--muted)] [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-[var(--rule-soft)] [&_.recharts-curve.recharts-tooltip-cursor]:stroke-[var(--rule-soft)] [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-[var(--rule-soft)] [&_.recharts-radial-bar-background-sector]:fill-[var(--soft)] [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[var(--soft)] [&_.recharts-reference-line_[stroke='#ccc']]:stroke-[var(--rule)] [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
+          "flex aspect-video justify-center overflow-hidden text-xs [&_.recharts-cartesian-axis-tick_text]:fill-[var(--muted)] [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-[var(--rule-soft)] [&_.recharts-curve.recharts-tooltip-cursor]:stroke-[var(--rule-soft)] [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-[var(--rule-soft)] [&_.recharts-radial-bar-background-sector]:fill-[var(--soft)] [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-[var(--soft)] [&_.recharts-reference-line_[stroke='#ccc']]:stroke-[var(--rule)] [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
           className,
         )}
         {...props}

@@ -157,7 +157,6 @@ function WorkspaceShellInner({
   const ai = useAiWorkspace();
   const {
     insight: coachInsight,
-    meta: coachMeta,
     busy: coachBusy,
     error: coachError,
     generate: generateCoach,
@@ -492,22 +491,13 @@ function WorkspaceShellInner({
         <AiCoachCard
           status={ai.aiStatus}
           insight={coachInsight}
-          meta={coachMeta}
           busy={coachBusy}
           error={coachError}
           onGenerate={() => void generateCoach()}
           onOpenChat={openCoachChat}
         />
       ) : undefined,
-    [
-      ai.aiStatus,
-      coachBusy,
-      coachError,
-      generateCoach,
-      coachInsight,
-      coachMeta,
-      openCoachChat,
-    ],
+    [ai.aiStatus, coachBusy, coachError, generateCoach, coachInsight, openCoachChat],
   );
 
   return (
@@ -561,7 +551,13 @@ function WorkspaceShellInner({
                         title="Dashboard"
                         description="Today's work, plan progress, and the performance that matters."
                         icon={
-                          <DuotoneTile name="dashboard" tile="accent" className="size-11" />
+                          <div className="hidden sm:block">
+                            <DuotoneTile
+                              name="dashboard"
+                              tile="accent"
+                              className="size-11"
+                            />
+                          </div>
                         }
                         meta={
                           <>
@@ -616,18 +612,6 @@ function WorkspaceShellInner({
                             </div>
                           </>
                         }
-                      />
-                    )}
-                    {view === "calendar" && (
-                      <PageHeader
-                        title="Study planner"
-                        description="Your mock study plan and dated personal checklists, in one planner."
-                      />
-                    )}
-                    {view === "tasks" && (
-                      <PageHeader
-                        title="My tasks"
-                        description="Plan assignments and your own tasks, in one list."
                       />
                     )}
                     {view === "history" && (
@@ -961,14 +945,20 @@ function ScopeFilters({
   platforms: string[];
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div role="group" aria-label="Analytical scope" className="segment-group">
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+      {/* Scope tabs scroll rather than wrap: four options must stay one row,
+          and at 320–420px the group would otherwise spill out of its border. */}
+      <div
+        role="group"
+        aria-label="Analytical scope"
+        className="segment-group min-w-0 max-w-full overflow-x-auto"
+      >
         {(
           [
-            { id: "full", label: "Full mocks" },
-            { id: "subject", label: "Subject wise" },
-            { id: "sectional", label: "Sectional wise" },
-            { id: "all", label: "All mocks" },
+            { id: "full", label: "Full mocks", icon: "file" },
+            { id: "subject", label: "Subject wise", icon: "book" },
+            { id: "sectional", label: "Sectional wise", icon: "layers" },
+            { id: "all", label: "All mocks", icon: "history" },
           ] as const
         ).map((t) => {
           const active =
@@ -978,23 +968,29 @@ function ScopeFilters({
           return (
             <button
               key={t.id}
+              type="button"
               aria-pressed={active}
-              className="segment"
+              className="segment whitespace-nowrap"
               onClick={() =>
                 view === "dashboard"
                   ? setScope(t.id as DashboardScope)
                   : changeFilter("type", t.id)
               }
             >
+              <PlainIcon
+                name={t.icon}
+                size={14}
+                className={active ? "" : "text-muted"}
+              />
               {t.label}
             </button>
           );
         })}
       </div>
-      <div className="ml-auto flex gap-2 flex-wrap">
+      <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
         <select
           aria-label="Filter by platform"
-          className="w-auto py-2 text-xs"
+          className="w-auto min-w-0 max-w-[10.5rem] truncate rounded-control py-[9px] pl-3 pr-7 text-xs"
           value={filters.platform ?? "all"}
           onChange={(e) => changeFilter("platform", e.target.value)}
         >
@@ -1006,7 +1002,7 @@ function ScopeFilters({
         {view !== "dashboard" && (
           <select
             aria-label="Filter by subject"
-            className="w-auto py-2 text-xs"
+            className="w-auto min-w-0 max-w-[10.5rem] truncate rounded-control py-[9px] pl-3 pr-7 text-xs"
             value={filters.subject ?? "all"}
             onChange={(e) => changeFilter("subject", e.target.value)}
           >

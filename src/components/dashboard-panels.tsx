@@ -1,5 +1,6 @@
 "use client";
 import { DuotoneTile, type IconName } from "./icon";
+import { cn } from "@/lib/utils";
 
 export function EmptyChart({
   children = "Your progress will appear after your first mock.",
@@ -21,6 +22,7 @@ export function Panel({
   children,
   className = "",
   dense = false,
+  eyebrow,
 }: {
   title: string;
   description?: string;
@@ -31,6 +33,8 @@ export function Panel({
   className?: string;
   /** Compact dashboard header/body spacing. */
   dense?: boolean;
+  /** Small-caps label above the title (the mockup's "THIS WEEK"). */
+  eyebrow?: string;
 }) {
   return (
     <section className={`panel ${className}`}>
@@ -51,11 +55,12 @@ export function Panel({
             />
           )}
           <div className="min-w-0">
+            {eyebrow && <p className="section-label">{eyebrow}</p>}
             <h2
               className={
                 dense
                   ? "font-serif text-[17px] font-medium leading-tight tracking-[-0.02em]"
-                  : "panel-title"
+                  : cn("panel-title", eyebrow && "mt-0.5")
               }
             >
               {title}

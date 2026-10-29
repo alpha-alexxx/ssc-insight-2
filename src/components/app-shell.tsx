@@ -20,8 +20,11 @@ import {
   SidebarRail,
   SidebarTrigger,
   useSidebar,
+  COLLAPSED_ICON_BUTTON,
+  COLLAPSED_TEXT_SPAN,
 } from "./ui/sidebar";
 import { istTodayIso } from "@/lib/plan/view-model";
+import { cn } from "@/lib/utils";
 
 /**
  * Application shell — official shadcn sidebar composition adapted to the
@@ -179,9 +182,7 @@ function NavItem({
             size={17}
             tone={active ? "accent" : "ink"}
           />
-          <span className="group-data-[collapsible=icon]:hidden">
-            {item.label}
-          </span>
+          <span className={cn(COLLAPSED_TEXT_SPAN)}>{item.label}</span>
           {active && (
             <PlainIcon
               name="chevronRight"
@@ -212,18 +213,23 @@ export function AppSidebar({
   const { setOpenMobile } = useSidebar();
   return (
     <Sidebar collapsible="icon" className="border-r border-rule">
-      <SidebarHeader className="border-b border-rule-soft px-2 py-3">
+      <SidebarHeader className="border-b border-rule-soft px-2 py-3 group-data-[collapsible=icon]:px-0">
         <div className="flex items-center gap-1">
           <Link
             href="/dashboard"
-            className="flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-ink"
+            className="flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-ink group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0"
             aria-label="SSC Insight dashboard"
             onClick={() => setOpenMobile(false)}
           >
             <span className="grid size-8 shrink-0 place-items-center rounded-control border border-rule-soft bg-canvas">
               <PlainIcon name="book" size={17} tone="accent" />
             </span>
-            <span className="min-w-0 group-data-[collapsible=icon]:hidden">
+            <span
+              className={cn(
+                "min-w-0",
+                COLLAPSED_TEXT_SPAN,
+              )}
+            >
               <span className="block font-serif text-[21px] font-semibold leading-none tracking-[-0.035em]">
                 ssc<span className="text-accent">insight</span>
                 <span className="text-accent">.</span>
@@ -246,8 +252,10 @@ export function AppSidebar({
       <SidebarContent>
         {NAV_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel className="flex items-center gap-2.5 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-              {group.label}
+            <SidebarGroupLabel className="flex items-center gap-2.5 overflow-hidden px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted group-data-[collapsible=icon]:px-0">
+              <span className={cn("shrink-0", COLLAPSED_TEXT_SPAN)}>
+                {group.label}
+              </span>
               <span className="h-px flex-1 bg-rule-soft" aria-hidden="true" />
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -261,17 +269,20 @@ export function AppSidebar({
                   />
                 ))}
                 {group.label === "Results" && (
-                  <SidebarMenuItem className="px-1.5 pt-1.5">
+                  <SidebarMenuItem className="px-1.5 pt-1.5 group-data-[collapsible=icon]:px-0">
                     <button
                       type="button"
                       onClick={() => {
                         onAddMock();
                         setOpenMobile(false);
                       }}
-                      className="flex min-h-10 w-full items-center gap-2.5 rounded-control bg-accent px-2.5 py-2 text-sm font-medium text-paper transition-colors hover:bg-accent-hover group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+                      className={cn(
+                        "flex min-h-10 w-full items-center gap-2.5 rounded-control bg-accent px-2.5 py-2 text-sm font-medium text-paper transition-colors hover:bg-accent-hover",
+                        COLLAPSED_ICON_BUTTON,
+                      )}
                     >
                       <PlainIcon name="plus" size={16} tone="paper" />
-                      <span className="group-data-[collapsible=icon]:hidden">
+                      <span className={cn(COLLAPSED_TEXT_SPAN)}>
                         Log a mock
                       </span>
                       <PlainIcon
@@ -288,7 +299,7 @@ export function AppSidebar({
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="border-t border-rule-soft bg-canvas/60">
+      <SidebarFooter className="border-t border-rule-soft bg-canvas/60 group-data-[collapsible=icon]:px-1">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -310,9 +321,7 @@ export function AppSidebar({
                   size={17}
                   tone={view === "settings" ? "accent" : "ink"}
                 />
-                <span className="group-data-[collapsible=icon]:hidden">
-                  Settings
-                </span>
+                <span className={cn(COLLAPSED_TEXT_SPAN)}>Settings</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -326,15 +335,20 @@ export function AppSidebar({
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="mx-2 mb-1 rounded-panel border border-rule-soft bg-paper px-2.5 py-2.5">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <div className="mx-2 mb-1 rounded-panel border border-rule-soft bg-paper px-2.5 py-2.5 group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:mb-0 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0">
+          <div className="flex min-w-0 items-center justify-center gap-2.5 group-data-[collapsible=icon]:gap-0">
             <span
               className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
               aria-hidden="true"
             >
               {initials(userName)}
             </span>
-            <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+            <div
+              className={cn(
+                "min-w-0 flex-1",
+                COLLAPSED_TEXT_SPAN,
+              )}
+            >
               <p className="truncate text-xs font-medium">{userName || "My workspace"}</p>
               <p className="truncate text-[10px] text-muted">
                 {userEmail || "Private account"}

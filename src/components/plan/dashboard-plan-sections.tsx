@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Clock, Flag } from "lucide-react";
+import { ChevronDown, Flag } from "lucide-react";
 import { Panel } from "../dashboard-panels";
 import { PlainIcon } from "../icon";
 import { Button } from "../ui/button";
@@ -10,6 +10,7 @@ import { longDate, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   dayAssignmentStats,
+  dayTypeLabel,
   nextRecommendedAction,
   planProgressStats,
   revisionQueue,
@@ -73,6 +74,11 @@ export function TodayFocusPanel({
       dense
       icon="book"
       title="Study Plan"
+      description={
+        shownDay
+          ? `Day ${shownDay.day} of 50 · ${dayTypeLabel(shownDay.dayType).toUpperCase()}`
+          : "Browse the calendar to revisit the plan."
+      }
       action={
         <Button
           variant="outline"
@@ -293,7 +299,11 @@ export function StudyPipelinePanel({
           today={today}
           onOpenDay={onOpenDay}
         />
-        <PipelineRevisionSection plan={plan} today={today} />
+        <PipelineRevisionSection
+          plan={plan}
+          today={today}
+          onOpenDay={onOpenDay}
+        />
       </div>
     </Panel>
   );
@@ -536,11 +546,16 @@ function PipelineUpcomingSection({
 function PipelineRevisionSection({
   plan,
   today,
+  onOpenDay,
 }: {
   plan: PlanWithToday;
   today: string;
+  onOpenDay: (date: string) => void;
 }) {
   const revision = revisionQueue(plan.days, today);
+  const [expanded, setExpanded] = useState(false);
+  // The three oldest items lead; expansion reveals the rest of the queue.
+  const visible = expanded ? revision.items.slice(0, 8) : revision.items.slice(0, 3);
   return (
     <section
       aria-label="Revision queue"
@@ -550,54 +565,74 @@ function PipelineRevisionSection({
         <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
           Revision queue
         </h3>
+        <span
+          className={`text-[10px] tabular ${
+            revision.total > 0 ? "text-accent" : "text-positive"
+          }`}
+        >
+          {revision.total > 0
+            ? `${revision.total} pending`
+            : "Fully caught up"}
+        </span>
       </div>
       <div>
-        <div className="grid grid-cols-3 gap-2">
-          {(
-            [
-              ["Rev-1", revision.rev1.length],
-              ["Rev-2", revision.rev2.length],
-              ["Rev-3", revision.rev3.length],
-            ] as const
-          ).map(([label, count]) => (
-            <div key={label} className="min-w-0">
-              <p
-                className={`font-serif text-xl tabular ${
-                  count > 0 ? "text-accent" : "text-muted"
-                }`}
-              >
-                {count}
-              </p>
-              <p className="text-[9px] uppercase tracking-[0.08em] text-muted">
-                {label}
-              </p>
-            </div>
-          ))}
-        </div>
-        {revision.total > 0 ? (
-          <ul className="mt-2 space-y-1.5 text-[10px] text-muted">
-            {revision.items.slice(0, 2).map((item) => (
-              <li
-                key={`${item.kind}:${item.id}`}
-                className="flex items-center gap-1.5"
-              >
-                <Clock
-                  size={11}
-                  className="shrink-0"
-                  aria-hidden="true"
-                />
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="font-medium text-ink">{item.label}</span> ·{" "}
-                  {shortDate(item.date)} · {item.kind}
-                </span>
+        {revision.total === 0 ? (
+          <p className="py-2 text-xs text-positive">
+            Nothing to revisit right now — new entries appear as you complete
+            assignments.
+          </p>
+        ) : (
+          <ul className="divide-y divide-rule-soft overflow-hidden rounded-control border border-rule-soft">
+            {visible.map((item) => (
+              <li key={`${item.kind}:${item.id}`}>
+                <button
+                  type="button"
+                  onClick={() => onOpenDay(item.date)}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-soft"
+                >
+                  <span
+                    className={`inline-flex shrink-0 items-center rounded-pill border px-2 py-0.5 text-[10px] font-medium ${
+                      item.kind === "rev1"
+                        ? "border-accent/40 bg-accent-soft text-accent"
+                        : item.kind === "rev2"
+                          ? "border-rule-soft bg-soft text-muted"
+                          : "border-positive/40 bg-positive-soft text-positive"
+                    }`}
+                  >
+                    Rev-{item.kind === "rev1" ? 1 : item.kind === "rev2" ? 2 : 3}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                    {item.label}
+                  </span>
+                  <span className="shrink-0 text-[10px] tabular text-muted">
+                    {shortDate(item.date)}
+                  </span>
+                  <PlainIcon
+                    name="chevronRight"
+                    size={14}
+                    className="shrink-0 text-muted"
+                    aria-hidden="true"
+                  />
+                </button>
               </li>
             ))}
-            {revision.total > 2 && <li>+{revision.total - 2} more pending</li>}
           </ul>
-        ) : (
-          <p className="mt-2 text-[10px] text-positive">
-            Revision is fully caught up.
-          </p>
+        )}
+        {revision.total > visible.length && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-muted transition-colors hover:text-ink"
+          >
+            {expanded
+              ? "Show fewer"
+              : `+${revision.total - visible.length} more pending`}
+            <ChevronDown
+              size={12}
+              className={cn("transition-transform", expanded && "rotate-180")}
+            />
+          </button>
         )}
         <p className="mt-2 text-[9px] leading-relaxed text-muted">
           Completion is manual; attempting a test never marks revision done.

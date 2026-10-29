@@ -29,3 +29,6 @@ graphify-out/.graphify_*
 
 # local Windows ACL-repair backups and reports
 .acl-recovery/
+
+# local visual-QA screenshots (tools/shot.mjs output)
+.impeccable/refine/

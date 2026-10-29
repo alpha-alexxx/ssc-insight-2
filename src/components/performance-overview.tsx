@@ -402,6 +402,10 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
   const missing = rows.filter((row) => row.resultCount === 0);
   const data = populated.map((row) => ({
     subject: row.label,
+    // Radar ticks are radial: a long subject name ("General Awareness") is
+    // clipped at the side vertices on narrow screens. Shorten only the axis
+    // label — the tooltip and the View-data table keep the full name.
+    axis: row.label.replace("General Awareness", "Gen. Awareness"),
     // Clamp only the polygon geometry; the tooltip and table keep the real
     // value, including a negative score percentage.
     percentage: Math.max(0, row.averagePercentage!),
@@ -418,7 +422,12 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
             config={{ percentage: { label: "Average score", color: "var(--chart-score)" } }}
             className="!aspect-auto mx-auto h-[255px] w-full"
           >
-            <RadarChart data={data} outerRadius="72%" accessibilityLayer>
+            <RadarChart
+              data={data}
+              outerRadius="62%"
+              margin={{ top: 4, right: 12, bottom: 4, left: 12 }}
+              accessibilityLayer
+            >
               <ChartTooltip
                 cursor={false}
                 content={
@@ -444,7 +453,7 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
               />
               <PolarGrid stroke="var(--rule-soft)" />
               <PolarAngleAxis
-                dataKey="subject"
+                dataKey="axis"
                 tick={{ fontSize: 10, fill: "var(--muted)" }}
               />
               <PolarRadiusAxis
@@ -522,44 +531,12 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
     </div>
   );
 }
-/* ---------- KPI strip ---------- */
-function KpiCard({
-  icon,
-  tile,
-  label,
-  value,
-  hint,
-}: {
-  icon: "history" | "target" | "award" | "success" | "user" | "trend";
-  tile: string;
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-panel border border-rule-soft bg-paper px-3.5 py-3">
-      <span
-        className={cn(
-          "flex size-9 shrink-0 items-center justify-center rounded-control",
-          tile,
-        )}
-        aria-hidden="true"
-      >
-        <PlainIcon name={icon} size={16} />
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
-          {label}
-        </p>
-        <p className="mt-0.5 truncate font-serif text-lg leading-none tabular text-ink">
-          {value}
-        </p>
-        <p className="mt-1 truncate text-[10px] text-muted">{hint}</p>
-      </div>
-    </div>
-  );
-}
-function KpiStrip({ analytics }: { analytics: Analytics }) {
+/* ---------- Performance metadata row ----------
+ * Deliberately not a second headline stat strip: the dashboard overview owns
+ * the headline metrics, so this reads as a quiet glossary of the numbers the
+ * charts below are built from — labels, values, hairline dividers, no tiles.
+ */
+function PerformanceMeta({ analytics }: { analytics: Analytics }) {
   const { scope, summary, trend } = analytics;
   const points = trend.points;
   const isFull = scope === "full";
@@ -574,91 +551,62 @@ function KpiStrip({ analytics }: { analytics: Analytics }) {
     summary.previousSnapshotPercentage != null
       ? summary.latestSnapshotPercentage - summary.previousSnapshotPercentage
       : null;
-  return (
-    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-      <KpiCard
-        icon="history"
-        tile="bg-accent-soft text-accent"
-        label="Mocks"
-        value={n(analytics.sourceAttemptCount)}
-        hint="Total attempted"
-      />
-      <KpiCard
-        icon="target"
-        tile="bg-accent-soft text-accent"
-        label="Average score"
-        value={
-          isFull && averageMarks != null
-            ? `${n(averageMarks)} / ${FULL_MOCK_MAX_SCORE}`
-            : summary.averagePercentage != null
-              ? `${n(summary.averagePercentage)}%`
-              : "—"
-        }
-        hint={
-          summary.averagePercentage != null
+  const items: { label: string; value: string; tone?: string }[] = [
+    { label: "Mocks", value: n(analytics.sourceAttemptCount) },
+    {
+      label: "Average",
+      value:
+        isFull && averageMarks != null
+          ? `${n(averageMarks)} / ${FULL_MOCK_MAX_SCORE}`
+          : summary.averagePercentage != null
             ? `${n(summary.averagePercentage)}%`
-            : "No results yet"
-        }
-      />
-      <KpiCard
-        icon="award"
-        tile="bg-warning-soft text-warning"
-        label="Best score"
-        value={
-          isFull && bestMarks != null
-            ? `${n(bestMarks)} / ${FULL_MOCK_MAX_SCORE}`
-            : summary.bestPercentage != null
-              ? `${n(summary.bestPercentage)}%`
-              : "—"
-        }
-        hint={
-          summary.bestPercentage != null
+            : "—",
+    },
+    {
+      label: "Best",
+      value:
+        isFull && bestMarks != null
+          ? `${n(bestMarks)} / ${FULL_MOCK_MAX_SCORE}`
+          : summary.bestPercentage != null
             ? `${n(summary.bestPercentage)}%`
-            : "No results yet"
-        }
-      />
-      <KpiCard
-        icon="success"
-        tile="bg-positive-soft text-positive"
-        label="Accuracy"
-        value={
-          summary.weightedAccuracy != null
-            ? `${n(summary.weightedAccuracy)}%`
-            : "—"
-        }
-        hint={
-          summary.attemptRate != null
-            ? `${n(summary.attemptRate)}% attempted`
-            : "No attempts yet"
-        }
-      />
-      <KpiCard
-        icon="user"
-        tile="bg-accent-soft text-accent"
-        label="Results"
-        value={n(analytics.pointCount)}
-        hint="Scored data points"
-      />
-      {delta != null && (
-        <div className="flex items-center gap-3 rounded-panel border border-accent/30 bg-accent-soft px-3.5 py-3">
-          <span
-            className="flex size-9 shrink-0 items-center justify-center rounded-control bg-paper text-accent"
-            aria-hidden="true"
-          >
-            <PlainIcon name="trend" size={16} />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-accent">
-              {delta > 0.05 ? "You're improving!" : delta < -0.05 ? "Dipping" : "Steady"}
-            </p>
-            <p className="mt-0.5 truncate text-[10px] text-muted">
-              {delta > 0 ? "+" : ""}
-              {n(delta)}% avg. score vs the previous snapshot
-            </p>
-          </div>
+            : "—",
+    },
+    {
+      label: "Accuracy",
+      value:
+        summary.weightedAccuracy != null
+          ? `${n(summary.weightedAccuracy)}%`
+          : "—",
+    },
+    {
+      label: "Results",
+      value: n(analytics.pointCount),
+    },
+    {
+      label: "Versus previous",
+      value:
+        delta == null
+          ? "—"
+          : `${delta > 0 ? "+" : ""}${n(delta)} pts`,
+      tone:
+        delta == null
+          ? undefined
+          : delta > 0.05
+            ? "text-positive"
+            : delta < -0.05
+              ? "text-danger"
+              : "text-muted",
+    },
+  ];
+  return (
+    <dl className="performance-meta">
+      {items.map(({ label, value, tone }) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd className={cn("tabular", tone)}>{value}</dd>
         </div>
-      )}
-    </div>
+      ))}
+    </dl>
   );
 }
 /* ---------- Attempt breakdown (donut + bars + chips + tip) ---------- */
@@ -765,16 +713,16 @@ function AttemptBreakdown({ analytics }: { analytics: Analytics }) {
           </div>
           <div className="min-w-0 flex-1 space-y-3">
             {rows.map((row) => (
-              <div key={row.label} className="flex items-center gap-3">
+              <div key={row.label} className="flex min-w-0 items-center gap-2 sm:gap-3">
                 <span
                   className="size-2 shrink-0 rounded-full"
                   style={{ background: row.color }}
                   aria-hidden="true"
                 />
-                <span className="w-24 shrink-0 text-xs text-muted">
+                <span className="w-[4.75rem] shrink-0 truncate text-[11px] text-muted sm:w-24 sm:text-xs">
                   {row.label}
                 </span>
-                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-pill bg-soft">
+                <div className="h-1.5 min-w-8 flex-1 overflow-hidden rounded-pill bg-soft">
                   <div
                     className={cn("h-full rounded-pill", row.bar)}
                     style={{
@@ -786,10 +734,12 @@ function AttemptBreakdown({ analytics }: { analytics: Analytics }) {
                     }}
                   />
                 </div>
-                <span className="w-10 shrink-0 text-right text-xs font-medium tabular text-ink">
+                <span className="w-8 shrink-0 text-right text-[11px] font-medium tabular text-ink sm:w-10 sm:text-xs">
                   {n(row.count)}
                 </span>
-                <span className="w-12 shrink-0 text-right text-[10px] tabular text-muted">
+                {/* The percentage is redundant with the bar at phone widths;
+                    the count and the proportion rule already carry it. */}
+                <span className="hidden w-12 shrink-0 text-right text-[10px] tabular text-muted sm:block">
                   {summary.questions
                     ? `${n((row.count / summary.questions) * 100)}%`
                     : "—"}
@@ -1728,7 +1678,7 @@ export const PerformanceOverview = memo(function PerformanceOverview({
   );
   return (
     <>
-      <KpiStrip analytics={analytics} />
+      <PerformanceMeta analytics={analytics} />
       <div className="grid xl:grid-cols-[1.65fr_1fr] gap-4 mb-4">
         <Panel title={copy.trend} description={copy.trendDescription}>
           <ScopeTrend analytics={analytics} targetScore={target} />

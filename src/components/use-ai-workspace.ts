@@ -11,6 +11,7 @@ import type {
   CoachResponse,
 } from "@/lib/ai/client-types";
 import type { CoachInsight } from "@/lib/ai/schemas";
+import { longDate } from "@/lib/format";
 
 function newId() {
   return (
@@ -29,6 +30,36 @@ export function trimChatHistory(messages: ChatMessage[], lastN: number) {
     .slice(-lastN);
   while (history.length && history[0].role === "assistant") history.shift();
   return history;
+}
+
+/** The seeded user turn for dashboard-initiated insight generation. Exported
+ * so the sheet's retry can route back to the coach endpoint instead of the
+ * chat endpoint. */
+export const INSIGHT_REQUEST_TEXT = "Generate an insight from my recent mocks.";
+
+/** Render the structured coach insight as chat markdown — the sheet's
+ * MessageContent supports ### headings, "-" bullets and **bold**, so the
+ * reading experience matches the rest of the conversation. */
+function insightToChatText(insight: CoachInsight, meta: CoachMeta | null) {
+  const lines: string[] = [];
+  lines.push(`### ${insight.headline}`);
+  lines.push(insight.summary);
+  lines.push("**Working well**");
+  for (const item of insight.strengths) lines.push(`- ${item}`);
+  lines.push("**Needs attention**");
+  for (const item of insight.focusAreas) lines.push(`- ${item}`);
+  lines.push("**Next actions**");
+  insight.nextActions.forEach((item, index) =>
+    lines.push(`${index + 1}. ${item}`),
+  );
+  for (const caveat of insight.caveats) lines.push(caveat);
+  const dataDate = meta?.dataAsOf ? longDate(meta.dataAsOf) : null;
+  lines.push(
+    meta
+      ? `Based on ${meta.coverage.totalAttempts} saved result${meta.coverage.totalAttempts === 1 ? "" : "s"} and ${meta.coverage.recentFullMocksIncluded} recent full mock${meta.coverage.recentFullMocksIncluded === 1 ? "" : "s"}${dataDate ? ` · data to ${dataDate}` : ""}.`
+      : "Based on your saved results.",
+  );
+  return lines.join("\n");
 }
 
 /**
@@ -73,6 +104,19 @@ export function useAiWorkspace() {
   }, []);
 
   const generateCoach = useCallback(async () => {
+    if (chatAbort.current) return; // a stream is already in flight
+    setChatError("");
+    setChatOpen(true);
+    setChatStreaming(true);
+    const requestId = newId();
+    const assistantId = newId();
+    // The request lands in the visible transcript: the chat context the model
+    // sees on follow-ups includes what the insight covered.
+    setChatMessages((current) => [
+      ...chatBaseForSend(current, false),
+      { id: requestId, role: "user", content: INSIGHT_REQUEST_TEXT },
+      { id: assistantId, role: "assistant", content: "" },
+    ]);
     setCoachBusy(true);
     setCoachError("");
     try {
@@ -82,11 +126,30 @@ export function useAiWorkspace() {
       });
       setCoachInsight(result.insight);
       setCoachMeta(result.meta);
+      setChatMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId
+            ? { ...message, content: insightToChatText(result.insight, result.meta) }
+            : message,
+        ),
+      );
     } catch (e) {
-      setCoachError(
-        e instanceof Error ? e.message : "Could not generate an insight",
+      const message =
+        e instanceof Error ? e.message : "Could not generate an insight";
+      setCoachError(message);
+      setChatMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId
+            ? {
+                ...message,
+                content:
+                  "I could not read your saved mocks just now. The error shows on the dashboard coach card; try again from there.",
+              }
+            : message,
+        ),
       );
     } finally {
+      setChatStreaming(false);
       setCoachBusy(false);
       void refreshAiStatus();
     }

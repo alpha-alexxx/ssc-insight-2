@@ -2,29 +2,18 @@
 import { AlertCircle, MessageSquare, RefreshCw, Sparkles } from "lucide-react";
 import { Panel } from "./dashboard-panels";
 import { Button } from "./ui/button";
-import type { AiStatus, CoachMeta } from "@/lib/ai/client-types";
+import type { AiStatus } from "@/lib/ai/client-types";
 import type { CoachInsight } from "@/lib/ai/schemas";
-import { longDate } from "@/lib/format";
 
-function Bullets({ items }: { items: string[] }) {
-  return (
-    <ul className="space-y-2 text-sm leading-relaxed">
-      {items.map((item, index) => (
-        <li key={`${index}-${item}`} className="flex gap-2">
-          <span aria-hidden="true" className="text-accent mt-[2px]">
-            —
-          </span>
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
+/**
+ * The dashboard's coach launcher. Generation runs against the coach endpoint
+ * and the result streams into the AI chat sheet — this card stays a compact
+ * entry point: last headline as a teaser, errors, and usage. The full reading
+ * lives in the conversation, where follow-up questions continue from it.
+ */
 export function AiCoachCard({
   status,
   insight,
-  meta,
   busy,
   error,
   onGenerate,
@@ -32,23 +21,20 @@ export function AiCoachCard({
 }: {
   status: AiStatus;
   insight: CoachInsight | null;
-  meta: CoachMeta | null;
   busy: boolean;
   error: string;
   onGenerate: () => void;
   onOpenChat: () => void;
 }) {
   const usage = status.usage;
-  const dataDate = meta?.dataAsOf ? longDate(meta.dataAsOf) : null;
   return (
     <Panel
       title="AI coach"
-      description="Get personalized guidance based on your recent mocks."
-      className="mb-6"
+      description="Guidance from your recent mocks, in the chat panel."
       action={
         <Button
           size="sm"
-          variant={insight ? "outline" : "default"}
+          variant="outline"
           onClick={onGenerate}
           disabled={busy}
         >
@@ -72,88 +58,40 @@ export function AiCoachCard({
           </p>
         )}
 
-        {!insight && !busy && (
-          <p className="max-w-2xl text-sm leading-relaxed text-muted">
-            Generate a short, evidence-based read of your preparation. It uses
-            your aggregate analytics and the latest 20 full mocks. Your notes
-            are never included, and nothing is saved automatically.
-          </p>
-        )}
-
-        {!insight && busy && (
-          <p role="status" className="text-sm text-muted">
-            Reading your saved mocks…
-          </p>
-        )}
-
-        {insight && (
-          <>
-            <h3 className="font-serif text-xl leading-snug">
+        {insight ? (
+          <button
+            type="button"
+            onClick={onOpenChat}
+            className="block w-full rounded-control border border-rule-soft bg-canvas px-4 py-3 text-left transition-colors hover:border-accent/40"
+          >
+            <span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">
+              <Sparkles size={11} /> Latest insight
+            </span>
+            <span className="mt-1.5 block truncate font-serif text-[15px] font-medium leading-snug">
               {insight.headline}
-            </h3>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed">
-              {insight.summary}
-            </p>
-
-            <div className="mt-5 grid gap-5 border-t border-rule-soft pt-5 md:grid-cols-2">
-              <div>
-                <p className="section-label mb-2">Working well</p>
-                <Bullets items={insight.strengths} />
-              </div>
-              <div>
-                <p className="section-label mb-2">Needs attention</p>
-                <Bullets items={insight.focusAreas} />
-              </div>
-            </div>
-
-            <div className="mt-5 border-t border-rule-soft pt-5">
-              <p className="section-label mb-2">Next actions</p>
-              <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-                {insight.nextActions.map((action, index) => (
-                  <li key={`${index}-${action}`}>{action}</li>
-                ))}
-              </ol>
-            </div>
-
-            {insight.caveats.length > 0 && (
-              <div className="mt-5 border-l-2 border-rule pl-4">
-                {insight.caveats.map((caveat) => (
-                  <p
-                    key={caveat}
-                    className="text-xs leading-relaxed text-muted"
-                  >
-                    {caveat}
-                  </p>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft pt-4">
-              <p className="text-[11px] text-muted">
-                {meta
-                  ? `Based on ${meta.coverage.totalAttempts} saved result${meta.coverage.totalAttempts === 1 ? "" : "s"} and ${meta.coverage.recentFullMocksIncluded} recent full mock${meta.coverage.recentFullMocksIncluded === 1 ? "" : "s"}${dataDate ? ` · data to ${dataDate}` : ""}.`
-                  : "Based on your saved results."}{" "}
-                AI can be wrong; your saved data is the source of truth.
-              </p>
-              <Button size="sm" variant="outline" onClick={onOpenChat}>
-                <MessageSquare size={14} /> Ask a follow-up
-              </Button>
-            </div>
-          </>
+            </span>
+            <span className="mt-1 block truncate text-xs text-muted">
+              Open the chat to read the full breakdown
+            </span>
+          </button>
+        ) : (
+          <p className="max-w-2xl text-sm leading-relaxed text-muted">
+            {busy
+              ? "Reading your saved mocks — the insight opens in the chat panel."
+              : "Generate a short, evidence-based read of your preparation. It opens in the chat panel, where you can ask follow-ups."}
+          </p>
         )}
 
-        {!insight && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft pt-4">
-            <p className="text-[11px] text-muted">
-              Only aggregates and the latest 20 full mocks are sent to the
-              configured AI provider. Notes, email, and user identity are never
-              sent.
-            </p>
-            <Button size="sm" variant="outline" onClick={onOpenChat}>
-              <MessageSquare size={14} /> Ask a question
-            </Button>
-          </div>
-        )}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft pt-4">
+          <p className="text-[11px] text-muted">
+            Only aggregates and the latest 20 full mocks are sent to the
+            configured AI provider. Notes, email, and user identity are never
+            sent.
+          </p>
+          <Button size="sm" variant="outline" onClick={onOpenChat}>
+            <MessageSquare size={14} /> Ask a question
+          </Button>
+        </div>
 
         {usage && (
           <p className="mt-3 text-[11px] text-muted tabular">

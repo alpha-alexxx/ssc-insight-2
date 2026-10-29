@@ -175,3 +175,22 @@ export function viewTransition(style: StyleId): {
       return { duration: 0.22, ease: "easeOut" };
   }
 }
+
+/**
+ * Spec for in-place content swaps (a new plan day, a new analytics scope).
+ * Mirrors the style's `--dur-enter` so a swap always feels like the same
+ * system as every other transition, just shorter than a route change.
+ */
+export function microMotion(style: StyleId): {
+  duration: number;
+  ease: "circOut" | "easeOut";
+} {
+  switch (style) {
+    case "sera":
+      return { duration: 0.14, ease: "circOut" };
+    case "mira":
+      return { duration: 0.11, ease: "easeOut" };
+    default:
+      return { duration: 0.18, ease: "easeOut" };
+  }
+}

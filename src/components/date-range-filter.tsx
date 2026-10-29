@@ -23,15 +23,16 @@ export function DateRangeFilter({
   return (
     <Popover.Root>
       <Popover.Trigger
-        className={`inline-flex items-center gap-2 border rounded-control py-2 px-3 text-xs transition-colors ${
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-control py-[9px] pl-3 pr-2.5 text-xs transition-colors sm:pr-3 ${
           active
-            ? "border-ink bg-soft text-ink"
-            : "border-rule bg-paper text-muted hover:bg-soft"
+            ? "border border-ink bg-soft text-ink"
+            : "border border-rule bg-paper text-muted hover:bg-soft"
         }`}
         aria-label="Filter by date range"
       >
+        <PlainIcon name="calendar" size={14} className="icon-muted" />
         {active ? "Custom dates" : "All time"}
-        <PlainIcon name="chevronRight" size={12} className="-rotate-90" />
+        <PlainIcon name="chevronRight" size={12} className="rotate-90" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

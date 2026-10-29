@@ -168,7 +168,9 @@ The workspace uses the official shadcn sidebar composition. At `md` and above it
 
 Main content is centered within a 1560px maximum width with 12–20px horizontal padding at small widths and 20px at desktop. The dashboard is composed as a compact overview strip followed by a primary/secondary two-column workspace at `xl`; both columns stack below that breakpoint. The planner uses calendar-plus-selected-day at `xl` and a single-column date/schedule flow on mobile.
 
-The summary is one divided metric strip, not individual floating cards: soft rules, four columns on desktop, two below 768px, 13–15px cell padding, 23–28px serif values. The performance section keeps a quiet metadata row and charts below the operational overview rather than repeating the headline metrics.
+The summary is one divided metric strip, not individual floating cards: soft rules, four columns on desktop, two below 768px, 13–15px cell padding, 23–28px serif values. Each cell is a single link target with a 2px square progress rule and a chevron that appears on hover or focus. The performance section keeps a quiet metadata row (labels, values, hairline dividers) and charts below the operational overview rather than repeating the headline metrics.
+
+**The Frame Rule.** Rules, tracks, bars, and progress fills are square; only status dots and the answer-distribution ring are round. A percentage rule is never a pill, and a metric strip is never a row of separate rounded cards.
 
 **The Readable Table Rule.** Keep wide tables inside their horizontal scroll container. Preserve comparable columns and nowrap values instead of squeezing them into unreadable cells.
 
@@ -194,6 +196,8 @@ The AI panel is a right-side shadcn Sheet: roughly 520px on desktop, full width 
 
 Tooltips are square paper boxes with rule borders and 12px text. Empty charts reserve at least 220px with centered explanatory text; single-point trends use a compact explicit summary instead of an empty plot. Chart animations are disabled. MotionConfig respects the user's reduced-motion preference, and global CSS minimizes animation and transition durations for that preference. Notifications use only a small vertical entrance.
 
+Dashboard state changes use token-driven fades, never page-style transitions: a content swap (a new plan day, a new analytics scope) fades in over 4px with the style's `microMotion()` duration (110–180ms), progress rules transition width at `--dur-enter`, and hover/press states use `--dur-quick`. A swap has no exit animation and no height animation, because collapsing a tall panel would jump the scroll position. Under `prefers-reduced-motion` every one of these becomes an instant change, and hover affordances stay permanently visible rather than appearing on motion.
+
 ## Status dots and personal-task conventions
 
 Personal tasks (My Tasks, daily workspace, unified dashboard plan) use a 10px `StatusDot` instead of text badges. The four states map to theme-protected semantic tokens only — never palette hues: `todo` is a hollow ink-outline dot (`border-rule` on paper), `in_progress` is `--accent`, `completed` is `--positive`, and `overdue` is `--danger` with a soft `ring-danger-soft` halo. Because `[data-palette=…]` blocks never override `--positive/--warning/--danger/--accent/--muted` (they are defined only in `:root`/`.dark`), dots render identically across all 15 palette × style combinations. The dot is a button when status can cycle; it exposes "Status: {label}. Activate to change." and its hover grows only under `motion-reduce:` guards.
@@ -205,7 +209,9 @@ Personal month calendars live in My Tasks and Today's Plan, independent of the S
 - Do keep labels, legends, and units visible beside metrics.
 - Do preserve the divided stat strip and horizontal table scrolling.
 - Do use semantic paper, ink, accent, and chart variables.
+- Do keep one bold action per screen; secondary AI actions stay outline.
 - Don't add rounded dashboard cards or colorful icon tiles.
+- Don't repeat the headline metrics in a second stat strip further down a view.
 - Don't introduce paper textures or heavy shadows.
 - Don't animate charts or ignore reduced-motion preferences.
 

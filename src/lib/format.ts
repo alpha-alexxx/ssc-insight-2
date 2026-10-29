@@ -38,6 +38,13 @@ export function monthDate(date: string): string {
   return safeFormat(monthDay, date);
 }
 
+const istClock = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Kolkata",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
 const istDayKey = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
   month: "2-digit",
@@ -82,6 +89,11 @@ export function istDateKey(value: string | Date): string {
   } catch {
     return "";
   }
+}
+
+/** "08:40 PM" — the live IST clock in the dashboard header. */
+export function istTimeLabel(value: string | Date = new Date()): string {
+  return safeFormat(istClock, value);
 }
 
 /** Validate an ISO calendar date without accepting datetime strings. */

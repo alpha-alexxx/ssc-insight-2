@@ -29,7 +29,9 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "15rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "3rem"
+// 56px rail: 40px collapsed controls + the group's 8px paddings. 3rem left
+// zero breathing room for 16px icons inside padded 32px buttons (clipping).
+const SIDEBAR_WIDTH_ICON = "3.5rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarContextProps = {
@@ -244,7 +246,7 @@ const Sidebar = React.forwardRef<
         />
         <div
           className={cn(
-            "fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] duration-[var(--dur-enter)] ease-[var(--ease-out-soft)] md:flex",
+            "fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] overflow-hidden transition-[left,right,width] duration-[var(--dur-enter)] ease-[var(--ease-out-soft)] md:flex",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -522,7 +524,7 @@ const SidebarMenuItem = React.forwardRef<
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -542,6 +544,16 @@ const sidebarMenuButtonVariants = cva(
     },
   }
 )
+// Collapsed (icon) mode: the button becomes a centered 40px square and the
+// text span fades/collapses on the same timing as the rail width, so labels
+// never spill past the 56px rail mid-transition. gap-0 + flex-none keep the
+// lone icon optically centered: a zero-width span still contributes a flex
+// gap, and a flex-1 span (footer name block) would otherwise grow and pin
+// content to the left of the centered row.
+const COLLAPSED_ICON_BUTTON =
+  "group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:p-0!"
+const COLLAPSED_TEXT_SPAN =
+  "group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:min-w-0 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:overflow-hidden group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:transition-[width,opacity] group-data-[collapsible=icon]:duration-[var(--dur-enter)] group-data-[collapsible=icon]:ease-[var(--ease-out-soft)]"
 
 const SidebarMenuButton = React.forwardRef<
   HTMLButtonElement,
@@ -768,4 +780,7 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  /** Collapsed-mode helpers: centered 40px button box + fading text span. */
+  COLLAPSED_ICON_BUTTON,
+  COLLAPSED_TEXT_SPAN,
 }

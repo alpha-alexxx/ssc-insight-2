@@ -202,6 +202,20 @@ npm run verify:neon
 
 A passing session endpoint is not proof of Google login. Browser verification must additionally complete Google consent, reload to confirm the session, and sign out. Report Google login as pending if user participation or provider configuration prevents that check.
 
+### Browser UI checks
+
+`tools/ui-check.mjs` drives a headless Chrome over CDP and reports horizontal overflow, `prefers-reduced-motion` transition durations, and the keyboard focus ring on the dashboard metric strip. It reads the page only — no control that writes data is clicked.
+
+```powershell
+npm run dev
+chrome --headless=new --remote-debugging-port=9222 --user-data-dir="$env:TEMP\dsh-cdp-profile" about:blank
+node tools/ui-check.mjs --width 1440
+node tools/ui-check.mjs --width 390 --height 844
+node tools/shot.mjs --out .impeccable/refine --widths 1440,390 --wait 16000
+```
+
+Overflow that a deliberate scroll container clips (the `View data` table twin) is not reported. The command exits non-zero on page-level horizontal scrolling, a console error, or a strip cell that Tab never reaches. Both scripts expect the dev server on `http://localhost:3000` (override with `--url`) and Chrome's CDP endpoint on `127.0.0.1:9222`. `tools/cdp-check.mjs` remains the broader page/network dump.
+
 ## Agent tooling
 
 The user-installed `neon-postgres` Codex plugin bundles the Neon skills and OAuth MCP endpoint `https://mcp.neon.tech/mcp`. Do not duplicate it with separate skills/MCP entries. The CLI is preferred for this project's operations. The linked `.neon` file is local and ignored; `neon.ts` declares only the requested services.

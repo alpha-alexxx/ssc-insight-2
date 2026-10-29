@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { Skeleton } from "./ui/skeleton";
-import { PlainIcon } from "./icon";
+import { PlainIcon, type IconName } from "./icon";
 import { cn } from "@/lib/utils";
 import type { Analytics } from "@/lib/analytics";
 import { formatNumber as n } from "@/lib/domain";
@@ -13,15 +13,15 @@ import {
 } from "@/lib/plan/view-model";
 
 /**
- * Four KPI cards, each answering one question and clicking through to the
- * surface that acts on it. Values come only from the merged plan, personal
- * tasks, and the current analytics scope; a missing plan/result renders as a
- * placeholder rather than a fabricated zero.
+ * The dashboard overview: one divided metric strip, not four floating cards.
+ * Each cell answers one question and is itself the link to the surface that
+ * acts on it. Values come only from the merged plan, personal tasks, and the
+ * current analytics scope; a missing plan/result renders as a placeholder
+ * rather than a fabricated zero.
  */
 export function DashboardOverview({
   plan,
   analytics,
-  target,
   loading,
   personalOverdue,
   onOpenToday,
@@ -29,7 +29,6 @@ export function DashboardOverview({
 }: {
   plan: (PlanPayload & { today: string }) | null;
   analytics: Analytics | null;
-  target: number | null;
   loading: boolean;
   /** Count of unfinished personal tasks past their due date; null when unknown. */
   personalOverdue: number | null;
@@ -41,18 +40,16 @@ export function DashboardOverview({
   if (loading && !plan) {
     return (
       <div
-        className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4"
+        className="metric-strip"
         aria-busy="true"
         aria-label="Loading overview"
       >
         {Array.from({ length: 4 }).map((_, index) => (
-          <div
-            key={index}
-            className="rounded-panel border border-rule-soft bg-paper p-4"
-          >
+          <div key={index} className="metric-cell">
             <Skeleton className="h-2.5 w-20" />
-            <Skeleton className="mt-3 h-7 w-24" />
-            <Skeleton className="mt-3 h-1.5 w-full" />
+            <Skeleton className="mt-2.5 h-7 w-16" />
+            <Skeleton className="mt-2 h-2.5 w-24" />
+            <Skeleton className="mt-2.5 h-0.5 w-full" />
           </div>
         ))}
       </div>
@@ -65,10 +62,20 @@ export function DashboardOverview({
   const stats = plan ? planProgressStats(plan.days) : null;
   const latest = analytics?.trend.points.at(-1) ?? null;
 
-  const metrics = [
+  const metrics: {
+    key: string;
+    label: string;
+    icon: IconName;
+    value: string;
+    hint: string;
+    pct: number | null;
+    onClick?: () => void;
+    href?: "/calendar" | "/my-tasks";
+  }[] = [
     {
       key: "today",
-      label: "Today's assignments",
+      label: "Today's plan",
+      icon: "file",
       value: todayPlan
         ? `${todayStats?.completed ?? 0}/${todayStats?.total ?? 0}`
         : "—",
@@ -79,8 +86,6 @@ export function DashboardOverview({
         : plan
           ? "Outside the 50-day window"
           : "Plan unavailable",
-      icon: "file" as const,
-      tile: "bg-accent-soft text-accent",
       pct:
         todayStats && todayStats.total > 0
           ? todayStats.completed / todayStats.total
@@ -90,18 +95,18 @@ export function DashboardOverview({
     {
       key: "plan",
       label: "Plan completed",
+      icon: "success",
       value: stats ? `${stats.completionPct}%` : "—",
       hint: stats
         ? `${stats.completedAssignments} of ${stats.totalAssignments} assignments`
         : "Plan unavailable",
-      icon: "success" as const,
-      tile: "bg-positive-soft text-positive",
       pct: stats ? stats.completionPct / 100 : 0,
       href: "/calendar" as const,
     },
     {
       key: "overdue",
       label: "Personal overdue",
+      icon: "clock",
       value: personalOverdue == null ? "—" : n(personalOverdue),
       hint:
         personalOverdue == null
@@ -109,112 +114,77 @@ export function DashboardOverview({
           : personalOverdue
             ? "Personal tasks past due"
             : "Nothing overdue in My Tasks",
-      icon: "clock" as const,
-      tile: "bg-warning-soft text-warning",
       pct: null,
       href: "/my-tasks" as const,
     },
     {
       key: "latest",
       label: "Latest result",
+      icon: "trend",
       value: latest ? `${n(latest.percentage)}%` : "—",
       hint: latest
-        ? `${shortDate(latest.date)} · ${n(latest.score)}/${latest.maxScore}${
-            target != null ? ` · target ${n(target)}/390` : ""
-          }`
+        ? `${shortDate(latest.date)} · ${n(latest.score)}/${latest.maxScore}`
         : analytics
           ? "No saved result in this scope"
           : "Results unavailable",
-      icon: "trend" as const,
-      tile: "bg-accent-soft text-accent",
       pct: latest ? latest.percentage / 100 : 0,
       onClick: onViewAll,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
+    <div className="metric-strip">
       {metrics.map(({ key, ...metric }) => (
-        <KpiCard key={key} {...metric} />
+        <MetricCell key={key} {...metric} />
       ))}
     </div>
   );
 }
 
-type KpiMetric = {
-  label: string;
-  value: string;
-  hint: string;
-  icon: "file" | "success" | "clock" | "trend";
-  tile: string;
-  pct: number | null;
-  onClick?: () => void;
-  href?: "/calendar" | "/my-tasks";
-};
-
-function KpiCard({
+function MetricCell({
   label,
+  icon,
   value,
   hint,
-  icon,
-  tile,
   pct,
   onClick,
   href,
-}: KpiMetric) {
+}: {
+  label: string;
+  icon: IconName;
+  value: string;
+  hint: string;
+  pct: number | null;
+  onClick?: () => void;
+  href?: "/calendar" | "/my-tasks";
+}) {
   const inner = (
     <>
-      <div className="flex items-start gap-3">
-        <span
-          className={cn(
-            "flex size-10 shrink-0 items-center justify-center rounded-control",
-            tile,
-          )}
-          aria-hidden="true"
-        >
-          <PlainIcon name={icon} size={18} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
-            {label}
-          </p>
-          <p className="mt-1.5 font-serif text-2xl leading-none tabular">
-            {value}
-          </p>
-          <p className="mt-1.5 text-pretty text-[11px] leading-snug text-muted">
-            {hint}
-          </p>
-        </div>
+      <span className="metric-head">
+        <PlainIcon name={icon} size={13} className="shrink-0 text-muted" />
+        <span className="metric-label truncate">{label}</span>
         <PlainIcon
           name="chevronRight"
-          size={14}
-          className="mt-1 shrink-0 text-muted"
+          size={13}
+          className="metric-go ml-auto shrink-0 text-muted"
         />
-      </div>
-      {pct != null && (
-        <div className="mt-3 flex items-center gap-2">
-          <div
-            className="h-1.5 flex-1 overflow-hidden rounded-pill bg-soft"
-            role="progressbar"
-            aria-label={`${label} progress`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(pct * 100)}
-          >
-            <div
-              className="h-full rounded-pill bg-accent"
-              style={{ width: `${Math.round(pct * 100)}%` }}
-            />
-          </div>
-          <span className="text-[10px] tabular text-muted">
-            {Math.round(pct * 100)}%
-          </span>
-        </div>
-      )}
+      </span>
+      <span className="metric-value block">{value}</span>
+      <span className="metric-hint block truncate">{hint}</span>
+      <span
+        className="metric-rule block"
+        role={pct != null ? "progressbar" : undefined}
+        aria-label={pct != null ? `${label} progress` : undefined}
+        aria-valuemin={pct != null ? 0 : undefined}
+        aria-valuemax={pct != null ? 100 : undefined}
+        aria-valuenow={pct != null ? Math.round(pct * 100) : undefined}
+        aria-hidden={pct == null ? true : undefined}
+      >
+        <span style={{ width: `${Math.round((pct ?? 0) * 100)}%` }} />
+      </span>
     </>
   );
-  const className =
-    "block w-full rounded-panel border border-rule-soft bg-paper p-4 text-left transition-colors hover:border-accent/50 hover:bg-soft/40";
+  const className = cn("metric-cell", !href && !onClick && "cursor-default");
   if (href) {
     return (
       <Link

@@ -651,18 +651,23 @@
     display: inline-flex;
     align-items: stretch;
     flex-wrap: wrap;
-    gap: 1px;
-    padding: 1px;
-    border: 1px solid var(--rule);
+    border: 1px solid var(--rule-soft);
     border-radius: var(--radius-control);
     background: var(--paper);
     max-width: 100%;
   }
+  /* Hairline dividers between options (the mockup's joined bar), not gaps. */
+  .segment-group .segment + .segment {
+    border-left: 1px solid var(--rule-soft);
+  }
   .segment {
     white-space: nowrap;
-    padding: var(--segment-pad-y) var(--segment-pad-x);
-    border-radius: calc(var(--radius-control) - 1px);
-    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    font-size: 12.5px;
+    font-weight: 500;
     color: var(--muted);
     transition:
       color var(--dur-quick) ease,
@@ -675,6 +680,9 @@
   .segment[aria-pressed="true"],
   .segment[aria-pressed="true"]:hover {
     background: var(--ink);
+    color: var(--paper);
+  }
+  .segment[aria-pressed="true"] svg {
     color: var(--paper);
   }
   .segment:disabled {
@@ -1004,27 +1012,65 @@
     font-size: 12px;
     line-height: 1.5;
   }
+  /* The dashboard overview is one divided strip, not four floating cards:
+     thin rules carry the structure, cells stay square (style radius), and
+     each cell is a single large hit target for its destination. */
   .metric-strip {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     border: 1px solid var(--rule-soft);
-    border-radius: var(--radius-control);
+    border-radius: var(--radius-panel);
     background: var(--paper);
     overflow: hidden;
   }
   .metric-cell {
+    display: block;
     min-width: 0;
     padding: 13px 15px;
+    text-align: left;
+    transition: background-color var(--dur-quick) ease;
   }
   .metric-cell + .metric-cell {
     border-left: 1px solid var(--rule-soft);
   }
+  .metric-cell:hover,
+  .metric-cell:focus-visible {
+    background: var(--soft);
+  }
+  /* Inset ring: the strip clips its overflow, so an outward offset would be
+     cut off. Keyboard focus must stay visible on every cell. */
+  .metric-cell:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .metric-cell:hover .metric-label,
+  .metric-cell:focus-visible .metric-label {
+    color: var(--ink);
+  }
+  /* The chevron is decoration for pointer users; keyboard focus reveals it
+     too, and reduced motion keeps it permanently visible (below). */
+  .metric-cell .metric-go {
+    opacity: 0;
+    transition: opacity var(--dur-quick) ease;
+  }
+  .metric-cell:hover .metric-go,
+  .metric-cell:focus-visible .metric-go {
+    opacity: 1;
+  }
+  .metric-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
   .metric-label {
+    min-width: 0;
     color: var(--muted);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+    transition: color var(--dur-quick) ease;
   }
   .metric-value {
     margin-top: 4px;
@@ -1041,15 +1087,166 @@
     font-size: 10px;
     line-height: 1.35;
   }
-  .compact-panel-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 16px 10px;
+  /* Square progress rule: a 2px track, never a pill. */
+  .metric-rule {
+    margin-top: 8px;
+    height: 2px;
+    overflow: hidden;
+    background: var(--soft);
   }
-  .compact-panel-body {
-    padding: 0 16px 14px;
+  .metric-rule > span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width var(--dur-enter) var(--ease-out-soft);
+  }
+  /* Quiet metadata row under a section heading — labels, values, and
+     hairline dividers instead of a second headline stat strip. */
+  .performance-meta {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    margin-bottom: 16px;
+    border-block: 1px solid var(--rule-soft);
+  }
+  .performance-meta > div {
+    min-width: 0;
+    padding: 10px 14px;
+  }
+  .performance-meta > div + div {
+    border-left: 1px solid var(--rule-soft);
+  }
+  .performance-meta dt {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .performance-meta dd {
+    margin-top: 3px;
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 550;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    white-space: nowrap;
+  }
+  /* Two-up segmented control: same components, full-row hit areas. */
+  .segment-group.is-block {
+    display: flex;
+    width: 100%;
+  }
+  .segment-group.is-block .segment {
+    flex: 1 1 0;
+    text-align: center;
+  }
+  /* Section header: title block and its inline controls. Stacks below lg so
+     the control never squeezes the heading into two ragged lines. */
+  .section-head {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  /* Day stepping: arrows flank a bordered date pill (the mockup's dateline
+     row — every element sits in its own bordered control at one height).
+     The return-to-today chip keeps its space reserved so stepping days
+     never slides the arrows out from under the pointer. */
+  .day-nav {
+    display: flex;
+    align-self: stretch;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .day-nav-step {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    background: var(--paper);
+    color: var(--muted);
+    transition:
+      background-color var(--dur-quick) ease,
+      color var(--dur-quick) ease;
+  }
+  .day-nav-step:hover:not(:disabled) {
+    background: var(--soft);
+    color: var(--ink);
+  }
+  .day-nav-step:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .day-nav-step:disabled {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .day-nav-step:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .day-nav-body {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    min-width: 0;
+    padding: 0 12px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    background: var(--paper);
+  }
+  .day-nav-today {
+    flex: 0 0 auto;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    background: var(--paper);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition:
+      background-color var(--dur-quick) ease,
+      border-color var(--dur-quick) ease,
+      color var(--dur-quick) ease;
+  }
+  .day-nav-today:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .day-nav-today:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .day-nav-date {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+  @media (min-width: 1024px) {
+    .section-head {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .day-nav {
+      flex: 0 0 auto;
+      align-self: auto;
+      justify-content: flex-start;
+    }
   }
 
   /* ---------- Landing page helpers ---------- */
@@ -1108,6 +1305,18 @@ html {
   .metric-value {
     font-size: 24px;
   }
+  .performance-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .performance-meta > div:nth-child(odd) {
+    border-left: 0;
+  }
+  .performance-meta > div:nth-child(n + 3) {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .performance-meta dd {
+    font-size: 15px;
+  }
   .stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1144,6 +1353,22 @@ html {
   .sheet-content {
     animation: none !important;
   }
+  /* Dashboard state changes are transitions, not animations — freeze them
+     and keep the hover affordances permanently legible without motion. */
+  .metric-cell,
+  .metric-label,
+  .metric-rule > span,
+  .metric-cell .metric-go,
+  .day-nav-step,
+  .segment {
+    transition: none !important;
+  }
+  .day-nav-step:active:not(:disabled) {
+    transform: none;
+  }
+  .metric-cell .metric-go {
+    opacity: 1;
+  }
   .duotone .duotone-echo,
   .duotone:hover .duotone-echo,
   .duotone-tile,
@@ -1159,8 +1384,27 @@ html {
 @media (pointer: coarse) {
   [data-slot="button"],
   [data-sidebar="menu-button"],
+  .day-nav-step,
   .segment {
     min-width: 44px;
     min-height: 44px;
   }
+}
+
+/* Collapsed sidebar: the lone icon must sit optically centered in the 40px
+   button. tailwind-merge strips the gap-0 variant from the button's class
+   string (it conflicts with the base gap-2), and layered overrides lose to
+   Tailwind's utilities layer — so these live unlayered, where they win. */
+.group[data-collapsible="icon"] [data-sidebar="menu-button"] {
+  gap: 0;
+}
+.group[data-collapsible="icon"] [data-sidebar="menu-button"] > span {
+  flex: none;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    width var(--dur-enter) var(--ease-out-soft),
+    opacity var(--dur-enter) var(--ease-out-soft);
 }

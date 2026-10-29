@@ -140,11 +140,60 @@ export function isoMonthEnd(iso: string): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Weekday names are computed once per weekday, not once per cell: a strip of
+ * seven day cells would otherwise build fourteen `Intl.DateTimeFormat`
+ * instances on every render. Dates are read at UTC noon so no round-trip
+ * through a local zone can shift the weekday.
+ */
+const WEEKDAY_LONG = new Intl.DateTimeFormat("en-US", {
+  weekday: "long",
+  timeZone: "UTC",
+});
+const WEEKDAY_SHORT = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  timeZone: "UTC",
+});
+const weekdayName = (() => {
+  const long: string[] = [];
+  const short: string[] = [];
+  // 2024-01-01 was a Monday; seven consecutive UTC noons cover every weekday.
+  for (let index = 0; index < 7; index += 1) {
+    const date = new Date(Date.UTC(2024, 0, 1 + index, 12));
+    long.push(WEEKDAY_LONG.format(date));
+    short.push(WEEKDAY_SHORT.format(date));
+  }
+  return { long, short };
+})();
+function weekdayIndex(iso: string): number | null {
+  const date = new Date(`${iso}T12:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : (date.getUTCDay() + 6) % 7;
+}
+
 export function isoWeekdayName(iso: string): string {
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", {
-    weekday: "long",
-    timeZone: "UTC",
-  });
+  const index = weekdayIndex(iso);
+  return index == null ? "—" : weekdayName.long[index]!;
+}
+
+/** "Mon" — the compact weekday label used by the dashboard week strip. */
+export function isoWeekdayShort(iso: string): string {
+  const index = weekdayIndex(iso);
+  return index == null ? "—" : weekdayName.short[index]!;
+}
+
+/**
+ * The plan's `dayType` strings are full editorial sentences ("LIVE MOCK 2 –
+ * LAST DAY OF WINDOW (Sat 24 – Mon 26 Oct)"). A header needs a category, so
+ * collapse them to the label a student scans for; the source text stays
+ * available on the day view and calendar rows.
+ */
+export function dayTypeLabel(dayType: string): string {
+  const value = dayType.toUpperCase();
+  if (value.includes("FINAL REVISION")) return "Final revision";
+  if (value.includes("REVISION") || value.includes("REV-")) return "Revision day";
+  if (value.includes("LIVE MOCK")) return "Live mock day";
+  if (value.includes("MOCK")) return "Mock day";
+  return "Study day";
 }
 
 /* ---------- derivations (single source for dashboard + views) ---------- */
