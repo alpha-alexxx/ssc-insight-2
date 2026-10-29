@@ -8,6 +8,8 @@ import {
 import {
   addIsoDays,
   dayAssignmentStats,
+  monthGridDays,
+  nextMockDay,
   nextRecommendedAction,
   planProgressStats,
   revisionQueue,
@@ -209,4 +211,114 @@ test("week range is Monday-based", () => {
   const week = weekRange("2026-10-28"); // Wednesday
   assert.equal(week.from, "2026-10-26");
   assert.equal(week.to, "2026-11-01");
+});
+
+test("month grid covers whole Monday-led weeks", () => {
+  const cases = [
+    // October 2026 starts on a Thursday and ends on a Saturday: five rows.
+    { iso: "2026-10-15", from: "2026-09-28", to: "2026-11-01", length: 35 },
+    // November 2026 starts on a Sunday and ends on a Monday: six rows.
+    { iso: "2026-11-15", from: "2026-10-26", to: "2026-12-06", length: 42 },
+    { iso: "2026-12-15", from: "2026-11-30", to: "2027-01-03", length: 35 },
+    { iso: "2027-01-15", from: "2026-12-28", to: "2027-01-31", length: 35 },
+  ];
+  for (const expected of cases) {
+    const grid = monthGridDays(expected.iso);
+    assert.equal(grid[0], expected.from);
+    assert.equal(grid.at(-1), expected.to);
+    assert.equal(grid.length, expected.length);
+    assert.equal(grid.length % 7, 0, `${expected.iso}: whole weeks only`);
+    assert.equal(new Set(grid).size, grid.length, "no duplicate days");
+    // Every day of the displayed month is present.
+    const month = expected.iso.slice(0, 7);
+    const monthDays = grid.filter((iso) => iso.slice(0, 7) === month);
+    assert.equal(monthDays[0], `${month}-01`, "month starts on the 1st");
+    assert.equal(
+      monthDays.at(-1),
+      addIsoDays(`${month}-01`, monthDays.length - 1),
+      "no gaps inside the month",
+    );
+  }
+});
+
+test("month grid stays a whole block outside the plan window", () => {
+  const grid = monthGridDays("2027-06-10");
+  assert.equal(grid[0], "2027-05-31"); // a Monday
+  assert.equal(grid.length % 7, 0);
+});
+
+
+/* ---------- next mock ---------- */
+
+test("next mock filters by type before stopping", () => {
+  // Twenty sectional tests exhaust any small `upcomingMocks` budget; the first
+  // real mock sits behind them, so the helper must filter before it stops.
+  const filler = Array.from({ length: 20 }, (_, index) =>
+    dayView({
+      day: index + 1,
+      date: addIsoDays("2026-10-26", index),
+      tasks: [
+        taskView({
+          key: `d${index + 1}:0`,
+          date: addIsoDays("2026-10-26", index),
+          type: "maths_sectional",
+        }),
+      ],
+    }),
+  );
+  const mockDate = addIsoDays("2026-10-26", 20);
+  const mockDay = dayView({
+    day: 21,
+    date: mockDate,
+    tasks: [taskView({ key: "d21:0", day: 21, date: mockDate })],
+  });
+  const found = nextMockDay([...filler, mockDay], "2026-10-26");
+  assert.equal(found?.task.date, mockDate);
+  assert.equal(found?.day.day, 21);
+});
+
+test("next mock skips completed mocks and past days", () => {
+  const past = dayView({
+    day: 1,
+    date: "2026-10-26",
+    tasks: [taskView({ key: "d1:0", date: "2026-10-26" })],
+  });
+  const done = dayView({
+    day: 2,
+    date: "2026-10-27",
+    tasks: [
+      taskView({ key: "d2:0", day: 2, date: "2026-10-27", completed: true }),
+    ],
+  });
+  const next = dayView({
+    day: 3,
+    date: "2026-10-28",
+    tasks: [
+      taskView({ key: "d3:0", day: 3, date: "2026-10-28", type: "paid_mock" }),
+    ],
+  });
+  assert.equal(nextMockDay([past, done, next], "2026-10-27")?.task.key, "d3:0");
+  assert.equal(nextMockDay([done], "2026-10-27"), null);
+});
+
+test("next mock reads the real plan without truncating", () => {
+  // Built from the source plan through the same view conversion the app uses.
+  const view = days.map((day) =>
+    dayView({
+      day: day.day,
+      date: day.date,
+      tasks: day.tasks.map((task) =>
+        taskView({
+          key: planTaskKey(day.day, day.tasks.indexOf(task)),
+          date: day.date,
+          type: task.type,
+          completed: task.completed,
+        }),
+      ),
+    }),
+  );
+  const found = nextMockDay(view, "2026-10-26");
+  assert.ok(found, "the plan schedules at least one mock");
+  assert.equal(found.task.completed, false);
+  assert.equal(found.day.date, "2026-10-26");
 });

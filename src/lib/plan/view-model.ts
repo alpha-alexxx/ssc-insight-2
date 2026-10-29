@@ -141,6 +141,19 @@ export function isoMonthEnd(iso: string): string {
 }
 
 /**
+ * Whole Monday-led weeks covering `iso`'s month — always a multiple of seven,
+ * so a month grid never ends on a ragged row. October 2026 is 35 cells,
+ * November 2026 (a six-week month) is 42, December 2026 is 35.
+ */
+export function monthGridDays(iso: string): string[] {
+  const first = weekStartIso(isoMonthStart(iso));
+  const last = addIsoDays(weekStartIso(isoMonthEnd(iso)), 6);
+  const out: string[] = [];
+  for (let day = first; day <= last; day = addIsoDays(day, 1)) out.push(day);
+  return out;
+}
+
+/**
  * Weekday names are computed once per weekday, not once per cell: a strip of
  * seven day cells would otherwise build fourteen `Intl.DateTimeFormat`
  * instances on every render. Dates are read at UTC noon so no round-trip
@@ -278,6 +291,26 @@ export function upcomingMocks(
     }
   }
   return out;
+}
+
+/**
+ * The next unfinished full-length mock on or after `todayIso`.
+ *
+ * Deliberately not `upcomingMocks(days, today, 1)[0]`: that helper honours its
+ * limit before filtering by type, so a run of sectionals and topic tests would
+ * consume the budget and the "next mock" would read as empty. This scans the
+ * whole remaining plan and stops on the first match.
+ */
+export function nextMockDay(
+  days: PlanDayView[],
+  todayIso: string,
+): { task: PlanTaskView; day: PlanDayView } | null {
+  for (const day of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (day.date < todayIso) continue;
+    const task = day.tasks.find((t) => !t.completed && isMockType(t.type));
+    if (task) return { task, day };
+  }
+  return null;
 }
 
 export type RevisionItem = {

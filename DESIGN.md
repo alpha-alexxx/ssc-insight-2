@@ -225,6 +225,12 @@ Outcome cards use semantic articles and definition lists with visible values, so
 
 Dated saved attempts use the companion `AttemptRecordCard` in the same module. It is a compact horizontal row with a 62px score ring, a visible “Attempted” state, the actual attempt date, title, platform/type, score/max, accuracy, and a result action. Aggregate answer-stack cards never invent a single attempt date.
 
+## Study Calendar
+
+The calendar is a workspace view, not a dashboard, so it opens with the shared `PageHeader` (serif `workspace-title`, one hairline below, actions wrapping under the title on phones) rather than a display-size heading and a view-management card. Its summary is the same divided metric strip as the dashboard — four cells: next mock, plan completion, this week's load, and mocks done — with the same 2px square rule. Two of the four are static because they have no surface to open; that is the one sanctioned exception to "each cell is a link target", and inventing a destination would be worse than the exception.
+
+Mode selection is one page-level `.segment` row; the period controls live in the surface's own `.section-head`, which stacks the title above the nav below `lg` so neither squeezes the other at phone widths. Month cells are controls, not panels: `rounded-control`, one border treatment per state (in plan, outside the plan window, outside the displayed month, today, selected) with no stacked opacity, chips at `sm` and above and a category-dot row below. Below `xl` the selected-day panel follows the grid directly — a single-column date/schedule flow — and becomes a sticky rail at `xl`; the calendar legend belongs to the grid, not the page. Day completion is always the 2px square rule, never a ring. The calendar carries no personal tasks.
+
 ## Personal work and dashboard hierarchy
 
 The dashboard sequence is Overview → Today's Plan → Study Calendar, followed by supporting panels and performance. Today's Plan presents structured assignments and personal tasks under explicit labels. The shared personal calendar and list use a primary work column with a 300px calendar rail on desktop; mobile places the compact calendar before the rows. Thin rules and typography organize content without enclosing every item in a card. Task summaries use real account-wide counts. Pending/completed calendar markers have accessible count labels; task completion, priority, and overdue state also have text or checkbox semantics.
