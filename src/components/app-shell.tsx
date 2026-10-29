@@ -92,6 +92,7 @@ export function AppFrame({
   onAddMock,
   onOpenAi,
   children,
+  defaultSidebarOpen = true,
 }: {
   view: AppView;
   userName: string;
@@ -102,9 +103,10 @@ export function AppFrame({
   onAddMock: () => void;
   onOpenAi: () => void;
   children: React.ReactNode;
+  defaultSidebarOpen?: boolean;
 }) {
   return (
-    <SidebarProvider defaultOpen>
+    <SidebarProvider defaultOpen={defaultSidebarOpen}>
       <AppSidebar
         view={view}
         userName={userName}
@@ -213,37 +215,44 @@ export function AppSidebar({
   const { setOpenMobile } = useSidebar();
   return (
     <Sidebar collapsible="icon" className="border-r border-rule">
-      <SidebarHeader className="border-b border-rule-soft px-2 py-3 group-data-[collapsible=icon]:px-0">
+      <SidebarHeader className="border-b border-rule-soft py-3">
         <div className="flex items-center gap-1">
-          <Link
-            href="/dashboard"
-            className="flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-control px-2 text-ink group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0"
-            aria-label="SSC Insight dashboard"
-            onClick={() => setOpenMobile(false)}
-          >
-            <span className="grid size-8 shrink-0 place-items-center rounded-control border border-rule-soft bg-canvas">
-              <PlainIcon name="book" size={17} tone="accent" />
-            </span>
-            <span
-              className={cn(
-                "min-w-0",
-                COLLAPSED_TEXT_SPAN,
-              )}
-            >
-              <span className="block font-serif text-[21px] font-semibold leading-none tracking-[-0.035em]">
-                ssc<span className="text-accent">insight</span>
-                <span className="text-accent">.</span>
-              </span>
-              <span className="mt-1 block text-[9px] font-medium uppercase tracking-[0.12em] text-muted">
-                Mock workspace
-              </span>
-            </span>
-          </Link>
+          <SidebarMenu className="min-w-0 flex-1">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                size="lg"
+                tooltip="SSC Insight dashboard"
+                className="h-10 gap-2.5 rounded-control"
+              >
+                <Link
+                  href="/dashboard"
+                  aria-label="SSC Insight dashboard"
+                  onClick={() => {
+                    onRouteIntent("dashboard");
+                    setOpenMobile(false);
+                  }}
+                >
+                  <span className="grid size-8 shrink-0 place-items-center rounded-control border border-rule-soft bg-canvas">
+                    <PlainIcon name="book" size={17} tone="accent" />
+                  </span>
+                  <span className={cn("grid min-w-0 flex-1 text-left", COLLAPSED_TEXT_SPAN)}>
+                    <span className="truncate font-serif text-[21px] font-semibold leading-none tracking-[-0.035em]">
+                      ssc<span className="text-accent">insight.</span>
+                    </span>
+                    <span className="mt-1 truncate text-[9px] font-medium uppercase tracking-[0.12em] text-muted">
+                      Mock workspace
+                    </span>
+                  </span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
           <button
             type="button"
             aria-label="Close navigation"
             onClick={() => setOpenMobile(false)}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-muted hover:bg-soft hover:text-ink md:hidden"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-control text-muted hover:bg-soft hover:text-ink md:hidden"
           >
             <PlainIcon name="close" size={16} />
           </button>
@@ -270,7 +279,8 @@ export function AppSidebar({
                 ))}
                 {group.label === "Results" && (
                   <SidebarMenuItem className="px-1.5 pt-1.5 group-data-[collapsible=icon]:px-0">
-                    <button
+                    <SidebarMenuButton
+                      tooltip="Log a mock"
                       type="button"
                       onClick={() => {
                         onAddMock();
@@ -291,7 +301,7 @@ export function AppSidebar({
                         tone="paper"
                         className="ml-auto shrink-0 group-data-[collapsible=icon]:hidden"
                       />
-                    </button>
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
               </SidebarMenu>
@@ -299,7 +309,7 @@ export function AppSidebar({
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="border-t border-rule-soft bg-canvas/60 group-data-[collapsible=icon]:px-1">
+      <SidebarFooter className="border-t border-rule-soft bg-canvas/60">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -335,36 +345,49 @@ export function AppSidebar({
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="mx-2 mb-1 rounded-panel border border-rule-soft bg-paper px-2.5 py-2.5 group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:mb-0 group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0">
-          <div className="flex min-w-0 items-center justify-center gap-2.5 group-data-[collapsible=icon]:gap-0">
-            <span
-              className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
-              aria-hidden="true"
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              size="lg"
+              tooltip={userName || "My workspace"}
+              className="gap-2.5 rounded-control"
             >
-              {initials(userName)}
-            </span>
-            <div
-              className={cn(
-                "min-w-0 flex-1",
-                COLLAPSED_TEXT_SPAN,
-              )}
-            >
-              <p className="truncate text-xs font-medium">{userName || "My workspace"}</p>
-              <p className="truncate text-[10px] text-muted">
-                {userEmail || "Private account"}
-              </p>
-            </div>
-            <PlainIcon
-              name="chevronRight"
-              size={13}
-              className="shrink-0 text-muted group-data-[collapsible=icon]:hidden"
-            />
-          </div>
-          <p className="mt-2 flex items-center gap-1.5 border-t border-rule-soft pt-2 text-[10px] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
-            <PlainIcon name="calendar" size={11} />
-            SSC CGL Tier 2 · dates in IST
-          </p>
-        </div>
+              <Link
+                href={VIEW_HREF.settings}
+                aria-label="Account settings"
+                onClick={() => {
+                  onRouteIntent("settings");
+                  setOpenMobile(false);
+                }}
+              >
+                <span
+                  className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
+                  aria-hidden="true"
+                >
+                  {initials(userName)}
+                </span>
+                <span className={cn("grid min-w-0 flex-1 text-left leading-tight", COLLAPSED_TEXT_SPAN)}>
+                  <span className="truncate text-xs font-medium">
+                    {userName || "My workspace"}
+                  </span>
+                  <span className="truncate text-[10px] text-muted">
+                    {userEmail || "Private account"}
+                  </span>
+                </span>
+                <PlainIcon
+                  name="chevronRight"
+                  size={13}
+                  className="ml-auto shrink-0 text-muted group-data-[collapsible=icon]:hidden"
+                />
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <p className="mx-2 flex items-center gap-1.5 border-t border-rule-soft pt-2 text-[10px] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
+          <PlainIcon name="calendar" size={11} />
+          SSC CGL Tier 2 · dates in IST
+        </p>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

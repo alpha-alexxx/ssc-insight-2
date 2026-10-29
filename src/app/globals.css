@@ -1390,21 +1390,3 @@ html {
     min-height: 44px;
   }
 }
-
-/* Collapsed sidebar: the lone icon must sit optically centered in the 40px
-   button. tailwind-merge strips the gap-0 variant from the button's class
-   string (it conflicts with the base gap-2), and layered overrides lose to
-   Tailwind's utilities layer — so these live unlayered, where they win. */
-.group[data-collapsible="icon"] [data-sidebar="menu-button"] {
-  gap: 0;
-}
-.group[data-collapsible="icon"] [data-sidebar="menu-button"] > span {
-  flex: none;
-  width: 0;
-  min-width: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition:
-    width var(--dur-enter) var(--ease-out-soft),
-    opacity var(--dur-enter) var(--ease-out-soft);
-}

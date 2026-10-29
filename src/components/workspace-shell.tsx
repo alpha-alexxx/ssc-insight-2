@@ -94,10 +94,12 @@ export function WorkspaceShell({
   authEnabled = false,
   userEmail = "",
   userName = "",
+  defaultSidebarOpen = true,
 }: {
   authEnabled?: boolean;
   userEmail?: string;
   userName?: string;
+  defaultSidebarOpen?: boolean;
 }) {
   // ToastProvider wraps the inner component so useToast works inside it.
   // ErrorBoundary already wraps the whole tree in layout.tsx.
@@ -107,6 +109,7 @@ export function WorkspaceShell({
         <WorkspaceShellInner
           authEnabled={authEnabled}
           userEmail={userEmail}
+          defaultSidebarOpen={defaultSidebarOpen}
           userName={userName}
         />
       </TodosDataProvider>
@@ -118,10 +121,12 @@ function WorkspaceShellInner({
   authEnabled = false,
   userEmail = "",
   userName = "",
+  defaultSidebarOpen = true,
 }: {
   authEnabled?: boolean;
   userEmail?: string;
   userName?: string;
+  defaultSidebarOpen?: boolean;
 }) {
   const toast = useToast();
   const reduced = useReducedMotion();
@@ -507,6 +512,7 @@ function WorkspaceShellInner({
           Skip to content
         </a>
         <AppFrame
+          defaultSidebarOpen={defaultSidebarOpen}
           view={view}
           userName={userName}
           userEmail={userEmail}
