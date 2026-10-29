@@ -214,8 +214,8 @@ export function AppSidebar({
 }) {
   const { setOpenMobile } = useSidebar();
   return (
-    <Sidebar collapsible="icon" className="border-r border-rule">
-      <SidebarHeader className="border-b border-rule-soft py-3">
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="border-b border-rule-soft py-[var(--sidebar-header-pad-y)]">
         <div className="flex items-center gap-1">
           <SidebarMenu className="min-w-0 flex-1">
             <SidebarMenuItem>
@@ -287,7 +287,7 @@ export function AppSidebar({
                         setOpenMobile(false);
                       }}
                       className={cn(
-                        "flex min-h-10 w-full items-center gap-2.5 rounded-control bg-accent px-2.5 py-2 text-sm font-medium text-paper transition-colors hover:bg-accent-hover",
+                        "sidebar-cta flex min-h-10 w-full items-center gap-2.5 rounded-control bg-accent px-2.5 py-2 text-sm font-medium text-paper transition-colors hover:bg-accent-hover",
                         COLLAPSED_ICON_BUTTON,
                       )}
                     >
@@ -362,7 +362,7 @@ export function AppSidebar({
                 }}
               >
                 <span
-                  className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
+                  className="sidebar-avatar grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
                   aria-hidden="true"
                 >
                   {initials(userName)}

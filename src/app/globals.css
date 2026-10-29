@@ -85,6 +85,13 @@
   --stat-cell-pad-y: 23px;
   --stat-cell-pad-x: 24px;
 
+  /* ---- sidebar chrome (style-adaptive; vega defaults = today's sizes) ---- */
+  --sidebar-rule-w: 1px;
+  --sidebar-rule-color: var(--rule);
+  --sidebar-row-h: 32px;
+  --sidebar-row-h-lg: 48px;
+  --sidebar-header-pad-y: 12px;
+
   /* ---- motion tokens ---- */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-quick: 140ms;
@@ -283,6 +290,8 @@
   --dur-enter: 160ms;
   --dur-view: 170ms;
   --ease-out-soft: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --sidebar-rule-w: 2px;
+  --sidebar-rule-color: var(--ink);
 }
 [data-style="sera"] .page-title {
   font-weight: 600;
@@ -328,6 +337,9 @@
   --dur-view: 140ms;
   --elev-pop:
     0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 20px -14px rgba(0, 0, 0, 0.28);
+  --sidebar-row-h: 28px;
+  --sidebar-row-h-lg: 42px;
+  --sidebar-header-pad-y: 8px;
 }
 [data-style="mira"] .page-title {
   font-size: clamp(28px, 2.8vw, 38px);
@@ -340,6 +352,34 @@
 }
 [data-style="mira"] .chart-empty {
   min-height: 170px;
+}
+
+/* ---------- sidebar: style-adaptive chrome ----------
+   Edge width/color and row geometry come from tokens (:root + style blocks),
+   so every palette × style × dark combination resolves without per-combo
+   rules. Unlayered so it beats the primitives' border-r utility; scoped to
+   the desktop sidebar ([data-mobile="true"] is the Sheet, which keeps
+   .sheet-content's own border). */
+[data-sidebar="sidebar"]:not([data-mobile="true"]) {
+  border-right: var(--sidebar-rule-w) solid var(--sidebar-rule-color);
+}
+
+/* Sera brutal chrome: ink ring on the active item (echoes .segment), offset
+   shadow on the CTA (echoes .duotone-tile), ink-weight dividers, square
+   avatar. Colors stay on tokens, so dark mode flips them like every sera
+   surface. */
+[data-style="sera"] [data-sidebar="menu-button"][data-active="true"] {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+[data-style="sera"] [data-sidebar="menu-button"].sidebar-cta {
+  box-shadow: 3px 3px 0 0 var(--ink);
+}
+[data-style="sera"] [data-sidebar="sidebar"] [data-sidebar="header"],
+[data-style="sera"] [data-sidebar="sidebar"] [data-sidebar="footer"] {
+  border-color: var(--rule);
+}
+[data-style="sera"] [data-sidebar="sidebar"] .sidebar-avatar {
+  border-radius: 0;
 }
 
 @theme inline {
