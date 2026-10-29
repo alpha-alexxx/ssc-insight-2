@@ -9,6 +9,11 @@ const UNIT: Record<CalendarMode, string> = {
   agenda: "week",
 };
 
+/** Agenda steps a week at a time, like the week surface. */
+export function stepSize(mode: CalendarMode): number {
+  return mode === "week" || mode === "agenda" ? 7 : 1;
+}
+
 /**
  * Period stepping: two arrows, a return-to-today chip, and a date jump. The
  * arrows are disabled at the plan's edges so a student never scrolls into an

@@ -22,6 +22,7 @@ import { PlanTaskRow } from "./selected-day-panel";
  */
 export function AgendaView({
   days,
+  selected,
   today,
   planLength,
   planStart,
@@ -35,6 +36,7 @@ export function AgendaView({
   onOpenAttempt,
 }: {
   days: PlanDayView[];
+  selected: string;
   today: string;
   planLength: number;
   planStart: string;
@@ -47,8 +49,11 @@ export function AgendaView({
   onLogResult: (task: PlanTaskView) => void;
   onOpenAttempt: (attempt: Attempt) => void;
 }) {
-  const upcoming = days.filter((day) => day.date >= today);
-  const past = days.filter((day) => day.date < today).reverse();
+  /* The list starts at the selected date, never earlier than today — so the
+     period controls below move the window rather than sitting inert. */
+  const from = selected > today ? selected : today;
+  const upcoming = days.filter((day) => day.date >= from);
+  const past = days.filter((day) => day.date < from).reverse();
   const attemptsOn = (iso: string) =>
     attempts.filter((attempt) => istDateKey(attempt.completedAt) === iso);
 
@@ -56,11 +61,11 @@ export function AgendaView({
     <CalendarSurface
       live
       title="Agenda"
-      meta={`${upcoming.length} of ${planLength} plan days remaining`}
+      meta={`${upcoming.length} of ${planLength} plan days from ${shortDate(from)}`}
       nav={
         <PeriodNav
           mode="agenda"
-          selected={today < planStart ? planStart : today > planEnd ? planEnd : today}
+          selected={from}
           planStart={planStart}
           planEnd={planEnd}
           onStep={onStep}
@@ -135,7 +140,7 @@ export function AgendaView({
         </ul>
       ) : (
         <p className="py-6 text-center text-sm text-muted">
-          No plan days left from today. The window closed on{" "}
+          Nothing scheduled from {shortDate(from)}. The plan window closes on{" "}
           {longDate(planEnd)}.
         </p>
       )}

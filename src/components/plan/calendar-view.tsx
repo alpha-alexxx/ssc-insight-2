@@ -25,7 +25,7 @@ import { AgendaView } from "./calendar/agenda-view";
 import { CalendarSurface } from "./calendar/calendar-surface";
 import { DayView } from "./calendar/day-view";
 import { MonthGrid, MonthLegend } from "./calendar/month-grid";
-import { PeriodNav } from "./calendar/period-nav";
+import { PeriodNav, stepSize } from "./calendar/period-nav";
 import { SelectedDayPanel } from "./calendar/selected-day-panel";
 import { CALENDAR_MODES, type CalendarMode } from "./calendar/visuals";
 import { WeekView } from "./calendar/week-view";
@@ -90,7 +90,7 @@ export function CalendarView({
     const next =
       mode === "month"
         ? shiftMonth(plan, selected, direction)
-        : addIsoDays(selected, direction * (mode === "week" ? 7 : 1));
+        : addIsoDays(selected, direction * stepSize(mode));
     setSelected(clampToPlan(plan, next));
   };
   const goToday = () => setSelected(clampToPlan(plan, today));
@@ -232,6 +232,7 @@ export function CalendarView({
             ) : (
               <AgendaView
                 days={plan.days}
+                selected={selected}
                 today={today}
                 planLength={plan.days.length}
                 planStart={plan.startDate}
