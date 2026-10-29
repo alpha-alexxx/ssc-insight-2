@@ -381,7 +381,59 @@ function PipelineProgressSection({
             </div>
           ))}
         </div>
-        <div className="mt-3 flex gap-1.5" aria-label="Plan phases">
+        {/* Mobile: stacked list — the chevron strip truncates to a few
+            characters per phase at phone widths. */}
+        <div className="mt-3 flex flex-col divide-y divide-rule-soft rounded-control border border-rule-soft sm:hidden" aria-label="Plan phases">
+          {plan.phases.map((phase) => {
+            const active = todayPlan?.phase === phase.phase;
+            const past = todayPlan
+              ? todayPlan.day > Number(phase.days.split("-").at(-1))
+              : false;
+            return (
+              <div
+                key={phase.phase}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2",
+                  active
+                    ? "bg-accent-soft"
+                    : past
+                      ? "bg-positive-soft"
+                      : "bg-canvas",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold tabular",
+                    active
+                      ? "bg-accent text-paper"
+                      : past
+                        ? "bg-positive text-paper"
+                        : "bg-soft text-muted",
+                  )}
+                  aria-hidden="true"
+                >
+                  {phase.phase}
+                </span>
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-[11px] font-medium",
+                    active
+                      ? "text-accent"
+                      : past
+                        ? "text-positive"
+                        : "text-ink",
+                  )}
+                >
+                  {phase.name}
+                </span>
+                <span className="shrink-0 text-[9px] leading-tight text-muted">
+                  Days {phase.days}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-3 hidden gap-1.5 sm:flex">
           {plan.phases.map((phase, index) => {
             const active = todayPlan?.phase === phase.phase;
             const past = todayPlan
@@ -504,36 +556,50 @@ function PipelineUpcomingSection({
         ) : (
           <ul className="divide-y divide-rule-soft overflow-hidden rounded-control border border-rule-soft">
             {upcoming.map(({ task, day }) => (
-              <li key={task.key} className="flex items-center gap-2.5 px-3 py-2">
-                <PlainIcon
-                  name="file"
-                  size={14}
-                  className="shrink-0 text-muted"
-                  aria-hidden="true"
-                />
-                <p className="min-w-0 flex-1 truncate text-xs font-medium">
-                  {task.name}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => onOpenDay(day.date)}
-                  className="shrink-0 text-[10px] tabular text-muted hover:text-accent"
-                >
-                  {longDate(day.date)}
-                </button>
-                <CategoryChip type={task.type} />
-                <button
-                  type="button"
-                  aria-label={`Open ${task.name}`}
-                  onClick={() =>
-                    task.url
-                      ? window.open(task.url, "_blank", "noopener,noreferrer")
-                      : onOpenDay(day.date)
-                  }
-                  className="shrink-0 text-muted transition-colors hover:text-accent"
-                >
-                  <PlainIcon name="chevronRight" size={14} />
-                </button>
+              <li key={task.key} className="px-3 py-2">
+                <div className="flex items-center gap-2.5">
+                  <PlainIcon
+                    name="file"
+                    size={14}
+                    className="shrink-0 text-muted"
+                    aria-hidden="true"
+                  />
+                  <p className="min-w-0 flex-1 truncate text-xs font-medium">
+                    {task.name}
+                  </p>
+                  <div className="hidden shrink-0 items-center gap-2.5 sm:flex">
+                    <button
+                      type="button"
+                      onClick={() => onOpenDay(day.date)}
+                      className="text-[10px] tabular text-muted hover:text-accent"
+                    >
+                      {longDate(day.date)}
+                    </button>
+                    <CategoryChip type={task.type} />
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Open ${task.name}`}
+                    onClick={() =>
+                      task.url
+                        ? window.open(task.url, "_blank", "noopener,noreferrer")
+                        : onOpenDay(day.date)
+                    }
+                    className="shrink-0 text-muted transition-colors hover:text-accent"
+                  >
+                    <PlainIcon name="chevronRight" size={14} />
+                  </button>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2 sm:hidden">
+                  <button
+                    type="button"
+                    onClick={() => onOpenDay(day.date)}
+                    className="text-[10px] tabular text-muted hover:text-accent"
+                  >
+                    {shortDate(day.date)}
+                  </button>
+                  <CategoryChip type={task.type} />
+                </div>
               </li>
             ))}
           </ul>

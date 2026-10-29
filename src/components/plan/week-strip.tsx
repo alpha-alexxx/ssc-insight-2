@@ -115,7 +115,7 @@ export function WeekStripPanel({
     >
       <div className="px-4 pb-5 sm:px-6 sm:pb-6">
         <div
-          className="grid grid-cols-7 gap-2 sm:gap-3"
+          className="grid grid-cols-7 gap-1.5 sm:gap-2 md:gap-3"
           aria-label="Days around the current week"
         >
           {dates.map((date) => {
@@ -159,7 +159,7 @@ function WeekCell({
       aria-current={isToday ? "date" : undefined}
       aria-label={`${day.weekday} ${day.date}: ${stats.completed} of ${stats.total} assignments done${hasMock ? ", includes a mock test" : ""}`}
       className={cn(
-        "flex min-w-0 flex-col items-start gap-2 rounded-panel border px-3 py-3.5 text-left transition-colors duration-150 active:translate-y-px motion-reduce:active:translate-y-0",
+        "flex min-w-0 flex-col items-start gap-1.5 rounded-panel border px-2 py-2.5 text-left transition-colors duration-150 active:translate-y-px motion-reduce:active:translate-y-0 sm:gap-2 sm:px-3 sm:py-3.5",
         isToday
           ? "border-accent bg-accent-soft"
           : past
@@ -177,12 +177,17 @@ function WeekCell({
           {isoWeekdayShort(day.date)}
         </span>
         {isToday && (
-          <span className="rounded-pill bg-ink px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-paper">
+          <span className="hidden rounded-pill bg-ink px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-paper sm:inline-flex">
             Today
           </span>
         )}
       </span>
-      <span className="font-serif text-[24px] leading-none tabular text-ink">
+      <span
+        className={cn(
+          "font-serif text-[18px] leading-none tabular text-ink sm:text-[24px]",
+          isToday && "underline decoration-accent decoration-2 underline-offset-4",
+        )}
+      >
         {Number(day.date.slice(-2))}
       </span>
       <span className="flex w-full items-center justify-between gap-1.5">
@@ -200,7 +205,7 @@ function WeekCell({
           )}
           {hasMock && <span className="size-2.5 rounded-full bg-accent" />}
         </span>
-        <span className="text-[11px] tabular text-muted">
+        <span className="hidden text-[11px] tabular text-muted sm:block">
           {stats.total ? `${stats.completed}/${stats.total}` : "—"}
         </span>
       </span>
@@ -212,19 +217,19 @@ function EmptyCell({ date }: { date: string }) {
   return (
     <div
       aria-hidden="true"
-      className="flex min-w-0 flex-col items-start gap-2 rounded-panel border border-rule-soft/60 bg-canvas px-3 py-3.5 text-muted"
+      className="flex min-w-0 flex-col items-start gap-1.5 rounded-panel border border-rule-soft/60 bg-canvas px-2 py-2.5 text-muted sm:gap-2 sm:px-3 sm:py-3.5"
     >
       <span className="text-[10px] uppercase tracking-[0.12em]">
         {isoWeekdayShort(date)}
       </span>
-      <span className="font-serif text-[24px] leading-none tabular">
+      <span className="font-serif text-[18px] leading-none tabular sm:text-[24px]">
         {Number(date.slice(-2))}
       </span>
       <span className="flex h-2.5 w-full items-center justify-between">
         <span className="flex items-center gap-1">
           <DoneDot className="border-rule/50 bg-canvas" />
         </span>
-        <span className="text-[11px] tabular">—</span>
+        <span className="hidden text-[11px] tabular sm:block">—</span>
       </span>
     </div>
   );
@@ -248,7 +253,7 @@ export function WeekStripSkeleton() {
         aria-label="Loading the days around today"
       >
         {Array.from({ length: 7 }).map((_, index) => (
-          <Skeleton key={index} className="h-[104px] w-full sm:h-[112px]" />
+          <Skeleton key={index} className="h-[84px] w-full sm:h-[112px]" />
         ))}
       </div>
     </div>

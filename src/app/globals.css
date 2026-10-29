@@ -1336,6 +1336,22 @@ html {
     font-size: 21px;
   }
 }
+/* Small tablets: 6 nowrap columns bleed across the hairline dividers, so
+   drop to a 3×2 grid and let the values wrap if still tight. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .performance-meta {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .performance-meta > div:nth-child(3n + 1) {
+    border-left: 0;
+  }
+  .performance-meta > div:nth-child(n + 4) {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .performance-meta dd {
+    white-space: normal;
+  }
+}
 /* Very narrow phones: tighten segmented controls so four options fit. */
 @media (max-width: 420px) {
   .segment {

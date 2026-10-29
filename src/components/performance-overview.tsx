@@ -692,7 +692,7 @@ function AttemptBreakdown({ analytics }: { analytics: Analytics }) {
       }
       className="mb-4"
     >
-      <div className="grid gap-5 px-5 pb-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid gap-5 px-4 pb-5 sm:px-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="flex flex-wrap items-center justify-center gap-6 sm:justify-start">
           <div className="relative shrink-0">
             <BreakdownDonut
@@ -867,7 +867,7 @@ function OverviewDonutCards({
       }
       className="mb-4"
     >
-      <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 px-4 pb-5 sm:px-5 sm:grid-cols-2 xl:grid-cols-4">
         {stacks.map((stack) => (
           <div
             key={stack.id}
@@ -955,7 +955,7 @@ function GroupedScoreBars({ analytics }: { analytics: Analytics }) {
       description={`Your score in each ${scope === "subject" ? "subject" : "section"} across recent mocks, as a percentage of that paper.`}
       className="mb-4"
     >
-      <div className="px-5 pb-4">
+      <div className="px-4 pb-4 sm:px-5">
         <ChartContainer
           config={config}
           className="!aspect-auto h-[260px] w-full"
@@ -1052,7 +1052,7 @@ function ScoreDistribution({ analytics }: { analytics: Analytics }) {
       description="Distribution of scores across all attempted mocks."
       className="mb-4"
     >
-      <div className="px-5 pb-4">
+      <div className="px-4 pb-4 sm:px-5">
         <ChartContainer
           config={{ count: { label: "Mocks", color: "var(--chart-score)" } }}
           className="!aspect-auto h-[220px] w-full"
@@ -1171,7 +1171,7 @@ function SubjectLines({ analytics }: { analytics: Analytics }) {
         title="Accuracy over attempts (Subject wise)"
         description="How accuracy changes with more attempts."
       >
-        <div className="px-5 pb-4">
+        <div className="px-4 pb-4 sm:px-5">
           {accuracyRows.length ? (
             <ChartContainer config={config} className="!aspect-auto h-[220px] w-full">
               <LineChart data={accuracyRows} margin={{ left: 0, right: 10, top: 8, bottom: 0 }} accessibilityLayer>
@@ -1192,7 +1192,7 @@ function SubjectLines({ analytics }: { analytics: Analytics }) {
         title="Time per attempt (Subject wise)"
         description="Average minutes spent per attempt in each subject."
       >
-        <div className="px-5 pb-4">
+        <div className="px-4 pb-4 sm:px-5">
           {timeRows.length ? (
             <ChartContainer config={config} className="!aspect-auto h-[220px] w-full">
               <LineChart data={timeRows} margin={{ left: 0, right: 10, top: 8, bottom: 0 }} accessibilityLayer>
@@ -1238,7 +1238,7 @@ function TargetPanel({
     label: dateLabel(snapshot.date),
   }));
   return (
-    <div className="px-5 pb-5">
+    <div className="px-4 pb-5 sm:px-5">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 py-2">
         <div className="flex items-start gap-3">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent" aria-hidden="true">
@@ -1443,7 +1443,7 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
     label: dateLabel(point.date),
   }));
   return (
-    <div className="px-5 pb-4">
+    <div className="px-4 pb-4 sm:px-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap gap-6 pt-1">
           <div className="flex items-center gap-2.5">

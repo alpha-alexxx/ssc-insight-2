@@ -47,7 +47,7 @@ export function AiCoachCard({
         </Button>
       }
     >
-      <div className="px-6 pb-5">
+      <div className="px-4 pb-4 sm:px-6 sm:pb-5">
         {error && (
           <p
             role="alert"

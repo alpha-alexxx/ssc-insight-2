@@ -155,7 +155,7 @@ function ChartTooltipContent({
   return (
     <div
       className={cn(
-        "grid min-w-[9rem] items-start gap-1.5 border border-rule bg-paper px-3 py-2 text-xs",
+        "grid min-w-[7rem] max-w-[min(12rem,calc(100%-1rem))] items-start gap-1.5 border border-rule bg-paper px-3 py-2 text-xs sm:min-w-[9rem]",
         className,
       )}
     >
