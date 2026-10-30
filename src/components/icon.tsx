@@ -42,6 +42,7 @@ import {
   FileCheck2,
   GitCompareArrows,
   Layers3,
+  LogOut,
   Minus,
   Monitor,
   Plus,
@@ -100,6 +101,7 @@ export type IconName =
   | "more"
   | "paste"
   | "sparkles"
+  | "logout"
   // data & files
   | "download"
   | "upload"
@@ -168,6 +170,7 @@ const ICONS: Record<IconName, IconEntry> = {
   compare: { lucide: GitCompareArrows },
   help: { lucide: CircleHelp },
   plus: { lucide: Plus },
+  logout: { lucide: LogOut },
   check: { lucide: Check },
   close: { lucide: X },
   search: { lucide: Search },

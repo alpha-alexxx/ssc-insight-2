@@ -1,9 +1,19 @@
 "use client";
 import Link from "next/link";
-import { AuthControl } from "./auth-control";
+import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
+import { AuthControl, useAuthActions } from "./auth-control";
 import { DuotoneIcon, PlainIcon } from "./icon";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -317,81 +327,11 @@ export function AppSidebar({
       <SidebarFooter className="border-t border-rule-soft bg-canvas/60">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              isActive={view === "settings"}
-              tooltip="Settings"
-              className="data-[active=true]:bg-accent-soft data-[active=true]:text-accent data-[active=true]:hover:bg-accent-soft"
-            >
-              <Link
-                href={VIEW_HREF.settings}
-                aria-current={view === "settings" ? "page" : undefined}
-                onClick={() => {
-                  onRouteIntent("settings");
-                  setOpenMobile(false);
-                }}
-              >
-                <PlainIcon
-                  name="settings"
-                  size={17}
-                  tone={view === "settings" ? "accent" : "ink"}
-                />
-                <span className={cn(COLLAPSED_TEXT_SPAN)}>Settings</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-            <div className="flex min-h-10 w-full items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-sm text-ink">
-              <span className="flex items-center gap-2.5">
-                <PlainIcon name="moon" size={16} tone="ink" />
-                Dark mode
-              </span>
-              <ThemeToggle className="size-7" />
-            </div>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              size="lg"
-              tooltip={userName || "My workspace"}
-              className="gap-2.5 rounded-control"
-            >
-              <Link
-                href={VIEW_HREF.settings}
-                aria-label="Account settings"
-                onClick={() => {
-                  onRouteIntent("settings");
-                  setOpenMobile(false);
-                }}
-              >
-                <span
-                  className="sidebar-avatar grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[0.625rem] font-semibold tracking-wide text-paper"
-                  aria-hidden="true"
-                >
-                  {initials(userName)}
-                </span>
-                <span
-                  className={cn(
-                    "grid min-w-0 flex-1 text-left leading-tight",
-                    COLLAPSED_TEXT_SPAN,
-                  )}
-                >
-                  <span className="truncate text-xs font-medium">
-                    {userName || "My workspace"}
-                  </span>
-                  <span className="truncate text-[0.625rem] text-muted">
-                    {userEmail || "Private account"}
-                  </span>
-                </span>
-                <PlainIcon
-                  name="chevronRight"
-                  size={13}
-                  className="ml-auto shrink-0 text-muted group-data-[collapsible=icon]:hidden"
-                />
-              </Link>
-            </SidebarMenuButton>
+            <UserMenu
+              userName={userName}
+              userEmail={userEmail}
+              onRouteIntent={onRouteIntent}
+            />
           </SidebarMenuItem>
         </SidebarMenu>
         <p className="mx-2 flex items-center gap-1.5 border-t border-rule-soft pt-2 text-[0.625rem] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
@@ -401,6 +341,101 @@ export function AppSidebar({
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+/**
+ * Sidebar user banner as a dropdown: account settings, theme toggle, and
+ * sign out in one menu. The banner keeps its collapsed-rail behavior (avatar
+ * only, tooltip) and opens to the right when the sidebar is icon-collapsed.
+ */
+function UserMenu({
+  userName,
+  userEmail,
+  onRouteIntent,
+}: {
+  userName: string;
+  userEmail: string;
+  onRouteIntent: (view: AppView) => void;
+}) {
+  const router = useRouter();
+  const { setOpenMobile, state } = useSidebar();
+  const { resolvedTheme, setTheme } = useTheme();
+  const { busy, signOut } = useAuthActions();
+  const dark = resolvedTheme === "dark";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <SidebarMenuButton
+          size="lg"
+          tooltip={userName || "My workspace"}
+          aria-label="Account menu"
+          className="gap-2.5 rounded-control data-[state=open]:bg-soft"
+        >
+          <span
+            className="sidebar-avatar grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[0.625rem] font-semibold tracking-wide text-paper"
+            aria-hidden="true"
+          >
+            {initials(userName)}
+          </span>
+          <span
+            className={cn(
+              "grid min-w-0 flex-1 text-left leading-tight",
+              COLLAPSED_TEXT_SPAN,
+            )}
+          >
+            <span className="truncate text-xs font-medium">
+              {userName || "My workspace"}
+            </span>
+            <span className="truncate text-[0.625rem] text-muted">
+              {userEmail || "Private account"}
+            </span>
+          </span>
+          <PlainIcon
+            name="chevronRight"
+            size={13}
+            className="ml-auto shrink-0 rotate-90 text-muted group-data-[collapsible=icon]:hidden"
+          />
+        </SidebarMenuButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side={state === "collapsed" ? "right" : "top"}
+        align="start"
+        className="min-w-[13rem]"
+      >
+        <DropdownMenuLabel className="normal-case tracking-normal">
+          <span className="block truncate text-xs font-medium text-ink">
+            {userName || "My workspace"}
+          </span>
+          <span className="block truncate text-[0.625rem] font-normal text-muted">
+            {userEmail || "Private account"}
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            onRouteIntent("settings");
+            setOpenMobile(false);
+            router.push(VIEW_HREF.settings);
+          }}
+        >
+          <PlainIcon name="settings" size={15} />
+          Settings
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => setTheme(dark ? "light" : "dark")}
+        >
+          <PlainIcon name={dark ? "sun" : "moon"} size={15} />
+          {dark ? "Light mode" : "Dark mode"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem danger disabled={busy} onSelect={signOut}>
+          <PlainIcon name="logout" size={15} />
+          {busy ? "Signing out…" : "Sign out"}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 /** Props for {@link AppHeader}. */

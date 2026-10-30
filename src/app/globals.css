@@ -837,6 +837,12 @@
   .popover-content {
     animation: popover-in 180ms var(--ease-out-soft);
   }
+  .dropdown-content {
+    animation: popover-in 160ms var(--ease-out-soft);
+  }
+  .dropdown-content[data-state="closed"] {
+    animation: none;
+  }
 
   /* ---------- Sheet (shadcn Dialog primitive, project motion) ----------
      The generated shadcn component was written for tw-animate-css, which
