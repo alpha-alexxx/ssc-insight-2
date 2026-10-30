@@ -1221,36 +1221,29 @@
     background: var(--accent-soft);
     padding: 10px 12px;
   }
-  /* Quiet metadata row under a section heading — labels, values, and
-     hairline dividers instead of a second headline stat strip. */
-  .performance-meta {
+  /* ---------- Performance score band ----------
+     The analytical headline of the Performance section: one ink-ruled
+     strip of serif figures, re-read with every scope/filter change. Pure
+     type — no icons, no chevrons, no hover fill — so it reads as the
+     ledger the charts below are drawn from, distinct from the dashboard's
+     linked metric-strip cells. Cell innards reuse the metric-* classes. */
+  .score-band {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    margin-bottom: 16px;
-    border-block: 1px solid var(--rule-soft);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-block: var(--stat-rule-width) solid var(--ink);
+    background: var(--paper);
+    overflow: hidden;
   }
-  .performance-meta > div {
+  .score-band > div {
     min-width: 0;
-    padding: 10px 14px;
+    padding: 18px 20px 16px;
   }
-  .performance-meta > div + div {
+  .score-band > div + div {
     border-left: 1px solid var(--rule-soft);
   }
-  .performance-meta dt {
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .performance-meta dd {
-    margin-top: 3px;
-    font-family: var(--font-heading);
-    font-size: 16px;
-    font-weight: 550;
-    line-height: 1.2;
-    letter-spacing: -0.015em;
-    white-space: nowrap;
+  /* With a target set the band carries a fifth cell. */
+  .score-band.is-five {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
   /* Two-up segmented control: same components, full-row hit areas. */
   .segment-group.is-block {
@@ -1468,17 +1461,22 @@ html {
   .metric-value {
     font-size: 24px;
   }
-  .performance-meta {
+  .score-band {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .performance-meta > div:nth-child(odd) {
+  .score-band > div {
+    padding: 12px 14px;
+  }
+  .score-band > div:nth-child(3) {
     border-left: 0;
   }
-  .performance-meta > div:nth-child(n + 3) {
+  .score-band > div:nth-child(n + 3) {
     border-top: 1px solid var(--rule-soft);
   }
-  .performance-meta dd {
-    font-size: 15px;
+  /* The conditional target cell closes the band full-width on phones. */
+  .score-band > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    border-left: 0;
   }
   .stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1497,22 +1495,6 @@ html {
   }
   .panel-title {
     font-size: 21px;
-  }
-}
-/* Small tablets: 6 nowrap columns bleed across the hairline dividers, so
-   drop to a 3×2 grid and let the values wrap if still tight. */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .performance-meta {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .performance-meta > div:nth-child(3n + 1) {
-    border-left: 0;
-  }
-  .performance-meta > div:nth-child(n + 4) {
-    border-top: 1px solid var(--rule-soft);
-  }
-  .performance-meta dd {
-    white-space: normal;
   }
 }
 /* Very narrow phones: tighten segmented controls so four options fit. */
