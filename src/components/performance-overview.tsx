@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useId, memo, useState } from "react";
-import { Lightbulb, Flag, Pencil } from "lucide-react";
+import { Lightbulb, Pencil } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -108,6 +108,29 @@ function trendRows(analytics: Analytics) {
     rows.set(key, row);
   }
   return [...rows.values()];
+}
+/** Single-series trend dot: a haloed marker on the latest result, quiet dots elsewhere. */
+function TrendDot({
+  color,
+  latestKey,
+  cx,
+  cy,
+  payload,
+}: {
+  color: string;
+  latestKey: string | null;
+  cx?: number;
+  cy?: number;
+  payload?: TrendRow;
+}) {
+  if (cx == null || cy == null || !payload) return null;
+  const isLatest = payload.key === latestKey;
+  return (
+    <g>
+      {isLatest && <circle cx={cx} cy={cy} r={7} fill={color} opacity={0.2} />}
+      <circle cx={cx} cy={cy} r={isLatest ? 4 : 3} fill={color} />
+    </g>
+  );
 }
 function ViewData({
   columns,
@@ -220,6 +243,7 @@ function ScopeTrend({
     );
   }
   const singleSeries = trend.series.length === 1;
+  const lastRowKey = rows.length ? rows[rows.length - 1]!.key : null;
   return (
     <>
       <ChartContainer
@@ -278,6 +302,12 @@ function ScopeTrend({
               stroke={targetColor}
               strokeDasharray="4 4"
               ifOverflow="extendDomain"
+              label={{
+                value: `Target ${n(target)}%`,
+                position: "insideTopRight",
+                fill: "var(--muted)",
+                fontSize: 10,
+              }}
             />
           )}
           <ChartTooltip
@@ -321,7 +351,16 @@ function ScopeTrend({
               stroke={`var(--color-${series.id})`}
               strokeWidth={2}
               fill={`url(#${uid}-${series.id})`}
-              dot={{ r: 3, fill: `var(--color-${series.id})` }}
+              dot={
+                singleSeries ? (
+                  <TrendDot
+                    color={`var(--color-${series.id})`}
+                    latestKey={lastRowKey}
+                  />
+                ) : (
+                  { r: 3, fill: `var(--color-${series.id})` }
+                )
+              }
               connectNulls={false}
               label={
                 singleSeries
@@ -346,8 +385,8 @@ function ScopeTrend({
       </p>
       {target != null && (
         <p className="pb-1 text-center text-[10px] muted">
-          Dashed line marks your target at {n(target)}% ·{" "}
-          {n((target / 100) * FULL_MOCK_MAX_SCORE)} / {FULL_MOCK_MAX_SCORE}
+          Dashed line: your target, {n((target / 100) * FULL_MOCK_MAX_SCORE)} /{" "}
+          {FULL_MOCK_MAX_SCORE} marks
         </p>
       )}
       <p className="sr-only">
@@ -486,25 +525,32 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
               ? "Log at least three subjects to see the full profile."
               : "Log subject results to discover your strengths."}
           </EmptyChart>
-          {populated.map((row) => (
-            <div key={row.subjectId}>
-              <div className="flex justify-between text-xs mb-1.5">
-                <span>{row.label}</span>
-                <strong className="tabular font-medium">
+          {/* The radar's fallback reads as the ruled report language: one
+              hairline row per subject, inline bar, figure right. */}
+          <div className="border-t border-rule-soft">
+            {populated.map((row) => (
+              <div
+                key={row.subjectId}
+                className="flex items-center gap-3 border-b border-rule-soft py-2.5"
+              >
+                <span className="w-24 shrink-0 truncate text-xs">
+                  {row.label}
+                </span>
+                <div className="h-1.5 min-w-0 flex-1 overflow-hidden bg-soft">
+                  <div
+                    className="h-full"
+                    style={{
+                      width: `${Math.max(0, row.averagePercentage ?? 0)}%`,
+                      background: subjectColors[row.subjectId],
+                    }}
+                  />
+                </div>
+                <strong className="w-12 shrink-0 text-right text-xs font-medium tabular">
                   {n(row.averagePercentage)}%
                 </strong>
               </div>
-              <div className="h-1.5 bg-soft overflow-hidden">
-                <div
-                  className="h-full"
-                  style={{
-                    width: `${Math.max(0, row.averagePercentage ?? 0)}%`,
-                    background: subjectColors[row.subjectId],
-                  }}
-                />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
       {insight && (
@@ -531,85 +577,165 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
     </div>
   );
 }
-/* ---------- Performance metadata row ----------
- * Deliberately not a second headline stat strip: the dashboard overview owns
- * the headline metrics, so this reads as a quiet glossary of the numbers the
- * charts below are built from — labels, values, hairline dividers, no tiles.
+/* ---------- Score band ----------
+ * The section's opening statement: one ink-ruled strip of serif figures that
+ * re-reads with every scope/filter change. Marks lead on the full-mock scope
+ * (the 390-mark paper is the exam's own unit); percentages lead everywhere
+ * else. Deltas are always percentage points against the previous result.
  */
-function PerformanceMeta({ analytics }: { analytics: Analytics }) {
+function ScoreBand({
+  analytics,
+  target,
+}: {
+  analytics: Analytics;
+  target: number | null;
+}) {
   const { scope, summary, trend } = analytics;
   const points = trend.points;
   const isFull = scope === "full";
+  const latest = points.at(-1) ?? null;
+  const previous = points.at(-2) ?? null;
+  const latestDelta =
+    latest && previous ? latest.percentage - previous.percentage : null;
+  const averagePercentage = points.length
+    ? points.reduce((total, point) => total + point.percentage, 0) /
+      points.length
+    : null;
   const averageMarks = points.length
     ? points.reduce((total, point) => total + point.score, 0) / points.length
     : null;
-  const bestMarks = points.length
-    ? Math.max(...points.map((point) => point.score))
+  const best = points.length
+    ? points.reduce(
+        (best, point) => (point.score > best.score ? point : best),
+        points[0]!,
+      )
     : null;
-  const delta =
-    summary.latestSnapshotPercentage != null &&
-    summary.previousSnapshotPercentage != null
-      ? summary.latestSnapshotPercentage - summary.previousSnapshotPercentage
-      : null;
-  const items: { label: string; value: string; tone?: string }[] = [
-    { label: "Mocks", value: n(analytics.sourceAttemptCount) },
-    {
-      label: "Average",
-      value:
-        isFull && averageMarks != null
-          ? `${n(averageMarks)} / ${FULL_MOCK_MAX_SCORE}`
-          : summary.averagePercentage != null
-            ? `${n(summary.averagePercentage)}%`
-            : "—",
-    },
-    {
-      label: "Best",
-      value:
-        isFull && bestMarks != null
-          ? `${n(bestMarks)} / ${FULL_MOCK_MAX_SCORE}`
-          : summary.bestPercentage != null
-            ? `${n(summary.bestPercentage)}%`
-            : "—",
-    },
-    {
-      label: "Accuracy",
-      value:
-        summary.weightedAccuracy != null
-          ? `${n(summary.weightedAccuracy)}%`
-          : "—",
-    },
-    {
-      label: "Results",
-      value: n(analytics.pointCount),
-    },
-    {
-      label: "Versus previous",
-      value:
-        delta == null
-          ? "—"
-          : `${delta > 0 ? "+" : ""}${n(delta)} pts`,
-      tone:
-        delta == null
-          ? undefined
-          : delta > 0.05
-            ? "text-positive"
-            : delta < -0.05
-              ? "text-danger"
-              : "text-muted",
-    },
-  ];
+  const targetPercent = targetPercentage(target);
+  const targetGap =
+    latest && targetPercent != null ? latest.percentage - targetPercent : null;
+  const deltaTone = (delta: number | null) =>
+    delta == null
+      ? "is-flat"
+      : delta > 0.05
+        ? "is-up"
+        : delta < -0.05
+          ? "is-down"
+          : "is-flat";
+  const marks = (value: number) => (
+    <>
+      {n(value)}
+      <span className="text-sm font-normal text-muted">
+        {" "}
+        / {FULL_MOCK_MAX_SCORE}
+      </span>
+    </>
+  );
   return (
-    <dl className="performance-meta">
-      {items.map(({ label, value, tone }) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd className={cn("tabular", tone)}>{value}</dd>
+    <div className={cn("score-band", target != null && "is-five")}>
+      <div>
+        <p className="metric-label">Latest</p>
+        <p className="metric-figure">
+          <span className="metric-value tabular">
+            {latest ? (isFull ? marks(latest.score) : `${n(latest.percentage)}%`) : "—"}
+          </span>
+          {latestDelta != null && (
+            <span className={cn("metric-delta", deltaTone(latestDelta))}>
+              {latestDelta > 0 ? "+" : ""}
+              {n(latestDelta)} pts
+            </span>
+          )}
+        </p>
+        <p className="metric-hint truncate">
+          {latest
+            ? `${dateLabel(latest.date)} · ${
+                isFull ? `${n(latest.percentage)}%` : latest.seriesLabel
+              }`
+            : "Log a mock to begin"}
+        </p>
+      </div>
+      <div>
+        <p className="metric-label">Average</p>
+        <p className="metric-figure">
+          <span className="metric-value tabular">
+            {averagePercentage != null
+              ? isFull
+                ? marks(averageMarks!)
+                : `${n(averagePercentage)}%`
+              : "—"}
+          </span>
+        </p>
+        <p className="metric-hint truncate">
+          {points.length
+            ? isFull
+              ? `${n(averagePercentage)}% avg · ${n(analytics.sourceAttemptCount)} mocks`
+              : `across ${n(analytics.sourceAttemptCount)} mocks`
+            : "no results yet"}
+        </p>
+      </div>
+      <div>
+        <p className="metric-label">Best</p>
+        <p className="metric-figure">
+          <span className="metric-value tabular">
+            {best
+              ? isFull
+                ? marks(best.score)
+                : `${n(best.percentage)}%`
+              : "—"}
+          </span>
+        </p>
+        <p className="metric-hint truncate">
+          {best
+            ? isFull
+              ? `${n(best.percentage)}% · ${dateLabel(best.date)}`
+              : dateLabel(best.date)
+            : "no results yet"}
+        </p>
+      </div>
+      <div>
+        <p className="metric-label">Accuracy</p>
+        <p className="metric-figure">
+          <span className="metric-value tabular">
+            {summary.weightedAccuracy != null
+              ? `${n(summary.weightedAccuracy)}%`
+              : "—"}
+          </span>
+        </p>
+        <p className="metric-hint truncate">
+          {summary.questions
+            ? `${n(summary.correct)} of ${n(summary.questions)} correct`
+            : "no questions recorded"}
+        </p>
+      </div>
+      {target != null && (
+        <div>
+          <p className="metric-label">Target</p>
+          <p className="metric-figure">
+            <span
+              className={cn(
+                "metric-value tabular",
+                targetGap == null
+                  ? undefined
+                  : targetGap >= 0
+                    ? "text-positive"
+                    : "text-danger",
+              )}
+            >
+              {targetGap == null
+                ? "—"
+                : `${targetGap > 0 ? "+" : ""}${n(targetGap)} pts`}
+            </span>
+          </p>
+          <p className="metric-hint truncate">
+            {isFull
+              ? `target ${n(target)} / ${FULL_MOCK_MAX_SCORE}`
+              : `target ${n(targetPercent ?? 0)}%`}
+          </p>
         </div>
-      ))}
-    </dl>
+      )}
+    </div>
   );
 }
-/* ---------- Attempt breakdown (donut + bars + chips + tip) ---------- */
+/* ---------- Attempt breakdown (donut + bars + tip) ---------- */
 function BreakdownDonut({ segments }: { segments: { value: number; color: string }[] }) {
   const total = segments.reduce((sum, segment) => sum + segment.value, 0);
   const radius = 15.915;
@@ -644,15 +770,14 @@ function BreakdownDonut({ segments }: { segments: { value: number; color: string
     </svg>
   );
 }
-function AttemptBreakdown({ analytics }: { analytics: Analytics }) {
-  const { summary, trend } = analytics;
-  const points = trend.points;
-  const bestMarks = points.length
-    ? Math.max(...points.map((point) => point.score))
-    : null;
-  const bestPct = points.length
-    ? Math.max(...points.map((point) => point.percentage))
-    : null;
+function AttemptBreakdown({
+  analytics,
+  className,
+}: {
+  analytics: Analytics;
+  className?: string;
+}) {
+  const { summary } = analytics;
   const rows = [
     {
       label: "Correct",
@@ -686,11 +811,13 @@ function AttemptBreakdown({ analytics }: { analytics: Analytics }) {
     <Panel
       title="Make every attempt count"
       description={
-        analytics.scope === "all"
-          ? "Breakdown of your attempts across all mocks."
-          : "Breakdown of your full mock attempts."
+        summary.questions
+          ? `${n(summary.questions)} questions across ${n(analytics.sourceAttemptCount)} mocks.`
+          : analytics.scope === "all"
+            ? "Breakdown of your attempts across all mocks."
+            : "Breakdown of your full mock attempts."
       }
-      className="mb-4"
+      className={className}
     >
       <div className="grid gap-5 px-4 pb-5 sm:px-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="flex flex-wrap items-center justify-center gap-6 sm:justify-start">
@@ -748,100 +875,18 @@ function AttemptBreakdown({ analytics }: { analytics: Analytics }) {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            <div className="flex items-center gap-2.5 rounded-control border border-rule-soft px-3 py-2.5">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
-                <PlainIcon name="target" size={14} />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate font-serif text-base leading-none tabular text-ink">
-                  {n(summary.questions)}
-                </p>
-                <p className="mt-0.5 truncate text-[10px] text-muted">
-                  Total questions
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 rounded-control border border-rule-soft px-3 py-2.5">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-positive-soft text-positive" aria-hidden="true">
-                <PlainIcon name="success" size={14} />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate font-serif text-base leading-none tabular text-ink">
-                  {summary.weightedAccuracy != null
-                    ? `${n(summary.weightedAccuracy)}%`
-                    : "—"}
-                </p>
-                <p className="mt-0.5 truncate text-[10px] text-muted">Accuracy</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5 rounded-control border border-rule-soft px-3 py-2.5">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning" aria-hidden="true">
-                <PlainIcon name="award" size={14} />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate font-serif text-base leading-none tabular text-ink">
-                  {bestMarks != null ? `${n(bestMarks)} / 390` : bestPct != null ? `${n(bestPct)}%` : "—"}
-                </p>
-                <p className="mt-0.5 truncate text-[10px] text-muted">
-                  Highest score
-                </p>
-              </div>
-            </div>
-          </div>
+        <div className="flex flex-col justify-center">
           <InsightCallout>{tip}</InsightCallout>
         </div>
       </div>
     </Panel>
   );
 }
-/* ---------- Per-subject / per-section donut cards ---------- */
-function AccuracyDonut({
-  value,
-  color,
-  size = 72,
-}: {
-  value: number | null;
-  color: string;
-  size?: number;
-}) {
-  const radius = 15.915;
-  const circumference = 2 * Math.PI * radius;
-  const fraction = value == null ? 0 : Math.max(0, Math.min(1, value / 100));
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg viewBox="0 0 40 40" className="size-full -rotate-90" aria-hidden="true">
-        <circle cx="20" cy="20" r={radius} fill="none" strokeWidth="4" style={{ stroke: "var(--soft)" }} />
-        <circle
-          cx="20"
-          cy="20"
-          r={radius}
-          fill="none"
-          strokeWidth="4"
-          strokeLinecap="round"
-          style={{
-            stroke: color,
-            strokeDasharray: `${circumference * fraction} ${circumference}`,
-          }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <p className="font-serif text-base leading-none tabular text-ink">
-          {value == null ? "—" : `${n(value)}%`}
-        </p>
-        <p className="mt-0.5 text-[8px] uppercase tracking-[0.08em] text-muted">
-          Accuracy
-        </p>
-      </div>
-    </div>
-  );
-}
-function OverviewDonutCards({
-  analytics,
-}: {
-  analytics: Analytics;
-}) {
+/* ---------- Scope report table (subject / sectional) ----------
+ * The per-entity ledger: a ruled marksheet instead of a grid of identical
+ * donut cards — color tick per row, an inline accuracy bar, and the score
+ * as the closing column. Scrolls horizontally on phones (.table-scroll). */
+function ScopeReportTable({ analytics }: { analytics: Analytics }) {
   const stacks = analytics.radial.filter((stack) => stack.total > 0);
   if (!stacks.length)
     return (
@@ -853,74 +898,77 @@ function OverviewDonutCards({
     analytics.scope === "subject"
       ? subjectColors[id as SubjectId]
       : sectionColors[id as SectionId];
+  const isSubject = analytics.scope === "subject";
   return (
     <Panel
-      title={
-        analytics.scope === "subject"
-          ? "Subject-wise overview"
-          : "Section-wise performance"
-      }
+      title={isSubject ? "Subject report" : "Section report"}
       description={
-        analytics.scope === "subject"
-          ? "Questions attempted, accuracy and score in each subject."
-          : "Accuracy and score in each section."
+        isSubject
+          ? "Accuracy, attempts and score in each subject, across every mock in view."
+          : "Accuracy, attempts and score in each section, across every mock in view."
       }
       className="mb-4"
     >
-      <div className="grid gap-3 px-4 pb-5 sm:px-5 sm:grid-cols-2 xl:grid-cols-4">
-        {stacks.map((stack) => (
-          <div
-            key={stack.id}
-            className="flex flex-col gap-3 rounded-panel border border-rule-soft p-4"
-          >
-            <p className="flex items-center gap-2 text-sm font-medium text-ink">
-              <span
-                className="size-2 rounded-full"
-                style={{ background: colorOf(stack.id) }}
-                aria-hidden="true"
-              />
-              {stack.label}
-            </p>
-            <div className="flex items-center gap-4">
-              <AccuracyDonut value={stack.accuracy} color={colorOf(stack.id)} />
-              <div className="min-w-0 flex-1 space-y-1.5 text-[11px]">
-                <p className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-muted">
-                    <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
-                    Attempted
-                  </span>
-                  <span className="font-medium tabular text-ink">
-                    {n(stack.correct + stack.incorrect)} / {n(stack.total)}
-                  </span>
-                </p>
-                <p className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-muted">
-                    <span className="size-1.5 rounded-full bg-positive" aria-hidden="true" />
-                    Correct
-                  </span>
-                  <span className="font-medium tabular text-ink">
-                    {n(stack.correct)}
-                  </span>
-                </p>
-                <p className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-muted">
-                    <span className="size-1.5 rounded-full bg-danger" aria-hidden="true" />
-                    Incorrect
-                  </span>
-                  <span className="font-medium tabular text-ink">
-                    {n(stack.incorrect)}
-                  </span>
-                </p>
-              </div>
-            </div>
-            <p className="flex items-center justify-between border-t border-rule-soft pt-2.5 text-[11px]">
-              <span className="text-muted">Score</span>
-              <span className="font-semibold tabular text-ink">
-                {n(stack.score)} / {n(stack.maxScore)}
-              </span>
-            </p>
-          </div>
-        ))}
+      <div className="px-4 pb-4 sm:px-5">
+        <div className="table-scroll">
+          <table className="w-full min-w-[620px]">
+            <thead>
+              <tr>
+                <th className="sticky-col">{isSubject ? "Subject" : "Section"}</th>
+                <th>Accuracy</th>
+                <th>Attempted</th>
+                <th>Correct</th>
+                <th>Incorrect</th>
+                <th className="text-right">Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stacks.map((stack) => {
+                const attempted = stack.correct + stack.incorrect;
+                return (
+                  <tr key={stack.id}>
+                    <td className="sticky-col">
+                      <span className="flex items-center gap-2 whitespace-nowrap font-medium">
+                        <span
+                          className="size-2 shrink-0 rounded-full"
+                          style={{ background: colorOf(stack.id) }}
+                          aria-hidden="true"
+                        />
+                        {stack.label}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="flex items-center gap-2.5">
+                        <span className="h-1.5 w-20 shrink-0 overflow-hidden bg-soft">
+                          <span
+                            className="block h-full"
+                            style={{
+                              width: `${Math.max(0, Math.min(100, stack.accuracy ?? 0))}%`,
+                              background: colorOf(stack.id),
+                            }}
+                          />
+                        </span>
+                        <span className="tabular">
+                          {stack.accuracy == null
+                            ? "—"
+                            : `${n(stack.accuracy)}%`}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="tabular">
+                      {n(attempted)} / {n(stack.total)}
+                    </td>
+                    <td className="tabular">{n(stack.correct)}</td>
+                    <td className="tabular">{n(stack.incorrect)}</td>
+                    <td className="text-right font-medium tabular">
+                      {n(stack.score)} / {n(stack.maxScore)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </Panel>
   );
@@ -1030,7 +1078,13 @@ function GroupedScoreBars({ analytics }: { analytics: Analytics }) {
   );
 }
 /* ---------- Score distribution histogram (all / full) ---------- */
-function ScoreDistribution({ analytics }: { analytics: Analytics }) {
+function ScoreDistribution({
+  analytics,
+  className,
+}: {
+  analytics: Analytics;
+  className?: string;
+}) {
   const points = analytics.trend.points;
   if (points.length < 3) return null;
   const buckets = Array.from({ length: 10 }, (_, index) => ({
@@ -1050,7 +1104,7 @@ function ScoreDistribution({ analytics }: { analytics: Analytics }) {
     <Panel
       title="Score distribution"
       description="Distribution of scores across all attempted mocks."
-      className="mb-4"
+      className={className}
     >
       <div className="px-4 pb-4 sm:px-5">
         <ChartContainer
@@ -1168,8 +1222,8 @@ function SubjectLines({ analytics }: { analytics: Analytics }) {
   return (
     <div className="mb-4 grid gap-4 xl:grid-cols-2">
       <Panel
-        title="Accuracy over attempts (Subject wise)"
-        description="How accuracy changes with more attempts."
+        title="Accuracy over attempts"
+        description="How accuracy changes with more attempts, subject by subject."
       >
         <div className="px-4 pb-4 sm:px-5">
           {accuracyRows.length ? (
@@ -1189,7 +1243,7 @@ function SubjectLines({ analytics }: { analytics: Analytics }) {
         </div>
       </Panel>
       <Panel
-        title="Time per attempt (Subject wise)"
+        title="Time per attempt"
         description="Average minutes spent per attempt in each subject."
       >
         <div className="px-4 pb-4 sm:px-5">
@@ -1239,71 +1293,59 @@ function TargetPanel({
   }));
   return (
     <div className="px-4 pb-5 sm:px-5">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 py-2">
-        <div className="flex items-start gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent" aria-hidden="true">
-            <Flag size={14} />
-          </span>
-          <div>
-            <p className="text-[11px] muted">Your target</p>
-            <p className="font-semibold tabular mt-1">
-              {target == null ? "Not set" : `${n(target)} / 390`}
-            </p>
-            <p className="text-[10px] muted mt-1">
-              {targetPercent == null ? "Add a score or percentage" : `${n(targetPercent)}% of the paper`}
-            </p>
-          </div>
+      {/* Quiet stat row in the band's language: small-caps label, serif
+          figure, one hint line — no icon bubbles. */}
+      <div className="grid grid-cols-2 gap-x-5 gap-y-4 py-1 sm:grid-cols-3">
+        <div className="min-w-0">
+          <p className="metric-label">Your target</p>
+          <p className="mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]">
+            {target == null ? "Not set" : `${n(target)} / ${FULL_MOCK_MAX_SCORE}`}
+          </p>
+          <p className="mt-0.5 text-[10px] muted">
+            {targetPercent == null
+              ? "Add a score or percentage"
+              : `${n(targetPercent)}% of the paper`}
+          </p>
         </div>
-        <div className="flex items-start gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent" aria-hidden="true">
-            <PlainIcon name="trend" size={14} />
-          </span>
-          <div>
-            <p className="text-[11px] muted">Latest average</p>
-            <p className="font-semibold tabular mt-1">
-              {snapshots.length ? `${n(latest!.percentage)}%` : "—"}
-            </p>
-            <p className="text-[10px] muted mt-1">
-              {latest ? `${latest.pointCount} result${latest.pointCount === 1 ? "" : "s"} that day` : "No results yet"}
-            </p>
-          </div>
+        <div className="min-w-0">
+          <p className="metric-label">Latest average</p>
+          <p className="mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]">
+            {snapshots.length ? `${n(latest!.percentage)}%` : "—"}
+          </p>
+          <p className="mt-0.5 text-[10px] muted">
+            {latest
+              ? `${latest.pointCount} result${latest.pointCount === 1 ? "" : "s"} that day`
+              : "No results yet"}
+          </p>
         </div>
-        <div className="col-span-2 flex items-start gap-3 sm:col-span-1">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-positive-soft text-positive" aria-hidden="true">
-            <PlainIcon name="arrowUpRight" size={14} />
-          </span>
-          <div>
-            <p className="text-[11px] muted">Against target</p>
-            <p className="font-semibold tabular mt-1 flex items-center gap-1.5">
-              {gap == null ? (
-                "—"
-              ) : (
-                <>
-                  {gap > 0 ? "+" : ""}
-                  {n(gap)} pp
-                  {gap >= 0 ? (
-                    <PlainIcon name="arrowUpRight" size={14} />
-                  ) : (
-                    <PlainIcon name="arrowDownRight" size={14} />
-                  )}
-                </>
-              )}
-            </p>
-            <p className="text-[10px] muted mt-1 flex items-center gap-1">
-              {direction === "up" ? (
-                <PlainIcon name="trend" size={12} />
-              ) : direction === "down" ? (
-                <PlainIcon name="arrowDownRight" size={12} />
-              ) : (
-                <PlainIcon name="minus" size={12} />
-              )}
-              {change == null
-                ? "Need two dated snapshots"
-                : direction === "flat"
-                  ? "Flat since the previous snapshot"
-                  : `${direction === "up" ? "Up" : "Down"} ${n(Math.abs(change))} pp since the previous snapshot`}
-            </p>
-          </div>
+        <div className="col-span-2 min-w-0 sm:col-span-1">
+          <p className="metric-label">Against target</p>
+          <p
+            className={cn(
+              "mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]",
+              gap == null
+                ? undefined
+                : gap >= 0
+                  ? "text-positive"
+                  : "text-danger",
+            )}
+          >
+            {gap == null ? "—" : `${gap > 0 ? "+" : ""}${n(gap)} pp`}
+          </p>
+          <p className="mt-0.5 flex items-center gap-1 text-[10px] muted">
+            {direction === "up" ? (
+              <PlainIcon name="trend" size={12} />
+            ) : direction === "down" ? (
+              <PlainIcon name="arrowDownRight" size={12} />
+            ) : (
+              <PlainIcon name="minus" size={12} />
+            )}
+            {change == null
+              ? "Need two dated snapshots"
+              : direction === "flat"
+                ? "Flat since the previous snapshot"
+                : `${direction === "up" ? "Up" : "Down"} ${n(Math.abs(change))} pp since the previous snapshot`}
+          </p>
         </div>
       </div>
       {snapshots.length > 1 ? (
@@ -1444,44 +1486,29 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
   }));
   return (
     <div className="px-4 pb-4 sm:px-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-wrap gap-6 pt-1">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
-              <PlainIcon name="success" size={14} />
-            </span>
-            <div>
-              <p className="font-semibold tabular text-sm text-ink">
-                {n(current.accuracy)}%
-              </p>
-              <p className="text-[10px] muted">Average accuracy</p>
-            </div>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="flex flex-wrap gap-x-8 gap-y-3 pt-1">
+          <div className="min-w-0">
+            <p className="metric-label">Average accuracy</p>
+            <p className="mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]">
+              {n(current.accuracy)}%
+            </p>
           </div>
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
-              <PlainIcon name="clock" size={14} />
-            </span>
-            <div>
-              <p className="font-semibold tabular text-sm text-ink">
-                {formatTime(
-                  current.averageTime == null
-                    ? null
-                    : Math.round(current.averageTime),
-                )}
-              </p>
-              <p className="text-[10px] muted">Average time</p>
-            </div>
+          <div className="min-w-0">
+            <p className="metric-label">Average time</p>
+            <p className="mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]">
+              {formatTime(
+                current.averageTime == null
+                  ? null
+                  : Math.round(current.averageTime),
+              )}
+            </p>
           </div>
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent" aria-hidden="true">
-              <PlainIcon name="file" size={14} />
-            </span>
-            <div>
-              <p className="font-semibold tabular text-sm text-ink">
-                {n(current.percentage)}%
-              </p>
-              <p className="text-[10px] muted">Average score</p>
-            </div>
+          <div className="min-w-0">
+            <p className="metric-label">Average score</p>
+            <p className="mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]">
+              {n(current.percentage)}%
+            </p>
           </div>
         </div>
         <select
@@ -1670,30 +1697,45 @@ export const PerformanceOverview = memo(function PerformanceOverview({
   const copy = scopeCopy[scope];
   const standPanel = (
     <Panel
-      title={scope === "all" ? "Where you stand" : scope === "subject" ? "Subject-wise strengths" : "Where you stand"}
-      description="Your performance across different areas."
+      title={scope === "subject" ? "Subject-wise strengths" : "Where you stand"}
+      description={
+        scope === "sectional"
+          ? "Average subject score across full and sectional mocks."
+          : "Average score by subject across every mock in view."
+      }
     >
       <WhereYouStand rows={analytics.whereYouStand} />
     </Panel>
   );
   return (
     <>
-      <PerformanceMeta analytics={analytics} />
-      <div className="grid xl:grid-cols-[1.65fr_1fr] gap-4 mb-4">
+      <ScoreBand analytics={analytics} target={target} />
+      <div className="mt-4 mb-4 grid gap-4 xl:grid-cols-[1.65fr_1fr]">
         <Panel title={copy.trend} description={copy.trendDescription}>
           <ScopeTrend analytics={analytics} targetScore={target} />
         </Panel>
         {standPanel}
       </div>
       {(scope === "subject" || scope === "sectional") && (
-        <OverviewDonutCards analytics={analytics} />
+        <ScopeReportTable analytics={analytics} />
       )}
       {(scope === "subject" || scope === "sectional") && (
         <GroupedScoreBars analytics={analytics} />
       )}
-      {scope === "all" && <ScoreDistribution analytics={analytics} />}
-      {(scope === "full" || scope === "all") && (
-        <AttemptBreakdown analytics={analytics} />
+      {/* The distribution needs three results to draw; below that the
+          breakdown keeps the full width instead of stranding an empty
+          grid column. */}
+      {scope === "all" &&
+        (analytics.trend.points.length >= 3 ? (
+          <div className="mb-4 grid gap-4 xl:grid-cols-2">
+            <AttemptBreakdown analytics={analytics} />
+            <ScoreDistribution analytics={analytics} />
+          </div>
+        ) : (
+          <AttemptBreakdown analytics={analytics} className="mb-4" />
+        ))}
+      {scope === "full" && (
+        <AttemptBreakdown analytics={analytics} className="mb-4" />
       )}
       {(target != null || analytics.target.snapshots.length > 0) && (
         <Panel
@@ -1716,7 +1758,7 @@ export const PerformanceOverview = memo(function PerformanceOverview({
         (analytics.deepDive ?? []).some((subject) => subject.count > 0) && (
           <Panel
             title="Subject deep dive"
-            description="Analyze your strengths and weaknesses across subjects."
+            description="Accuracy and pace for one subject, attempt by attempt."
           >
             <DeepDive analytics={analytics} />
           </Panel>

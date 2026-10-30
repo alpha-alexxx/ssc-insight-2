@@ -51,6 +51,7 @@ import {
 } from "@/lib/domain";
 import { formatNumber as n } from "@/lib/domain";
 import { longDate, shortDate, isIsoDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { istTodayIso } from "@/lib/plan/view-model";
 import type { AiScreenContext, AiView } from "@/lib/ai/client-types";
 import type { PlanTaskView } from "@/lib/plan/view-model";
@@ -994,10 +995,14 @@ function ScopeFilters({
           );
         })}
       </div>
-      <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+      {/* Filters close the control group: a full-width 2-up grid on phones
+          (deterministic rows, no ragged wrap), right-aligned inline from sm
+          up. The date filter spans both grid columns only when the subject
+          select makes it the third cell. */}
+      <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto sm:justify-end">
         <select
           aria-label="Filter by platform"
-          className="w-auto min-w-0 max-w-[10.5rem] truncate rounded-control py-[9px] pl-3 pr-7 text-xs"
+          className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[10.5rem]"
           value={filters.platform ?? "all"}
           onChange={(e) => changeFilter("platform", e.target.value)}
         >
@@ -1009,7 +1014,7 @@ function ScopeFilters({
         {view !== "dashboard" && (
           <select
             aria-label="Filter by subject"
-            className="w-auto min-w-0 max-w-[10.5rem] truncate rounded-control py-[9px] pl-3 pr-7 text-xs"
+            className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[10.5rem]"
             value={filters.subject ?? "all"}
             onChange={(e) => changeFilter("subject", e.target.value)}
           >
@@ -1021,11 +1026,18 @@ function ScopeFilters({
             ))}
           </select>
         )}
-        <DateRangeFilter
-          from={filters.from ?? ""}
-          to={filters.to ?? ""}
-          onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
-        />
+        <div
+          className={cn(
+            "min-w-0 [&>button]:w-full sm:[&>button]:w-auto",
+            view !== "dashboard" && "max-sm:col-span-2",
+          )}
+        >
+          <DateRangeFilter
+            from={filters.from ?? ""}
+            to={filters.to ?? ""}
+            onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
+          />
+        </div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Panel } from "./dashboard-panels";
 import { PlainIcon, DuotoneTile } from "./icon";
+import { Separator } from "./ui/separator";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import {
@@ -309,11 +310,17 @@ export function DashboardView({
       )}
 
       <section className="mt-8" aria-labelledby="performance-heading">
-        {/* One control bar, per the mockup: tile + title block, hairline
-            divider, then the scope segments and filters at one height. */}
-        <div className="panel mb-6 flex flex-wrap items-center gap-x-0 gap-y-3 px-4 py-3 sm:px-5">
-          <div className="flex min-w-0 items-center gap-3 pr-4 sm:pr-5">
-            <DuotoneTile name="report" tile="accent" className="size-10" />
+        {/* The section opens with a toolbar card: an identity row (duotone
+            tile, serif title, subtitle), a full-bleed hairline, then the
+            control row — scope tabs left, platform/date filters right —
+            everything on paper inside the panel. */}
+        <div className="panel mb-6">
+          <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
+            <DuotoneTile
+              name="report"
+              tile="accent"
+              className="size-10 shrink-0"
+            />
             <div className="min-w-0">
               <h2 id="performance-heading" className="panel-title">
                 Performance
@@ -323,18 +330,15 @@ export function DashboardView({
               </p>
             </div>
           </div>
-          <div
-            aria-hidden="true"
-            className="hidden h-12 w-px shrink-0 bg-rule-soft lg:block"
-          />
-          <div className="min-w-0 flex-1 pl-0 lg:pl-5">{scopeControls}</div>
+          <Separator />
+          <div className="px-4 py-3 sm:px-5">{scopeControls}</div>
         </div>
         {/* A scope change re-fetches analytics; say so, rather than letting
             the charts quietly swap under the heading. */}
         {loading && analytics && (
           <p
             role="status"
-            className="mb-3 flex items-center gap-1.5 text-[11px] text-muted"
+            className="mt-3 flex items-center gap-1.5 text-[11px] text-muted"
           >
             <PlainIcon name="refresh" size={12} className="animate-spin" />
             Updating your results…
