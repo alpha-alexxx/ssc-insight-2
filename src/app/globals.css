@@ -97,6 +97,26 @@
   --dur-quick: 140ms;
   --dur-enter: 220ms;
   --dur-view: 240ms;
+  /* ---- ink plate (landing) ----
+     The landing alternates paper sections with inverted "plates". A plate
+     never remaps the semantic tokens: only these five are read, and only by
+     `.plate` descendants. Nested product mockups therefore keep the real
+     paper/ink tokens and look exactly like the workspace. Composed from
+     --ink/--paper so all five palettes follow with no per-palette rules. */
+  --plate-bg: var(--ink);
+  --plate-fg: var(--paper);
+  --plate-muted: color-mix(in oklab, var(--paper) 62%, var(--ink));
+  --plate-rule: color-mix(in oklab, var(--paper) 30%, var(--ink));
+  --plate-rule-soft: color-mix(in oklab, var(--paper) 16%, var(--ink));
+  --plate-surface: color-mix(in oklab, var(--paper) 7%, var(--ink));
+  /* Paper-equivalent surface for a card sitting ON a plate. */
+  --plate-card: var(--paper);
+  /* Landing elevation. The hero collage is the one place on the site that
+     uses depth, so it gets a token rather than a hard-coded shadow: paper
+     lifts softly in vega, gets a hard ink offset in sera, and tightens in
+     mira. Colour derives from --ink, so it flips in dark mode. */
+  --landing-lift: 0 1px 2px color-mix(in oklab, var(--ink) 8%, transparent),
+    0 18px 44px -26px color-mix(in oklab, var(--ink) 55%, transparent);
   /* ---- shadcn compatibility aliases (all resolve to paper tokens) ----
      The generated shadcn primitives use --background/--border/--sidebar-*;
      map them onto the existing semantic system so every palette, style,
@@ -159,6 +179,16 @@
   --chart-computer: #aaa094;
   --outcome-unattempted: #3f3a32;
   /* shadcn aliases inherit the dark canvas/paper/ink values above. */
+  /* Ink plate, dark mode: a fully inverted cream band would be hostile at
+     night, and ink-on-ink would be invisible. The plate becomes the raised
+     charcoal (--soft) with nested cards on --paper, so they read recessed. */
+  --plate-bg: var(--soft);
+  --plate-fg: var(--ink);
+  --plate-muted: var(--muted);
+  --plate-rule: var(--rule);
+  --plate-rule-soft: var(--rule-soft);
+  --plate-surface: var(--paper);
+  --plate-card: var(--paper);
 }
 
 /* ---------- palette: blue — professional and precise ----------
@@ -295,6 +325,9 @@
   --ease-out-soft: cubic-bezier(0.2, 0.9, 0.25, 1);
   --sidebar-rule-w: 2px;
   --sidebar-rule-color: var(--ink);
+  /* The landing collage follows the same language: a hard ink offset, not a
+     soft blur, so a sera page never mixes elevation styles. */
+  --landing-lift: 6px 6px 0 0 var(--ink);
 }
 [data-style="sera"] .page-title {
   font-weight: 600;
@@ -356,6 +389,9 @@
   --sidebar-row-h: 28px;
   --sidebar-row-h-lg: 42px;
   --sidebar-header-pad-y: 8px;
+  /* Compact elevation to match mira's tighter scale. */
+  --landing-lift: 0 1px 2px color-mix(in oklab, var(--ink) 8%, transparent),
+    0 10px 24px -16px color-mix(in oklab, var(--ink) 45%, transparent);
 }
 [data-style="mira"] .page-title {
   font-size: clamp(1.75rem, 2.8vw, 2.375rem);
@@ -1450,6 +1486,748 @@
     font-weight: 550;
     letter-spacing: -0.035em;
     line-height: 1;
+  }
+  /* Hero collage elevation — see the `--landing-lift` token. */
+  .landing-lift {
+    box-shadow: var(--landing-lift);
+  }
+
+  /* ==========================================================
+     Landing page system — a printed preparation ledger.
+     Editorial sections sit on paper; two inverted "plates" carry the
+     product showcase and the privacy argument. Everything here reads
+     from tokens, so all five palettes x three styles x light/dark
+     resolve without a single per-combination rule.
+     ========================================================== */
+
+  /* ---------- sections ---------- */
+  /* Anchor targets must clear the 64px sticky masthead. */
+  .landing-section {
+    scroll-margin-top: 5rem;
+  }
+  /* The page spine: a numbered margin rule beside each editorial section.
+     Purely decorative, so it disappears below lg where there is no margin. */
+  .landing-spine {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  @media (min-width: 1024px) {
+    .landing-spine {
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+    }
+  }
+  .landing-spine-no {
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+    padding-top: 6px;
+  }
+  .landing-spine-no::after {
+    content: "";
+    display: block;
+    width: 1px;
+    height: 26px;
+    margin-top: 10px;
+    background: var(--rule-soft);
+  }
+
+  /* ---------- the ink plate ---------- */
+  .plate {
+    position: relative;
+    background: var(--plate-bg);
+    color: var(--plate-fg);
+    border-block: 1px solid var(--plate-rule);
+    /* Plates are full-bleed bands; their inner container re-applies padding. */
+    isolation: isolate;
+  }
+  .plate-label {
+    color: var(--plate-muted);
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+  }
+  .plate-title {
+    font-family: var(--font-heading);
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    line-height: 1.12;
+    font-weight: 450;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+    color: var(--plate-fg);
+  }
+  .plate-body {
+    color: var(--plate-muted);
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    max-width: 34rem;
+  }
+  .plate-rule {
+    height: 1px;
+    background: var(--plate-rule);
+    border: 0;
+  }
+  .plate-rule-soft {
+    height: 1px;
+    background: var(--plate-rule-soft);
+    border: 0;
+  }
+  .plate-surface {
+    background: var(--plate-surface);
+    border: 1px solid var(--plate-rule-soft);
+    border-radius: var(--radius-card);
+  }
+  /* A paper card placed on a plate: the product mockup, the AI card. */
+  .plate-card {
+    background: var(--plate-card);
+    color: var(--ink);
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+  }
+  .plate a.plate-link {
+    color: var(--plate-fg);
+    text-decoration: underline;
+    text-decoration-color: var(--plate-rule);
+    text-underline-offset: 3px;
+    transition: text-decoration-color var(--dur-quick) ease;
+  }
+  .plate a.plate-link:hover {
+    text-decoration-color: var(--plate-fg);
+  }
+
+  /* ---------- ruled ledger strip (the facts row) ---------- */
+  .ledger-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-block: 1px solid var(--ink);
+  }
+  @media (min-width: 640px) {
+    .ledger-row {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1024px) {
+    .ledger-row {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+  }
+  .ledger-cell {
+    min-width: 0;
+    padding: 18px 16px 16px;
+    border-top: 1px solid var(--rule-soft);
+    border-left: 0;
+  }
+  /* Two-across: the right-hand cell of each pair carries the divider. */
+  @media (max-width: 639px) {
+    .ledger-cell:nth-child(even) {
+      border-left: 1px solid var(--rule-soft);
+    }
+  }
+  /* Every cell in the first visual row has no top rule; the row's own
+     border-block supplies the rest. */
+  .ledger-cell:nth-child(-n + 2) {
+    border-top: 0;
+  }
+  @media (min-width: 640px) {
+    .ledger-cell:nth-child(-n + 3) {
+      border-top: 0;
+    }
+  }
+  @media (min-width: 640px) and (max-width: 1023px) {
+    /* Three-across: the fourth and fifth cells start a new row, and the
+       fifth spans (since it would otherwise sit alone). */
+    .ledger-cell {
+      border-left: 1px solid var(--rule-soft);
+    }
+    .ledger-cell:nth-child(1),
+    .ledger-cell:nth-child(4) {
+      border-left: 0;
+    }
+    .ledger-cell:nth-child(4) {
+      border-top: 1px solid var(--rule-soft);
+    }
+  }
+  /* Only below the five-across layout does the fifth fact sit alone: let it
+     span the full row instead of leaving a half-empty cell. */
+  @media (max-width: 1023px) {
+    .ledger-cell:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-left: 0;
+    }
+  }
+  @media (min-width: 1024px) {
+    .ledger-cell {
+      border-top: 0;
+      border-left: 1px solid var(--rule-soft);
+    }
+    .ledger-cell:first-child {
+      border-left: 0;
+    }
+  }
+  .ledger-value {
+    font-family: var(--font-heading);
+    font-size: 1.875rem;
+    line-height: 1.1;
+    font-weight: 450;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .ledger-unit {
+    font-size: 0.6875rem;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+  .ledger-note {
+    margin-top: 6px;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--muted);
+  }
+
+  /* ---------- specimen frame (the browser chrome) ---------- */
+  .specimen {
+    background: var(--paper);
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+  }
+  .specimen-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--rule-soft);
+    background: var(--canvas);
+  }
+  .specimen-dots {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  /* Frame Rule: only status dots and the answer ring are round. These are
+     window controls, so they stay square. */
+  .specimen-dots > span {
+    width: 6px;
+    height: 6px;
+    background: var(--rule);
+    border-radius: 1px;
+  }
+  .specimen-url {
+    font-size: 0.625rem;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .specimen-tabs {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--plate-rule-soft);
+  }
+  .specimen-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .specimen-tab {
+    position: relative;
+    flex: 0 0 auto;
+    padding: 12px 0 11px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+    color: var(--plate-muted);
+    transition: color var(--dur-quick) ease;
+  }
+  .specimen-tab:hover {
+    color: var(--plate-fg);
+  }
+  .specimen-tab[data-state="active"] {
+    color: var(--plate-fg);
+  }
+  .specimen-tab[data-state="active"]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--plate-fg);
+  }
+  .specimen-caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-top: 14px;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--plate-muted);
+  }
+  .specimen-badge {
+    flex-shrink: 0;
+    font-size: 0.5625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--plate-muted);
+    border: 1px solid var(--plate-rule-soft);
+    border-radius: var(--radius-control);
+    padding: 3px 7px;
+  }
+
+  /* ---------- product mockup typography ----------
+     A mockup is a miniature of a real screen, so it needs its own, much
+     smaller type scale. Container queries let each mockup adapt to the frame
+     it is placed in rather than to the viewport. */
+  .mock {
+    container-type: inline-size;
+    background: var(--canvas);
+    color: var(--ink);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+  @container (min-width: 520px) {
+    .mock {
+      font-size: 11px;
+    }
+  }
+  @container (min-width: 860px) {
+    .mock {
+      font-size: 12px;
+    }
+  }
+  .mock-panel {
+    background: var(--paper);
+    /* The mockups claim to BE the workspace, so their panels take the same
+       border geometry as the real `.panel` — 1px hairline under vega, 2px ink
+       under sera, 6px corners under mira. */
+    border: var(--panel-border-width) solid var(--panel-border-color);
+    border-radius: var(--radius-panel);
+    min-width: 0;
+  }
+  .mock-title {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .mock-label {
+    font-size: 0.7em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+  .mock-muted {
+    color: var(--muted);
+  }
+  .mock-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 5px;
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius-control);
+    font-size: 0.8em;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+  .mock-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  /* Mockup metric strip reuses the real divided-strip grammar, scaled. */
+  .mock-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-block: 1px solid var(--ink);
+    background: var(--paper);
+  }
+  @container (min-width: 640px) {
+    .mock-strip {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    /* The score band carries five cells when a target is set. */
+    .mock-strip.is-five {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .mock-strip.is-five .mock-strip-cell:nth-child(odd) {
+      border-left: 1px solid var(--rule-soft);
+    }
+    .mock-strip.is-five .mock-strip-cell:first-child {
+      border-left: 0;
+    }
+  }
+  .mock-strip-cell {
+    padding: 8px 10px;
+    border-left: 1px solid var(--rule-soft);
+    min-width: 0;
+  }
+  .mock-strip-cell:first-child {
+    border-left: 0;
+  }
+  .mock-strip-cell:nth-child(odd) {
+    border-left: 0;
+  }
+  @container (min-width: 640px) {
+    .mock-strip-cell:nth-child(odd) {
+      border-left: 1px solid var(--rule-soft);
+    }
+    .mock-strip-cell:first-child {
+      border-left: 0;
+    }
+  }
+  .mock-figure {
+    font-family: var(--font-heading);
+    font-size: 1.5em;
+    font-weight: 550;
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+    font-variant-numeric: tabular-nums;
+  }
+  .mock-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  .mock-table th {
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  .mock-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  /* The identity column gets the free space; every other column stays as
+     narrow as its content so the numbers line up. */
+  .mock-table .sticky-col {
+    width: 34%;
+    min-width: 9em;
+  }
+  .mock-table tr:last-child td {
+    border-bottom: 0;
+  }
+  .mock-bar {
+    display: block;
+    height: 2px;
+    background: var(--soft);
+    overflow: hidden;
+  }
+  .mock-bar > span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+  .mock-ring-label {
+    font-family: var(--font-heading);
+    font-variant-numeric: tabular-nums;
+    font-weight: 550;
+    letter-spacing: -0.02em;
+  }
+
+  /* ---------- 50-day plan grid ---------- */
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 3px;
+  }
+  .plan-cell {
+    position: relative;
+    /* Fixed height, not aspect-ratio: ten columns on a wide screen would
+       otherwise give 90px-tall cells for a single day number. */
+    height: 2.25rem;
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius-control);
+    background: var(--paper);
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 3px 4px;
+    font-size: 0.5625rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    overflow: hidden;
+  }
+  @media (max-width: 639px) {
+    .plan-cell {
+      height: 1.75rem;
+      padding: 2px 3px;
+      font-size: 0.5rem;
+    }
+  }
+  .plan-cell[data-phase="1"] {
+    background: var(--accent-soft);
+    border-color: color-mix(in oklab, var(--accent) 24%, transparent);
+  }
+  .plan-cell[data-phase="2"] {
+    background: var(--soft);
+  }
+  .plan-cell[data-phase="3"] {
+    background: var(--positive-soft);
+  }
+  /* A mock day carries a square rule along the bottom, never a ring. Most
+     days carry a mock (44 of 50), so the mark stays quiet: a 2px accent rule
+     would turn the grid into stripes. */
+  .plan-cell[data-mock="true"]::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    height: 2px;
+    background: color-mix(in oklab, var(--accent) 55%, transparent);
+  }
+  .plan-cell[data-today="true"] {
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink);
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* ---------- FAQ accordion ---------- */
+  /* The first item inherits the section head's closing hairline, so it does
+     not draw its own top rule. */
+  .faq-item + .faq-item {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .faq-item:last-child {
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .faq-trigger {
+    display: flex;
+    width: 100%;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 18px 2px;
+    text-align: left;
+    font-family: var(--font-heading);
+    font-size: 1.0625rem;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    transition: color var(--dur-quick) ease;
+  }
+  .faq-trigger:hover {
+    color: var(--accent);
+  }
+  .faq-mark {
+    position: relative;
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    transform: translateY(1px);
+  }
+  .faq-mark::before,
+  .faq-mark::after {
+    content: "";
+    position: absolute;
+    inset: 50% 0 auto 0;
+    height: 1px;
+    background: currentColor;
+  }
+  .faq-mark::after {
+    inset: 0 50% auto auto;
+    width: 1px;
+    height: 100%;
+    transition: transform var(--dur-enter) var(--ease-out-soft);
+  }
+  .faq-trigger[data-state="open"] .faq-mark::after {
+    transform: scaleY(0);
+  }
+  .faq-content {
+    overflow: hidden;
+  }
+  .faq-content[data-state="open"] {
+    animation: faq-open var(--dur-enter) var(--ease-out-soft);
+  }
+  .faq-content[data-state="closed"] {
+    animation: faq-close var(--dur-enter) var(--ease-out-soft);
+  }
+  @keyframes faq-open {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes faq-close {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  .faq-answer {
+    padding: 0 2px 20px;
+    max-width: 46rem;
+    font-size: 0.875rem;
+    line-height: 1.65;
+    color: var(--muted);
+  }
+
+  /* ---------- hero entrance (CSS only — never blocks the LCP) ---------- */
+  @keyframes landing-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .landing-rise {
+    animation: landing-rise 0.62s var(--ease-out-soft) both;
+  }
+  /* Three drift periods so floating cards never pulse in unison. */
+  @keyframes landing-float-a {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(0, -7px, 0);
+    }
+  }
+  @keyframes landing-float-b {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(0, -10px, 0);
+    }
+  }
+  @keyframes landing-float-c {
+    0%,
+    100% {
+      transform: translate3d(0, -3px, 0);
+    }
+    50% {
+      transform: translate3d(0, 6px, 0);
+    }
+  }
+  .landing-float-a {
+    animation: landing-float-a 9s ease-in-out infinite;
+  }
+  .landing-float-b {
+    animation: landing-float-b 11s ease-in-out infinite;
+  }
+  .landing-float-c {
+    animation: landing-float-c 13s ease-in-out infinite;
+  }
+  /* One-shot sweep behind the hero art — never loops. */
+  @keyframes landing-sweep {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .landing-sweep {
+    animation: landing-sweep 0.8s var(--ease-out-soft) both;
+  }
+
+  /* The scope diagram's fan. Drawn by default (the `dashoffset` is 0 in the
+     base rule); the draw-in is an enhancement layered on top for browsers
+     with scroll timelines. */
+  .scope-fan {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    vector-effect: non-scaling-stroke;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .scope-fan {
+        animation: fan-draw 0.9s var(--ease-out-soft) both;
+        animation-timeline: view();
+        animation-range: entry 10% entry 50%;
+      }
+      @keyframes fan-draw {
+        from {
+          stroke-dashoffset: 1;
+        }
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+    }
+  }
+
+  /* ---------- scroll reveals ----------
+     Visible is the BASE state; the reveal is layered on top only where the
+     browser supports scroll-driven animations and the reader allows motion.
+     That single inversion means a failed observer cannot blank a section,
+     and no JavaScript is involved at all. */
+  .rise {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .rise {
+        animation: rise-in 1ms linear both;
+        animation-timeline: view();
+        animation-range: entry 5% entry 45%;
+      }
+      @keyframes rise-in {
+        from {
+          opacity: 0;
+          translate: 0 var(--rise-y, 12px);
+        }
+        to {
+          opacity: 1;
+          translate: 0 0;
+        }
+      }
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none !important;
+    opacity: 1 !important;
+    translate: none !important;
+  }
+  .landing-rise,
+  .landing-sweep,
+  .landing-float-a,
+  .landing-float-b,
+  .landing-float-c {
+    animation: none !important;
+  }
+  .faq-content[data-state="open"],
+  .faq-content[data-state="closed"] {
+    animation: none !important;
+  }
+  .faq-mark::after {
+    transition: none !important;
   }
 }
 

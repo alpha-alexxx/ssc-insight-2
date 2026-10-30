@@ -1,8 +1,30 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Landing } from "@/components/landing";
 import { requireUser } from "@/lib/auth/require-user";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The landing's own metadata. The root layout carries the generic site title;
+ * this page is the one surface that should describe the product in a search
+ * result, so it overrides both title and description.
+ *
+ * Deliberately a static export rather than `generateMetadata`: this route
+ * already awaits `requireUser()`, and a metadata function would either
+ * duplicate that round trip or block the document head behind it.
+ */
+export const metadata: Metadata = {
+  title: "SSC Insight — SSC CGL Tier 2 mock tracker",
+  description:
+    "Log full, sectional and subject mocks. See the trend across 390 marks, the gap to your target, and the next test on a 50-day plan.",
+  openGraph: {
+    title: "SSC Insight — SSC CGL Tier 2 mock tracker",
+    description:
+      "A private mock tracker for SSC CGL Tier 2: four analytical scopes over one saved attempt, a 50-day study plan, and a portable JSON backup.",
+    type: "website",
+  },
+};
 
 /**
  * Public landing page — the only sign-in surface. The proxy leaves "/"

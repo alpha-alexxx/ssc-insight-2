@@ -2,6 +2,8 @@
 
 SSC Insight is a personal SSC CGL Tier 2 mock tracker. It helps an aspirant record results, understand performance over time, and decide what to practice next. The public `/` route explains the product and carries the only Google sign-in entry; verified accounts redirect to `/dashboard`. There is no separate sign-in page.
 
+The landing shows the product rather than describing it: a layered hero drawn from sample data, a tabbed showcase of the real dashboard, history, compare and planner screens rendered in code, an explanation of what an analytical scope is (one saved attempt, four readings, never double-counted), the 50-day plan with a day-workspace preview, a side-by-side compare ledger, the privacy model stated as what a backup contains and what it never contains, the AI coach presented as optional and read-only, and six questions answered with shipped behaviour. Its figures are illustrative sample data, labelled as such, and computed through the app's own scoring and analytics code.
+
 ## Audience and access
 
 SSC aspirants sign in with Google and work in isolated private accounts. Each user can access and change only their own mocks and settings. Anonymous visitors must sign in before entering the dashboard.
