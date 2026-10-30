@@ -33,6 +33,14 @@ export const SUBJECTS = {
 } as const;
 export type SubjectId = keyof typeof SUBJECTS;
 export const subjectIds = Object.keys(SUBJECTS) as SubjectId[];
+/** Two-to-five-letter abbreviations for tight columns (phone report tables). */
+export const SUBJECT_INITIALS: Record<SubjectId, string> = {
+  quant: "Quant",
+  reasoning: "GI",
+  english: "EN",
+  ga: "GA",
+  computer: "CK",
+};
 export const MAIN_SUBJECT_IDS = [
   "quant",
   "reasoning",

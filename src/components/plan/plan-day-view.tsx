@@ -72,7 +72,7 @@ export function PlanDayView({
   return (
     <div className="mx-auto max-w-6xl">
       {/* ---- Top nav: prev · calendar … add record · next ---- */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-5 flex flex-wrap items-center justify-center gap-2 sm:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           {previous && (
             <Link
