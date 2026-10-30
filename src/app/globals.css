@@ -282,6 +282,9 @@
   --radius-panel: 0px;
   --radius-control: 0px;
   --radius-card: 0px;
+  /* Square everything includes the segmented controls: the pill token is a
+     geometry token like the rest, not a permanent stadium shape. */
+  --radius-pill: 0px;
   --panel-border-width: 2px;
   --panel-border-color: var(--ink);
   --stat-rule-width: 2px;
@@ -330,6 +333,8 @@
   --radius-panel: 6px;
   --radius-control: 6px;
   --radius-card: 8px;
+  /* Mira softens every radius; the pill track follows the control radius. */
+  --radius-pill: 6px;
   --control-pad-y: 7px;
   --control-pad-x: 10px;
   --control-height: 34px;
@@ -426,6 +431,7 @@
   --radius-control: var(--radius-control);
   --radius-card: var(--radius-card);
   --radius-panel: var(--radius-panel);
+  --radius-pill: var(--radius-pill);
   --shadow-pop: var(--elev-pop);
   --ease-out-soft: var(--ease-out-soft);
   --color-sidebar-ring: var(--sidebar-ring);
