@@ -633,7 +633,11 @@ export function PersonalTodos({
                     maxLength={200}
                     required
                     placeholder={`Add a todo for ${dateLabel(date)}…`}
-                    className={cn("min-w-0 w-full", dashboardColumn && "pl-9!")}
+                    className={cn(
+                      "min-w-0 w-full",
+                      dashboardColumn &&
+                        "h-[var(--control-height-sm)] py-0! pl-9!",
+                    )}
                     disabled={busy}
                   />
                 </div>
@@ -644,7 +648,7 @@ export function PersonalTodos({
                   id="quick-todo-group"
                   className={cn(
                     dashboardColumn
-                      ? "w-full! min-w-0 text-xs"
+                      ? "h-[var(--control-height-sm)] w-full! min-w-0 py-0! text-xs"
                       : "w-auto! max-w-40",
                   )}
                   value={groupId}
