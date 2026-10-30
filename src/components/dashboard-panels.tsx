@@ -23,6 +23,7 @@ export function Panel({
   className = "",
   dense = false,
   eyebrow,
+  descriptionClassName,
 }: {
   title: string;
   description?: string;
@@ -35,6 +36,8 @@ export function Panel({
   dense?: boolean;
   /** Small-caps label above the title (the mockup's "THIS WEEK"). */
   eyebrow?: string;
+  /** Extra classes for the description line (e.g. hiding it at one width). */
+  descriptionClassName?: string;
 }) {
   return (
     <section className={`panel ${className}`}>
@@ -66,7 +69,12 @@ export function Panel({
               {title}
             </h2>
             {description && (
-              <p className={dense ? "mt-1 text-[10px] text-muted" : "mt-1.5 text-xs text-muted"}>
+              <p
+                className={cn(
+                  dense ? "mt-1 text-[10px] text-muted" : "mt-1.5 text-xs text-muted",
+                  descriptionClassName,
+                )}
+              >
                 {description}
               </p>
             )}
