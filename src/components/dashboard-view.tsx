@@ -112,7 +112,7 @@ export function DashboardView({
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
           <div className="min-w-0">
             <p
-              className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted"
+              className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted"
               aria-live="polite"
             >
               {activeDay ? (
@@ -136,7 +136,7 @@ export function DashboardView({
             <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h2
                 id="today-plan-heading"
-                className="font-serif text-[22px] font-medium leading-[1.2] tracking-[-0.025em] text-ink"
+                className="font-serif text-[1.375rem] font-medium leading-[1.2] tracking-[-0.025em] text-ink"
               >
                 What&apos;s the Plan!
               </h2>
@@ -147,7 +147,7 @@ export function DashboardView({
                 <button
                   type="button"
                   onClick={() => setFocusDate(null)}
-                  className="text-[11px] font-medium text-accent underline decoration-accent/40 underline-offset-[3px] transition-colors hover:decoration-accent motion-reduce:transition-none"
+                  className="text-[0.6875rem] font-medium text-accent underline decoration-accent/40 underline-offset-[3px] transition-colors hover:decoration-accent motion-reduce:transition-none"
                 >
                   Back to today
                 </button>
@@ -178,13 +178,13 @@ export function DashboardView({
                   the title block would announce the same day change twice. */}
               <p
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 px-3 font-serif text-[15px] font-medium tabular tracking-[-0.01em] sm:flex-none",
+                  "flex flex-1 items-center justify-center gap-1.5 px-3 font-serif text-[0.9375rem] font-medium tabular tracking-[-0.01em] sm:flex-none",
                   activeDate === today ? "text-ink" : "text-accent",
                 )}
               >
                 {isoWeekdayShort(activeDate)}, {longDate(activeDate)}
                 {activeDate === today && (
-                  <span className="rounded-pill bg-ink px-1.5 py-px font-sans text-[9px] font-semibold uppercase tracking-[0.08em] text-paper">
+                  <span className="rounded-pill bg-ink px-1.5 py-px font-sans text-[0.5625rem] font-semibold uppercase tracking-[0.08em] text-paper">
                     Today
                   </span>
                 )}
@@ -325,7 +325,7 @@ export function DashboardView({
               <h2 id="performance-heading" className="panel-title">
                 Performance
               </h2>
-              <p className="mt-0.5 text-[11px] leading-snug text-muted">
+              <p className="mt-0.5 text-[0.6875rem] leading-snug text-muted">
                 Track your mock results and identify areas to improve.
               </p>
             </div>
@@ -338,7 +338,7 @@ export function DashboardView({
         {loading && analytics && (
           <p
             role="status"
-            className="mt-3 flex items-center gap-1.5 text-[11px] text-muted"
+            className="mt-3 flex items-center gap-1.5 text-[0.6875rem] text-muted"
           >
             <PlainIcon name="refresh" size={12} className="animate-spin" />
             Updating your results…
@@ -381,7 +381,7 @@ function RecentAttemptsPanel({
         <button
           type="button"
           onClick={onViewAll}
-          className="inline-flex items-center gap-1 text-[10px] font-medium text-accent hover:text-accent-hover"
+          className="inline-flex items-center gap-1 text-[0.625rem] font-medium text-accent hover:text-accent-hover"
         >
           View all <PlainIcon name="arrowRight" size={12} />
         </button>

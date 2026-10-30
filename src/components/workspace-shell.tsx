@@ -817,7 +817,7 @@ function WorkspaceShellInner({
                         )}
                       </>
                     )}
-                    <footer className="flex flex-wrap justify-between gap-2 pt-6 text-[10px] text-muted">
+                    <footer className="flex flex-wrap justify-between gap-2 pt-6 text-[0.625rem] text-muted">
                       <p>Built for progress, one mock at a time.</p>
                       <p>
                         SSC CGL Tier 2 <span className="mx-2">·</span> All dates

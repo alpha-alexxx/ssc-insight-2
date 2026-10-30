@@ -92,7 +92,7 @@ export function WeekStripPanel({
       </div>
       {/* The legend reads as a caption row under the strip on every width:
           it never competes with the title again. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-rule-soft px-3 py-2.5 text-[10px] text-muted sm:px-6 sm:py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-rule-soft px-3 py-2.5 text-[0.625rem] text-muted sm:px-6 sm:py-3">
         <span className="inline-flex items-center gap-1.5">
           <DoneDot className="border-positive bg-positive" /> done
         </span>
@@ -144,7 +144,7 @@ function WeekCell({
     >
       <span
         className={cn(
-          "text-[9px] uppercase tracking-[0.1em] sm:text-[10px] sm:tracking-[0.12em]",
+          "text-[0.5625rem] uppercase tracking-[0.1em] sm:text-[0.625rem] sm:tracking-[0.12em]",
           isToday ? "font-semibold text-accent" : "text-muted",
         )}
       >
@@ -152,7 +152,7 @@ function WeekCell({
       </span>
       <span
         className={cn(
-          "font-serif text-[17px] leading-none tabular text-ink sm:text-[24px]",
+          "font-serif text-[1.0625rem] leading-none tabular text-ink sm:text-[1.5rem]",
           isToday && "underline decoration-accent decoration-2 underline-offset-4",
         )}
       >
@@ -176,7 +176,7 @@ function WeekCell({
           )}
           {hasMock && <span className="size-2.5 rounded-full bg-accent" />}
         </span>
-        <span className="hidden text-[11px] tabular text-muted sm:block">
+        <span className="hidden text-[0.6875rem] tabular text-muted sm:block">
           {stats.total ? `${stats.completed}/${stats.total}` : "—"}
         </span>
       </span>
@@ -190,17 +190,17 @@ function EmptyCell({ date }: { date: string }) {
       aria-hidden="true"
       className="flex min-w-0 flex-col items-center gap-1 rounded-panel px-0.5 py-2 text-center text-muted sm:items-start sm:gap-2 sm:px-3 sm:py-3.5 sm:text-left sm:border sm:border-rule-soft/60 sm:bg-canvas"
     >
-      <span className="text-[9px] uppercase tracking-[0.1em] sm:text-[10px] sm:tracking-[0.12em]">
+      <span className="text-[0.5625rem] uppercase tracking-[0.1em] sm:text-[0.625rem] sm:tracking-[0.12em]">
         {isoWeekdayShort(date)}
       </span>
-      <span className="font-serif text-[17px] leading-none tabular sm:text-[24px]">
+      <span className="font-serif text-[1.0625rem] leading-none tabular sm:text-[1.5rem]">
         {Number(date.slice(-2))}
       </span>
       <span className="flex h-2.5 items-center justify-center gap-1 sm:w-full sm:justify-between">
         <span className="flex items-center gap-1">
           <DoneDot className="border-rule/50 bg-canvas" />
         </span>
-        <span className="hidden text-[11px] tabular sm:block">—</span>
+        <span className="hidden text-[0.6875rem] tabular sm:block">—</span>
       </span>
     </div>
   );

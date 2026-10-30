@@ -22,7 +22,7 @@ export interface AuthControlProps {
 export function AuthControl({ enabled }: AuthControlProps) {
   if (!enabled) {
     return (
-      <span className="text-[11px] font-medium text-muted">
+      <span className="text-[0.6875rem] font-medium text-muted">
         Sign-in unavailable
       </span>
     );
@@ -99,7 +99,7 @@ function SignedIn({
     <>
       <span
         aria-hidden
-        className="hidden size-7 shrink-0 items-center justify-center rounded-pill border border-rule-soft bg-soft text-[11px] font-semibold tabular-nums text-ink sm:inline-flex"
+        className="hidden size-7 shrink-0 items-center justify-center rounded-pill border border-rule-soft bg-soft text-[0.6875rem] font-semibold tabular-nums text-ink sm:inline-flex"
         title={source}
       >
         {initial}

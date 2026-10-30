@@ -242,10 +242,10 @@ export function AppSidebar({
                       COLLAPSED_TEXT_SPAN,
                     )}
                   >
-                    <span className="truncate font-serif text-[21px] font-semibold leading-none tracking-[-0.035em]">
+                    <span className="truncate font-serif text-[1.3125rem] font-semibold leading-none tracking-[-0.035em]">
                       ssc<span className="text-accent">insight.</span>
                     </span>
-                    <span className="mt-1 truncate text-[9px] font-medium uppercase tracking-[0.12em] text-muted">
+                    <span className="mt-1 truncate text-[0.5625rem] font-medium uppercase tracking-[0.12em] text-muted">
                       Mock workspace
                     </span>
                   </span>
@@ -266,7 +266,7 @@ export function AppSidebar({
       <SidebarContent>
         {NAV_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel className="flex items-center gap-2.5 overflow-hidden px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted group-data-[collapsible=icon]:px-0">
+            <SidebarGroupLabel className="flex items-center gap-2.5 overflow-hidden px-2.5 text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted group-data-[collapsible=icon]:px-0">
               <span className={cn("shrink-0", COLLAPSED_TEXT_SPAN)}>
                 {group.label}
               </span>
@@ -367,7 +367,7 @@ export function AppSidebar({
                 }}
               >
                 <span
-                  className="sidebar-avatar grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[10px] font-semibold tracking-wide text-paper"
+                  className="sidebar-avatar grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[0.625rem] font-semibold tracking-wide text-paper"
                   aria-hidden="true"
                 >
                   {initials(userName)}
@@ -381,7 +381,7 @@ export function AppSidebar({
                   <span className="truncate text-xs font-medium">
                     {userName || "My workspace"}
                   </span>
-                  <span className="truncate text-[10px] text-muted">
+                  <span className="truncate text-[0.625rem] text-muted">
                     {userEmail || "Private account"}
                   </span>
                 </span>
@@ -394,7 +394,7 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <p className="mx-2 flex items-center gap-1.5 border-t border-rule-soft pt-2 text-[10px] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
+        <p className="mx-2 flex items-center gap-1.5 border-t border-rule-soft pt-2 text-[0.625rem] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
           <PlainIcon name="calendar" size={11} />
           SSC CGL Tier 2 · dates in IST
         </p>
@@ -491,7 +491,7 @@ export function AppHeader({
 function HeaderLocation({ label }: { label: string }) {
   return (
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2">
-      <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted sm:inline">
+      <span className="hidden shrink-0 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-muted sm:inline">
         Workspace
       </span>
       <PlainIcon

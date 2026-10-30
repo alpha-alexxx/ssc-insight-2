@@ -169,7 +169,7 @@ export function TodayFocusPanel({
                 type="button"
                 onClick={() => setExpanded(!expanded)}
                 aria-expanded={expanded}
-                className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-muted transition-colors hover:text-ink"
+                className="mt-2 inline-flex items-center gap-1 text-[0.625rem] font-medium text-muted transition-colors hover:text-ink"
               >
                 {expanded
                   ? "Show fewer"
@@ -193,7 +193,7 @@ export function TodayFocusPanel({
 
         {focus && (
           <div className="callout-accent mt-3">
-            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">
+            <span className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-accent">
               Next up
             </span>
             <PlainIcon name="file" size={13} className="text-accent" />
@@ -203,7 +203,7 @@ export function TodayFocusPanel({
             <button
               type="button"
               onClick={() => onOpenDay(focus.task.date)}
-              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-accent hover:text-accent-hover"
+              className="inline-flex items-center gap-1.5 text-[0.625rem] font-medium text-accent hover:text-accent-hover"
             >
               <PlainIcon name="calendar" size={12} />
               {shortDate(focus.task.date)}
@@ -261,7 +261,7 @@ function ProgressRing({
         <p className="font-serif text-xl leading-none tabular">
           {value}/{total}
         </p>
-        <p className="mt-1 text-[10px] text-muted">{caption}</p>
+        <p className="mt-1 text-[0.625rem] text-muted">{caption}</p>
       </div>
     </div>
   );
@@ -334,7 +334,7 @@ function PipelineProgressSection({
   return (
     <section aria-label="Plan progress">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <h3 className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-muted">
           Progress
         </h3>
       </div>
@@ -351,7 +351,7 @@ function PipelineProgressSection({
         >
           <span style={{ width: `${stats.completionPct}%` }} />
         </div>
-        <div className="mt-2 flex items-center justify-between text-[10px] text-muted">
+        <div className="mt-2 flex items-center justify-between text-[0.625rem] text-muted">
           <span>{stats.completionPct}% complete</span>
           <span>
             {todayStats
@@ -382,7 +382,7 @@ function PipelineProgressSection({
                 <p className="font-serif text-lg leading-none tabular">
                   {value}
                 </p>
-                <p className="mt-0.5 text-[9px] uppercase tracking-[0.08em] text-muted">
+                <p className="mt-0.5 text-[0.5625rem] uppercase tracking-[0.08em] text-muted">
                   {label}
                 </p>
               </div>
@@ -411,7 +411,7 @@ function PipelineProgressSection({
               >
                 <span
                   className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold tabular",
+                    "flex size-5 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-semibold tabular",
                     active
                       ? "bg-accent text-paper"
                       : past
@@ -424,7 +424,7 @@ function PipelineProgressSection({
                 </span>
                 <span
                   className={cn(
-                    "min-w-0 flex-1 truncate text-[11px] font-medium",
+                    "min-w-0 flex-1 truncate text-[0.6875rem] font-medium",
                     active
                       ? "text-accent"
                       : past
@@ -434,7 +434,7 @@ function PipelineProgressSection({
                 >
                   {phase.name}
                 </span>
-                <span className="shrink-0 text-[9px] leading-tight text-muted">
+                <span className="shrink-0 text-[0.5625rem] leading-tight text-muted">
                   Days {phase.days}
                 </span>
               </div>
@@ -471,7 +471,7 @@ function PipelineProgressSection({
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold tabular",
+                      "flex size-5 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-semibold tabular",
                       active
                         ? "bg-accent text-paper"
                         : past
@@ -485,7 +485,7 @@ function PipelineProgressSection({
                   <span className="min-w-0">
                     <span
                       className={cn(
-                        "block truncate text-[10px] font-medium",
+                        "block truncate text-[0.625rem] font-medium",
                         active
                           ? "text-accent"
                           : past
@@ -495,7 +495,7 @@ function PipelineProgressSection({
                     >
                       {phase.name}
                     </span>
-                    <span className="block text-[9px] leading-tight text-muted">
+                    <span className="block text-[0.5625rem] leading-tight text-muted">
                       Days {phase.days}
                     </span>
                   </span>
@@ -506,7 +506,7 @@ function PipelineProgressSection({
         </div>
         <div className="callout-accent mt-3">
           <Flag size={13} className="shrink-0 text-accent" aria-hidden="true" />
-          <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">
+          <span className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-accent">
             Next milestone
           </span>
           <span className="min-w-0 flex-1 truncate text-xs font-medium">
@@ -518,7 +518,7 @@ function PipelineProgressSection({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-[10px]"
+              className="h-7 px-2 text-[0.625rem]"
               onClick={() => onOpenDay(focus.task.date)}
             >
               View plan <PlainIcon name="arrowRight" size={12} />
@@ -546,12 +546,12 @@ function PipelineUpcomingSection({
       className="mt-3 border-t border-rule-soft pt-3"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <h3 className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-muted">
           Upcoming tests
         </h3>
         <Link
           href="/calendar"
-          className="inline-flex items-center gap-1 text-[10px] font-medium text-accent hover:text-accent-hover"
+          className="inline-flex items-center gap-1 text-[0.625rem] font-medium text-accent hover:text-accent-hover"
         >
           View all <PlainIcon name="arrowRight" size={12} />
         </Link>
@@ -579,7 +579,7 @@ function PipelineUpcomingSection({
                     <button
                       type="button"
                       onClick={() => onOpenDay(day.date)}
-                      className="text-[10px] tabular text-muted hover:text-accent"
+                      className="text-[0.625rem] tabular text-muted hover:text-accent"
                     >
                       {longDate(day.date)}
                     </button>
@@ -602,7 +602,7 @@ function PipelineUpcomingSection({
                   <button
                     type="button"
                     onClick={() => onOpenDay(day.date)}
-                    className="text-[10px] tabular text-muted hover:text-accent"
+                    className="text-[0.625rem] tabular text-muted hover:text-accent"
                   >
                     {shortDate(day.date)}
                   </button>
@@ -636,11 +636,11 @@ function PipelineRevisionSection({
       className="mt-3 border-t border-rule-soft pt-3"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+        <h3 className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-muted">
           Revision queue
         </h3>
         <span
-          className={`text-[10px] tabular ${
+          className={`text-[0.625rem] tabular ${
             revision.total > 0 ? "text-accent" : "text-positive"
           }`}
         >
@@ -665,7 +665,7 @@ function PipelineRevisionSection({
                   className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-soft"
                 >
                   <span
-                    className={`inline-flex shrink-0 items-center rounded-pill border px-2 py-0.5 text-[10px] font-medium ${
+                    className={`inline-flex shrink-0 items-center rounded-pill border px-2 py-0.5 text-[0.625rem] font-medium ${
                       item.kind === "rev1"
                         ? "border-accent/40 bg-accent-soft text-accent"
                         : item.kind === "rev2"
@@ -678,7 +678,7 @@ function PipelineRevisionSection({
                   <span className="min-w-0 flex-1 truncate text-xs font-medium">
                     {item.label}
                   </span>
-                  <span className="shrink-0 text-[10px] tabular text-muted">
+                  <span className="shrink-0 text-[0.625rem] tabular text-muted">
                     {shortDate(item.date)}
                   </span>
                   <PlainIcon
@@ -697,7 +697,7 @@ function PipelineRevisionSection({
             type="button"
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
-            className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-muted transition-colors hover:text-ink"
+            className="mt-2 inline-flex items-center gap-1 text-[0.625rem] font-medium text-muted transition-colors hover:text-ink"
           >
             {expanded
               ? "Show fewer"
@@ -708,7 +708,7 @@ function PipelineRevisionSection({
             />
           </button>
         )}
-        <p className="mt-2 text-[9px] leading-relaxed text-muted">
+        <p className="mt-2 text-[0.5625rem] leading-relaxed text-muted">
           Completion is manual; attempting a test never marks revision done.
         </p>
       </div>
@@ -748,7 +748,7 @@ export function PersonalTasksPanel({
       action={
         <Link
           href="/my-tasks"
-          className="text-[10px] font-medium text-accent hover:text-accent-hover"
+          className="text-[0.625rem] font-medium text-accent hover:text-accent-hover"
         >
           All tasks
         </Link>
@@ -764,7 +764,7 @@ export function PersonalTasksPanel({
             .
           </p>
         ) : (
-          <ul className="space-y-1.5 text-[11px]">
+          <ul className="space-y-1.5 text-[0.6875rem]">
             {overdue.slice(0, 2).map((task) => (
               <li key={task.id} className="flex justify-between gap-2">
                 <span className="truncate">{task.title}</span>
