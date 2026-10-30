@@ -820,7 +820,9 @@ function AttemptBreakdown({
       className={className}
     >
       <div className="grid gap-5 px-4 pb-5 sm:px-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="flex flex-wrap items-center justify-center gap-6 sm:justify-start">
+        {/* Phones stack the donut above a full-width legend; the side-by-side
+            row needs ~356px and clips on 320–360px screens. */}
+        <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-6">
           <div className="relative shrink-0">
             <BreakdownDonut
               segments={[
@@ -838,7 +840,7 @@ function AttemptBreakdown({
               </p>
             </div>
           </div>
-          <div className="min-w-0 flex-1 space-y-3">
+          <div className="w-full min-w-0 space-y-3 sm:flex-1">
             {rows.map((row) => (
               <div key={row.label} className="flex min-w-0 items-center gap-2 sm:gap-3">
                 <span
