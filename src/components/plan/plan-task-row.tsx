@@ -132,11 +132,6 @@ export function PlanTaskRow({
           </span>
           <ResultLine task={task} />
         </span>
-        {actions && (
-          <span className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
-            {actions}
-          </span>
-        )}
       </span>
     </>
   );
@@ -171,6 +166,19 @@ export function PlanTaskRow({
           </div>
         )}
       </div>
+      {/* Mobile actions sit below the row body — inside the open-details
+          button they would be a button in a button (invalid HTML, hydration
+          error). The indent keeps them aligned under the text column. */}
+      {actions && (
+        <div
+          className={cn(
+            "mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden",
+            compact ? "pl-[25px]" : "pl-[50px]",
+          )}
+        >
+          {actions}
+        </div>
+      )}
       {children}
     </li>
   );

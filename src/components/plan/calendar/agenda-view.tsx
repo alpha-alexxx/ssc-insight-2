@@ -1,9 +1,12 @@
 "use client";
+import { useState, type ComponentProps } from "react";
 import { AttemptRecordCard } from "../../attempt-outcome-card";
+import { Button } from "../../ui/button";
 import { ProgressRule } from "../plan-shared";
 import { istDateKey, longDate, shortDate } from "@/lib/format";
 import type { Attempt } from "@/lib/domain";
 import {
+  addIsoDays,
   dayAssignmentStats,
   dayTypeLabel,
   isoWeekdayShort,
@@ -12,13 +15,16 @@ import {
   type PlanTaskView,
 } from "@/lib/plan/view-model";
 import { CalendarSurface } from "./calendar-surface";
-import { PeriodNav } from "./period-nav";
+import { AGENDA_WINDOW } from "./visuals";
 import { PlanTaskRow } from "../plan-task-row";
 
 /**
- * Every remaining plan day, as one continuous schedule of hairline-separated
- * groups rather than fifty stacked panels. Days already behind the student
- * collapse into one disclosure — they are reference, not work.
+ * The agenda as a bounded window: `AGENDA_WINDOW` days from the selected date
+ * (the toolbar's arrows step the window), so the surface stays scannable and
+ * stepping backwards shows earlier work instead of hitting an invisible
+ * "today" floor. "Show remaining plan days" lifts the cap in place; days
+ * before the window collapse into one disclosure — they are reference, not
+ * work.
  */
 export function AgendaView({
   days,
@@ -28,13 +34,11 @@ export function AgendaView({
   planStart,
   planEnd,
   attempts,
-  onStep,
-  onToday,
-  onSelect,
   onOpenTask,
   onToggleTask,
   onLogResult,
   onOpenAttempt,
+  touchHandlers,
 }: {
   days: PlanDayView[];
   selected: string;
@@ -43,43 +47,57 @@ export function AgendaView({
   planStart: string;
   planEnd: string;
   attempts: Attempt[];
-  onStep: (direction: 1 | -1) => void;
-  onToday: () => void;
-  onSelect: (iso: string) => void;
   onOpenTask: (task: PlanTaskView, day: PlanDayView) => void;
   /** Real completion toggle for the checkbox (optimistic via the caller). */
   onToggleTask?: (task: PlanTaskView, next: boolean) => void;
   onLogResult: (task: PlanTaskView) => void;
   onOpenAttempt: (attempt: Attempt) => void;
+  touchHandlers?: Pick<
+    ComponentProps<"div">,
+    "onTouchStart" | "onTouchEnd"
+  >;
 }) {
-  /* The list starts at the selected date, never earlier than today — so the
-     period controls below move the window rather than sitting inert. */
-  const from = selected > today ? selected : today;
-  const upcoming = days.filter((day) => day.date >= from);
-  const past = days.filter((day) => day.date < from).reverse();
+  /* Expansion belongs to the window being viewed; a period step (a new
+     `selected`) opens a fresh window. Derived from the window identity, so no
+     state-sync effect is needed. */
+  const [windowState, setWindowState] = useState({
+    start: selected,
+    expanded: false,
+  });
+  const expanded =
+    windowState.start === selected ? windowState.expanded : false;
+
+  const hardEnd = expanded
+    ? addIsoDays(selected, 3700)
+    : addIsoDays(selected, AGENDA_WINDOW - 1);
+  const shown = days.filter(
+    (day) => day.date >= selected && day.date <= hardEnd,
+  );
+  const hiddenCount = days.length - (shown.length + daysBefore(days, selected));
+  const windowEnd = shown.length ? shown[shown.length - 1]!.date : selected;
+  const first = shown[0];
+  const last = shown[shown.length - 1];
   const attemptsOn = (iso: string) =>
     attempts.filter((attempt) => istDateKey(attempt.completedAt) === iso);
 
   return (
     <CalendarSurface
       live
-      title="Agenda"
-      meta={`${upcoming.length} of ${planLength} plan days from ${shortDate(from)}`}
-      nav={
-        <PeriodNav
-          mode="agenda"
-          selected={from}
-          planStart={planStart}
-          planEnd={planEnd}
-          onStep={onStep}
-          onToday={onToday}
-          onSelect={onSelect}
-        />
+      title={
+        shown.length
+          ? `${shortDate(selected)} – ${shortDate(windowEnd)}`
+          : longDate(selected)
       }
+      meta={
+        first && last
+          ? `Day ${first.day}–${last.day} of ${planLength} · ${shown.length} plan day${shown.length === 1 ? "" : "s"}`
+          : `The plan runs ${shortDate(planStart)} – ${shortDate(planEnd)}`
+      }
+      touchHandlers={touchHandlers}
     >
-      {upcoming.length ? (
-        <ul aria-label="Agenda from today">
-          {upcoming.map((day) => {
+      {shown.length ? (
+        <ul aria-label={`Agenda from ${shortDate(selected)}`}>
+          {shown.map((day) => {
             const stats = dayAssignmentStats(day);
             const dayAttempts = attemptsOn(day.date);
             return (
@@ -87,10 +105,17 @@ export function AgendaView({
                 key={day.day}
                 className="border-t border-rule-soft py-3 first:border-t-0 first:pt-1"
               >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <p className="section-label">
-                    Day {day.day} · {isoWeekdayShort(day.date)}{" "}
-                    {shortDate(day.date)}
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <p className="section-label flex flex-wrap items-center gap-1.5">
+                    <span>
+                      Day {day.day} · {isoWeekdayShort(day.date)}{" "}
+                      {shortDate(day.date)}
+                    </span>
+                    {day.date === today && (
+                      <span className="rounded-pill bg-ink px-1.5 py-px text-[0.5625rem] font-medium uppercase tracking-wide text-paper">
+                        Today
+                      </span>
+                    )}
                   </p>
                   <p className="text-[11px] tabular text-muted">
                     {stats.completed}/{stats.total}
@@ -149,36 +174,56 @@ export function AgendaView({
         </ul>
       ) : (
         <p className="py-6 text-center text-sm text-muted">
-          Nothing scheduled from {shortDate(from)}. The plan window closes on{" "}
-          {longDate(planEnd)}.
+          Nothing scheduled from {shortDate(selected)}. The plan window closes
+          on {longDate(planEnd)}.
         </p>
       )}
 
-      {past.length > 0 && (
+      {hiddenCount > 0 && (
+        <div className="mt-4 border-t border-rule-soft pt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full border-dashed"
+            onClick={() => setWindowState({ start: selected, expanded: true })}
+          >
+            Show remaining plan days ({hiddenCount})
+          </Button>
+        </div>
+      )}
+
+      {daysBefore(days, selected) > 0 && (
         <details className="mt-4 border-t border-rule-soft pt-3">
           <summary className="cursor-pointer text-[11px] font-medium text-muted hover:text-ink">
-            Earlier plan days ({past.length})
+            Earlier plan days ({daysBefore(days, selected)})
           </summary>
           <ul className="mt-2">
-            {past.map((day) => {
-              const stats = dayAssignmentStats(day);
-              return (
-                <li
-                  key={day.day}
-                  className="flex justify-between gap-3 border-b border-rule-soft py-1.5 text-[11px] last:border-0"
-                >
-                  <span className="text-muted">
-                    Day {day.day} · {shortDate(day.date)}
-                  </span>
-                  <span className="tabular text-muted">
-                    {stats.completed}/{day.tasks.length} done
-                  </span>
-                </li>
-              );
-            })}
+            {days
+              .filter((day) => day.date < selected)
+              .reverse()
+              .map((day) => {
+                const stats = dayAssignmentStats(day);
+                return (
+                  <li
+                    key={day.day}
+                    className="flex justify-between gap-3 border-b border-rule-soft py-1.5 text-[11px] last:border-0"
+                  >
+                    <span className="text-muted">
+                      Day {day.day} · {shortDate(day.date)}
+                    </span>
+                    <span className="tabular text-muted">
+                      {stats.completed}/{day.tasks.length} done
+                    </span>
+                  </li>
+                );
+              })}
           </ul>
         </details>
       )}
     </CalendarSurface>
   );
+}
+
+function daysBefore(days: PlanDayView[], selected: string): number {
+  return days.filter((day) => day.date < selected).length;
 }

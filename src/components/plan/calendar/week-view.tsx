@@ -15,6 +15,11 @@ import { taskChipClass } from "./visuals";
  * Seven days around the selection: columns at `md+`, a single-column day list
  * below it. The list is the point — a two-column grid leaves a ragged 4+3 tail
  * and nothing to discover, while a row list reads as the schedule it is.
+ *
+ * Like the month grid, each column is one button with one border treatment per
+ * state (in plan / today / selected), so the same click-and-keyboard mental
+ * model carries across both grids. The category legend under the surface is
+ * the CalendarLegend the month uses.
  */
 export function WeekView({
   days,
@@ -167,24 +172,22 @@ function WeekDayCell({
   }
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={isSelected}
+      aria-current={isToday ? "date" : undefined}
+      aria-label={label}
       className={cn(
-        "flex h-full flex-col overflow-hidden rounded-control border",
+        "flex h-full w-full flex-col overflow-hidden rounded-control border text-left transition-colors",
         isSelected
           ? "border-accent bg-accent-soft"
           : isToday
-            ? "border-accent/50 bg-paper"
-            : "border-rule-soft bg-paper",
+            ? "border-accent/50 bg-paper hover:bg-soft"
+            : "border-rule-soft bg-paper hover:border-accent/50 hover:bg-soft",
       )}
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-pressed={isSelected}
-        aria-current={isToday ? "date" : undefined}
-        aria-label={label}
-        className="flex flex-wrap items-center justify-center gap-1 border-b border-rule-soft px-1.5 py-2 text-center transition-colors hover:bg-soft"
-      >
+      <span className="flex flex-wrap items-center justify-center gap-1 border-b border-rule-soft px-1.5 py-2 text-center">
         <span className="text-[11px] font-medium text-muted">
           {isoWeekdayShort(iso)}
         </span>
@@ -194,8 +197,8 @@ function WeekDayCell({
             {stats.completed}/{stats.total}
           </span>
         )}
-      </button>
-      <div className="flex flex-1 flex-col gap-1 p-1.5">
+      </span>
+      <span className="flex flex-1 flex-col gap-1 p-1.5">
         {tasks.slice(0, shown).map((task) => (
           <span
             key={task.key}
@@ -213,9 +216,9 @@ function WeekDayCell({
           </span>
         )}
         {!tasks.length && (
-          <span className="px-1 py-1 text-[10px] text-muted">—</span>
+          <span className="px-1 py-1 text-[10px] text-muted">No assignments</span>
         )}
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }

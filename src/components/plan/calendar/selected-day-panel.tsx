@@ -12,6 +12,7 @@ import {
   dayAssignmentStats,
   dayTypeLabel,
   isMockType,
+  isoWeekdayName,
   type PlanDayView,
   type PlanTaskView,
 } from "@/lib/plan/view-model";
@@ -51,7 +52,8 @@ export function SelectedDayPanel({
     return (
       <Panel
         dense
-        title={shortDate(selected)}
+        eyebrow="Outside the plan window"
+        title={`${isoWeekdayName(selected)}, ${shortDate(selected)}`}
         description={`No assignments. The plan runs ${shortDate(planStart)} – ${longDate(planEnd)}.`}
       >
         <div className="px-4 pb-3 pt-1">
@@ -72,8 +74,9 @@ export function SelectedDayPanel({
   return (
     <Panel
       dense
-      title={shortDate(day.date)}
-      description={`Day ${day.day} of ${planLength} · ${dayTypeLabel(day.dayType)} · ${day.tasks.length} task${day.tasks.length === 1 ? "" : "s"}`}
+      eyebrow={`Day ${day.day} of ${planLength}`}
+      title={`${isoWeekdayName(day.date)}, ${shortDate(day.date)}`}
+      description={`${dayTypeLabel(day.dayType)} · ${day.tasks.length} task${day.tasks.length === 1 ? "" : "s"}`}
     >
       <div className="px-4 pb-3 pt-0">
         <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "../page-header";
 import { DuotoneTile, PlainIcon } from "../icon";
@@ -7,10 +7,12 @@ import { Button } from "../ui/button";
 import { Swap } from "../motion-swap";
 import { MetricStripSkeleton } from "../metric-strip";
 import { Skeleton } from "../ui/skeleton";
+import { useToast } from "../toast";
 import { PlanErrorCard } from "./plan-shared";
 import { EventDialog } from "./event-dialog";
 import { usePlanData } from "../use-plan-data";
 import { istDateKey, longDate, monthDate, shortDate } from "@/lib/format";
+import { parseCalendarState, serializeCalendarState } from "@/lib/calendar-url";
 import type { Attempt } from "@/lib/domain";
 import {
   addIsoDays,
@@ -24,7 +26,7 @@ import { CalendarMetrics } from "./calendar/calendar-metrics";
 import { AgendaView } from "./calendar/agenda-view";
 import { CalendarSurface } from "./calendar/calendar-surface";
 import { DayView } from "./calendar/day-view";
-import { MonthGrid, MonthLegend } from "./calendar/month-grid";
+import { CalendarLegend, MonthGrid } from "./calendar/month-grid";
 import { PeriodNav, stepSize } from "./calendar/period-nav";
 import { SelectedDayPanel } from "./calendar/selected-day-panel";
 import { SelectedDaySheet } from "./calendar/selected-day-sheet";
@@ -33,15 +35,24 @@ import { WeekView } from "./calendar/week-view";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useHorizontalSwipe } from "@/hooks/use-horizontal-swipe";
 
+/* The two grids re-render on every plan patch otherwise; memo skips the
+   re-renders that belong to unrelated state (the event dialog, the day
+   sheet). Their props are stable: the selection and step handlers are
+   useCallback'd here. */
+const MemoMonthGrid = memo(MonthGrid);
+const MemoWeekView = memo(WeekView);
+
 /**
  * Study calendar — four surfaces (month/week/day/agenda) over the merged
  * plan+progress payload. The plan carries no clock times, so every surface is
- * an ordered list rather than an hour grid. Selecting a date changes the day
- * panel; opening a task opens the shared detail dialog, and the deep link for
- * a date is /plan/<date>.
+ * an ordered list rather than an hour grid.
  *
- * Mode and selection stay local state: the view is excluded from the URL
- * mirror (filters-url.ts) because /plan/<date> already owns addressable dates.
+ * One control cluster per question: the toolbar under the header owns both
+ * the mode and the period controls (what am I looking at, how do I move),
+ * while each surface's head states its period title and context. Mode and
+ * selection mirror into the URL (lib/calendar-url.ts) with replaceState, so a
+ * refresh or shared link reopens the same view; the deep link for a date's
+ * full workspace is still /plan/<date>.
  */
 export function CalendarView({
   planApi,
@@ -56,37 +67,112 @@ export function CalendarView({
   onOpenAttempt: (attempt: Attempt) => void;
   onSelectedDateChange?: (date: string) => void;
 }) {
-  const { plan, loading, error, refresh, updateTask } = planApi;
+  const { plan, today: planToday, loading, error, refresh, updateTask } = planApi;
   const router = useRouter();
-  const today = istTodayIso();
-  const [mode, setMode] = useState<CalendarMode>("month");
-  const [selected, setSelected] = useState(() => today);
-  const [event, setEvent] = useState<
-    { task: PlanTaskView; day: PlanDayView } | undefined
-  >();
+  const toast = useToast();
   const isMobile = useIsMobile();
+  const today = planToday ?? istTodayIso();
+
+  /* URL mirror: read once on mount (leniently — bad params fall back to the
+     defaults), write back with replaceState on every change. */
+  const [urlState] = useState(() =>
+    typeof window === "undefined"
+      ? { mode: null, date: null }
+      : parseCalendarState(window.location.search),
+  );
+  const [mode, setMode] = useState<CalendarMode>(() => urlState.mode ?? "month");
+  const [requested, setRequested] = useState(
+    () => urlState.date ?? istTodayIso(),
+  );
+  /** The plan window owns the calendar: a request outside it (a shared URL
+      dated past the plan, today after the plan has ended) resolves to the
+      nearest plan day during render, so no state-sync effect is needed. */
+  const selected = plan ? clampToPlan(plan, requested) : requested;
+  /** The open dialog is identified by task key + date; the live row is
+      resolved from the plan each render, so the dialog can never go stale. */
+  const [event, setEvent] = useState<
+    { key: string; date: string } | undefined
+  >();
   const [daySheetOpen, setDaySheetOpen] = useState(false);
 
   useEffect(() => {
     onSelectedDateChange?.(selected);
   }, [selected, onSelectedDateChange]);
 
+  useEffect(() => {
+    window.history.replaceState(
+      null,
+      "",
+      serializeCalendarState(mode, selected, { mode: "month", date: today }),
+    );
+  }, [mode, selected, today]);
+
   /* Hooks live above the loading/error returns. `step` is inert until the
      plan exists, which is exactly when the swipe handler can fire anyway. */
-  const step = (direction: 1 | -1) => {
-    if (!plan) return;
-    const next =
-      mode === "month"
-        ? shiftMonth(plan, selected, direction)
-        : addIsoDays(selected, direction * stepSize(mode));
-    setSelected(clampToPlan(plan, next));
-  };
+  const step = useCallback(
+    (direction: 1 | -1) => {
+      if (!plan) return;
+      const next =
+        mode === "month"
+          ? shiftMonth(plan, selected, direction)
+          : addIsoDays(selected, direction * stepSize(mode));
+      setRequested(clampToPlan(plan, next));
+    },
+    [plan, mode, selected],
+  );
 
-  /* Swipe left/right on the month/week surface steps the period on touch. */
+  const goToday = useCallback(() => {
+    if (!plan) return;
+    setRequested(clampToPlan(plan, today));
+  }, [plan, today]);
+
+  /* Swipe left/right steps the period on touch — every surface, since the
+     plan carries no other horizontal gesture. */
   const swipeHandlers = useHorizontalSwipe(step);
+
+  const selectClamped = useCallback(
+    (iso: string) => {
+      if (!plan) return;
+      setRequested(clampToPlan(plan, iso));
+    },
+    [plan],
+  );
+
+  /** Grid taps select the day and, on phones, present it in the bottom sheet
+      — the aside only exists from md up, so below that the sheet is the only
+      way to see a day's schedule without scrolling past the grid. Period
+      navigation (arrows, date input, Today) deliberately doesn't open it. */
+  const selectDay = useCallback(
+    (iso: string) => {
+      if (!plan) return;
+      setRequested(clampToPlan(plan, iso));
+      if (isMobile) setDaySheetOpen(true);
+    },
+    [plan, isMobile],
+  );
+
+  const openTask = useCallback((task: PlanTaskView, day: PlanDayView) => {
+    setEvent({ key: task.key, date: day.date });
+  }, []);
+
+  const toggleTask = useCallback(
+    (task: PlanTaskView, next: boolean) => {
+      updateTask(task.key, { completed: next });
+    },
+    [updateTask],
+  );
 
   /* A sheet left open across a phone→desktop resize simply unmounts via
      `open={isMobile && daySheetOpen}`; no effect needed to close it. */
+
+  /** The dialog's live task, resolved from the plan by key each render — one
+      source of truth, no hand-patched snapshot. */
+  const eventTask = useMemo(() => {
+    if (!event || !plan) return null;
+    const day = plan.days.find((d) => d.date === event.date);
+    const task = day?.tasks.find((t) => t.key === event.key);
+    return task && day ? { task, day } : null;
+  }, [event, plan]);
 
   if (loading && !plan) return <CalendarLoading />;
   if (!plan)
@@ -102,21 +188,18 @@ export function CalendarView({
     (attempt) => istDateKey(attempt.completedAt) === selected,
   );
 
+  /** Optimistic per-task POSTs (no batch endpoint exists — the requests run
+      in parallel and each is tiny), with one summary toast for feedback. */
   const markAllDone = (day: PlanDayView) => {
-    day.tasks
-      .filter((task) => !task.completed)
-      .forEach((task) => updateTask(task.key, { completed: true }));
-  };
-
-  const goToday = () => setSelected(clampToPlan(plan, today));
-
-  /** Grid taps select the day and, on phones, present it in the bottom sheet
-      — the aside only exists from md up, so below that the sheet is the only
-      way to see a day's schedule without scrolling past the grid. Period
-      navigation (arrows, date input, Today) deliberately doesn't open it. */
-  const selectDay = (iso: string) => {
-    setSelected(clampToPlan(plan, iso));
-    if (isMobile) setDaySheetOpen(true);
+    const outstanding = day.tasks.filter((task) => !task.completed);
+    if (!outstanding.length) return;
+    for (const task of outstanding) updateTask(task.key, { completed: true });
+    toast.success(
+      outstanding.length === 1
+        ? "Task marked complete"
+        : `Marked ${outstanding.length} tasks complete`,
+      `Day ${day.day} · ${longDate(day.date)}`,
+    );
   };
 
   /** Sheet actions that hand off to an overlay or route close the sheet
@@ -125,11 +208,9 @@ export function CalendarView({
   const sheetCallbacks = {
     onOpenTask: (task: PlanTaskView, day: PlanDayView) => {
       setDaySheetOpen(false);
-      setEvent({ task, day });
+      setEvent({ key: task.key, date: day.date });
     },
-    onToggleTask: (task: PlanTaskView, next: boolean) => {
-      updateTask(task.key, { completed: next });
-    },
+    onToggleTask: toggleTask,
     onAddMock: (date: string, task?: PlanTaskView) => {
       setDaySheetOpen(false);
       onAddMock(date, task);
@@ -144,11 +225,12 @@ export function CalendarView({
     <PeriodNav
       mode={mode}
       selected={selected}
+      today={today}
       planStart={plan.startDate}
       planEnd={plan.endDate}
       onStep={step}
       onToday={goToday}
-      onSelect={(iso) => setSelected(clampToPlan(plan, iso))}
+      onSelect={selectClamped}
     />
   );
 
@@ -189,14 +271,16 @@ export function CalendarView({
       <CalendarMetrics
         days={plan.days}
         today={today}
-        onOpenNextMock={({ task, day }) => setEvent({ task, day })}
+        onOpenNextMock={({ task, day }) => openTask(task, day)}
         onOpenWeek={() => {
           setMode("week");
-          setSelected(clampToPlan(plan, today));
+          setRequested(clampToPlan(plan, today));
         }}
       />
 
-      <div className="mt-5 flex items-center">
+      {/* The calendar toolbar: mode on the left, period controls on the right
+          — one row from sm, stacked full-width rows on phones. */}
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div
           role="group"
           aria-label="Calendar view"
@@ -219,6 +303,13 @@ export function CalendarView({
             </button>
           ))}
         </div>
+        <div
+          role="group"
+          aria-label="Change period"
+          className="flex flex-wrap items-center justify-between gap-2 sm:justify-end"
+        >
+          {nav}
+        </div>
       </div>
 
       <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,1fr)]">
@@ -234,11 +325,10 @@ export function CalendarView({
                       ? `${plan.days.length} plan days · select any date`
                       : `Week of ${shortDate(weekRange(selected).from)}`
                   }
-                  nav={nav}
                   touchHandlers={swipeHandlers}
                 >
                   {mode === "month" ? (
-                    <MonthGrid
+                    <MemoMonthGrid
                       days={plan.days}
                       selected={selected}
                       today={today}
@@ -248,7 +338,7 @@ export function CalendarView({
                       onMonthStep={step}
                     />
                   ) : (
-                    <WeekView
+                    <MemoWeekView
                       days={plan.days}
                       selected={selected}
                       today={today}
@@ -256,11 +346,11 @@ export function CalendarView({
                     />
                   )}
                 </CalendarSurface>
-                {mode === "month" && (
-                  <div className="px-1 pb-1 pt-3">
-                    <MonthLegend />
-                  </div>
-                )}
+                {/* Both grids speak the same chip grammar, so both carry the
+                    legend; the day and agenda rows are labelled in words. */}
+                <div className="px-1 pb-1 pt-3">
+                  <CalendarLegend />
+                </div>
               </>
             ) : mode === "day" ? (
               <DayView
@@ -269,11 +359,11 @@ export function CalendarView({
                 planLength={plan.days.length}
                 planStart={plan.startDate}
                 planEnd={plan.endDate}
-                onStep={step}
-                onToday={goToday}
-                onSelect={(iso) => setSelected(clampToPlan(plan, iso))}
-                onOpenTask={(task, day) => setEvent({ task, day })}
+                onSelect={selectClamped}
+                onOpenTask={openTask}
+                onToggleTask={toggleTask}
                 onAddMock={onAddMock}
+                touchHandlers={swipeHandlers}
               />
             ) : (
               <AgendaView
@@ -284,13 +374,11 @@ export function CalendarView({
                 planStart={plan.startDate}
                 planEnd={plan.endDate}
                 attempts={attempts}
-                onStep={step}
-                onToday={goToday}
-                onSelect={(iso) => setSelected(clampToPlan(plan, iso))}
-                onOpenTask={(task, day) => setEvent({ task, day })}
-                onToggleTask={sheetCallbacks.onToggleTask}
+                onOpenTask={openTask}
+                onToggleTask={toggleTask}
                 onLogResult={(task) => onAddMock(task.date, task)}
                 onOpenAttempt={onOpenAttempt}
+                touchHandlers={swipeHandlers}
               />
             )}
           </Swap>
@@ -306,8 +394,8 @@ export function CalendarView({
                 planStart={plan.startDate}
                 planEnd={plan.endDate}
                 attempts={dayAttempts}
-                onOpenTask={(task, day) => setEvent({ task, day })}
-                onToggleTask={sheetCallbacks.onToggleTask}
+                onOpenTask={openTask}
+                onToggleTask={toggleTask}
                 onAddMock={onAddMock}
                 onOpenAttempt={onOpenAttempt}
                 onMarkAllDone={
@@ -339,19 +427,11 @@ export function CalendarView({
       )}
 
       <EventDialog
-        task={event?.task ?? null}
-        day={event?.day}
+        task={eventTask?.task ?? null}
+        day={eventTask?.day}
         onClose={() => setEvent(undefined)}
         onToggleComplete={(task) => {
           updateTask(task.key, { completed: !task.completed });
-          setEvent((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  task: { ...prev.task, completed: !prev.task.completed },
-                }
-              : prev,
-          );
         }}
         onOpenPlanDay={(date) => {
           setEvent(undefined);

@@ -212,6 +212,9 @@ function MonthCell({
           ? "border-rule-soft bg-paper hover:border-accent/50 hover:bg-soft"
           : "border-rule-soft/60 bg-canvas text-muted",
         !inMonth && "text-muted",
+        /* One border treatment per state: today gets the half-accent rule the
+           week columns use, and a selected cell always wins over it. */
+        isToday && !isSelected && "border-accent/50",
         isSelected && "border-accent bg-accent-soft hover:border-accent hover:bg-accent-soft",
       )}
     >
@@ -283,8 +286,12 @@ function MonthCell({
   );
 }
 
-/** The grid's own key: category tints plus the three state symbols. */
-export function MonthLegend() {
+/**
+ * The grid's key: category tints plus the three state symbols. Shared by the
+ * month and week surfaces — both speak the same chip grammar, so both carry
+ * the same legend (the day and agenda rows are labelled in words instead).
+ */
+export function CalendarLegend() {
   return (
     <div
       className={cn(

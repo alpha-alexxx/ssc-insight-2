@@ -1,4 +1,5 @@
 import type { IconName } from "../../icon";
+import type { CalendarViewMode } from "@/lib/calendar-url";
 import type { PlanTaskType } from "@/lib/plan/schema";
 import { isMockType } from "@/lib/plan/view-model";
 
@@ -8,7 +9,12 @@ import { isMockType } from "@/lib/plan/view-model";
  * chip where there is room for words, a filled dot where there is not.
  */
 
-export type CalendarMode = "month" | "week" | "day" | "agenda";
+/** The mode union lives with the URL mirror (lib/calendar-url.ts). */
+export type CalendarMode = CalendarViewMode;
+
+/** Days rendered per agenda window — one bounded fortnight, not the whole
+    remaining plan. "Show remaining plan days" lifts the cap in place. */
+export const AGENDA_WINDOW = 14;
 
 export const CALENDAR_MODES: {
   id: CalendarMode;
