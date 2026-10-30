@@ -381,7 +381,7 @@ function RecentAttemptsPanel({
         <button
           type="button"
           onClick={onViewAll}
-          className="inline-flex items-center gap-1 text-[0.625rem] font-medium text-accent hover:text-accent-hover"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[0.625rem] font-medium text-accent hover:text-accent-hover"
         >
           View all <PlainIcon name="arrowRight" size={12} />
         </button>

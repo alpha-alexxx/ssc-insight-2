@@ -40,6 +40,7 @@ import {
   type SubjectId,
   FULL_MOCK_MAX_SCORE,
   SUBJECTS,
+  SUBJECT_INITIALS,
   formatNumber as n,
   formatTime,
 } from "@/lib/domain";
@@ -132,48 +133,78 @@ function TrendDot({
     </g>
   );
 }
-function ViewData({
+/**
+ * The "View detailed data" disclosure, split across the Panel: the toggle
+ * sits in the header (`action` slot) and the table in the body. The parent
+ * owns `open` so only one panel's table is expanded at a time.
+ */
+function ViewDataToggle({
+  open,
+  onToggle,
+}: {
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[0.625rem] font-medium text-accent transition-colors hover:text-accent-hover"
+    >
+      Detailed data
+      <PlainIcon
+        name="arrowRight"
+        size={12}
+        className={cn(
+          "transition-transform duration-150",
+          open && "rotate-90",
+        )}
+      />
+    </button>
+  );
+}
+function ViewDataTable({
+  open,
   columns,
   rows,
 }: {
+  open: boolean;
   columns: string[];
   rows: React.ReactNode[][];
 }) {
-  if (!rows.length) return null;
+  if (!open || !rows.length) return null;
   return (
-    <details className="px-3 pb-3 text-[0.6875rem]">
-      <summary className="inline-flex cursor-pointer items-center gap-1 text-accent">
-        View detailed data <PlainIcon name="arrowRight" size={12} />
-      </summary>
-      <div className="mt-2 overflow-auto">
-        <table className="w-full tabular">
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column}>{column}</th>
+    <div className="mt-3 overflow-auto text-[0.6875rem]">
+      <table className="w-full tabular">
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th key={column}>{column}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((cells, index) => (
+            <tr key={index}>
+              {cells.map((cell, cellIndex) => (
+                <td key={cellIndex}>{cell}</td>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {rows.map((cells, index) => (
-              <tr key={index}>
-                {cells.map((cell, cellIndex) => (
-                  <td key={cellIndex}>{cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 function ScopeTrend({
   analytics,
   targetScore,
+  dataOpen,
 }: {
   analytics: Analytics;
   targetScore: number | null;
+  dataOpen: boolean;
 }) {
   const uid = useId().replace(/:/g, "");
   const { scope, trend } = analytics;
@@ -224,7 +255,8 @@ function ScopeTrend({
             {target != null ? `; your target is ${n(targetPercentage(target))}%` : ""}.
           </p>
         </div>
-        <ViewData
+        <ViewDataTable
+          open={dataOpen}
           columns={["Date", "Result", "Score", "Maximum", "Percentage", "Source"]}
           rows={[
             [
@@ -397,7 +429,8 @@ function ScopeTrend({
           )
           .join("; ")}
       </p>
-      <ViewData
+      <ViewDataTable
+        open={dataOpen}
         columns={["Date", "Result", "Score", "Maximum", "Percentage", "Source"]}
         rows={trend.points.map((point) => [
           dateLabel(point.date),
@@ -434,7 +467,13 @@ function InsightCallout({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
+function WhereYouStand({
+  rows,
+  dataOpen,
+}: {
+  rows: WhereYouStandRow[];
+  dataOpen: boolean;
+}) {
   const populated = rows.filter(
     (row) => row.resultCount > 0 && row.averagePercentage != null,
   );
@@ -563,7 +602,8 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
           No data yet for {missing.map((row) => row.label).join(", ")}.
         </p>
       )}
-      <ViewData
+      <ViewDataTable
+        open={dataOpen}
         columns={["Subject", "Average", "Accuracy", "Results"]}
         rows={rows.map((row) => [
           row.label,
@@ -913,7 +953,7 @@ function ScopeReportTable({ analytics }: { analytics: Analytics }) {
     >
       <div className="px-4 pb-4 sm:px-5">
         <div className="table-scroll">
-          <table className="w-full min-w-[620px]">
+          <table className="w-full min-w-[520px] sm:min-w-[620px]">
             <thead>
               <tr>
                 <th className="sticky-col">{isSubject ? "Subject" : "Section"}</th>
@@ -936,7 +976,16 @@ function ScopeReportTable({ analytics }: { analytics: Analytics }) {
                           style={{ background: colorOf(stack.id) }}
                           aria-hidden="true"
                         />
-                        {stack.label}
+                        {isSubject ? (
+                          <>
+                            <span className="sm:hidden">
+                              {SUBJECT_INITIALS[stack.id as SubjectId]}
+                            </span>
+                            <span className="hidden sm:inline">{stack.label}</span>
+                          </>
+                        ) : (
+                          stack.label
+                        )}
                       </span>
                     </td>
                     <td>
@@ -976,7 +1025,15 @@ function ScopeReportTable({ analytics }: { analytics: Analytics }) {
   );
 }
 /* ---------- Grouped score bars (subject / sectional) ---------- */
-function GroupedScoreBars({ analytics }: { analytics: Analytics }) {
+function GroupedScoreBars({
+  analytics,
+  dataOpen,
+  action,
+}: {
+  analytics: Analytics;
+  dataOpen: boolean;
+  action?: React.ReactNode;
+}) {
   const { scope, trend } = analytics;
   const rows = new Map<string, TrendRow & { label: string }>();
   for (const point of trend.points) {
@@ -1004,6 +1061,7 @@ function GroupedScoreBars({ analytics }: { analytics: Analytics }) {
       title={scope === "subject" ? "Subject-wise score trend" : "Section-wise score trend"}
       description={`Your score in each ${scope === "subject" ? "subject" : "section"} across recent mocks, as a percentage of that paper.`}
       className="mb-4"
+      action={action}
     >
       <div className="px-4 pb-4 sm:px-5">
         <ChartContainer
@@ -1065,7 +1123,8 @@ function GroupedScoreBars({ analytics }: { analytics: Analytics }) {
             <ChartLegend content={<ChartLegendContent />} />
           </BarChart>
         </ChartContainer>
-        <ViewData
+        <ViewDataTable
+          open={dataOpen}
           columns={["Mock", "Date", ...trend.series.map((s) => s.label)]}
           rows={data.map((row) => [
             row.name,
@@ -1271,9 +1330,11 @@ function SubjectLines({ analytics }: { analytics: Analytics }) {
 function TargetPanel({
   analytics,
   target,
+  dataOpen,
 }: {
   analytics: Analytics;
   target: number | null;
+  dataOpen: boolean;
 }) {
   const uid = useId().replace(/:/g, "");
   const snapshots = analytics.target.snapshots;
@@ -1439,7 +1500,8 @@ function TargetPanel({
           </AreaChart>
           </ChartContainer>
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-            <ViewData
+            <ViewDataTable
+              open={dataOpen}
               columns={["Date", "Average", "Results"]}
               rows={snapshots.map((snapshot) => [
                 dateLabel(snapshot.date),
@@ -1474,9 +1536,18 @@ function TargetPanel({
     </div>
   );
 }
-function DeepDive({ analytics }: { analytics: Analytics }) {
+function DeepDive({
+  analytics,
+  dataOpen,
+  requested,
+  onRequestedChange,
+}: {
+  analytics: Analytics;
+  dataOpen: boolean;
+  requested: SubjectId | null;
+  onRequestedChange: (id: SubjectId) => void;
+}) {
   const subjects = analytics.deepDive ?? [];
-  const [requested, setRequested] = useState<SubjectId>("quant");
   const current =
     subjects.find((subject) => subject.id === requested) ?? subjects[0];
   if (!subjects.length)
@@ -1517,7 +1588,9 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
           className="w-auto py-1.5 px-2 text-xs"
           aria-label="Subject deep dive"
           value={current.id}
-          onChange={(event) => setRequested(event.target.value as SubjectId)}
+          onChange={(event) =>
+            onRequestedChange(event.target.value as SubjectId)
+          }
         >
           {subjects.map((subject) => (
             <option key={subject.id} value={subject.id}>
@@ -1598,7 +1671,8 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
               />
             </LineChart>
           </ChartContainer>
-          <ViewData
+          <ViewDataTable
+            open={dataOpen}
             columns={["Date", "Score", "Maximum", "Accuracy", "Time"]}
             rows={current.trend.map((point) => [
               dateLabel(point.date),
@@ -1694,9 +1768,25 @@ export const PerformanceOverview = memo(function PerformanceOverview({
   analytics: Analytics | null;
   target: number | null;
 }) {
+  // Which panel's detailed-data table is expanded (one at a time), plus the
+  // deep-dive subject selection hoisted here so its header toggle can react
+  // to it.
+  const [openData, setOpenData] = useState<string | null>(null);
+  const [requestedSubject, setRequestedSubject] = useState<SubjectId | null>(
+    null,
+  );
+  const toggleData = (key: string) =>
+    setOpenData((current) => (current === key ? null : key));
   if (!analytics) return <EmptyChart>Loading your preparation…</EmptyChart>;
   const { scope } = analytics;
   const copy = scopeCopy[scope];
+  const standRows = analytics.whereYouStand.filter(
+    (row) => row.resultCount > 0,
+  );
+  const deepDiveSubjects = analytics.deepDive ?? [];
+  const deepDiveCurrent =
+    deepDiveSubjects.find((subject) => subject.id === requestedSubject) ??
+    deepDiveSubjects[0];
   const standPanel = (
     <Panel
       title={scope === "subject" ? "Subject-wise strengths" : "Where you stand"}
@@ -1705,16 +1795,42 @@ export const PerformanceOverview = memo(function PerformanceOverview({
           ? "Average subject score across full and sectional mocks."
           : "Average score by subject across every mock in view."
       }
+      action={
+        standRows.length > 0 ? (
+          <ViewDataToggle
+            open={openData === "stand"}
+            onToggle={() => toggleData("stand")}
+          />
+        ) : undefined
+      }
     >
-      <WhereYouStand rows={analytics.whereYouStand} />
+      <WhereYouStand
+        rows={analytics.whereYouStand}
+        dataOpen={openData === "stand"}
+      />
     </Panel>
   );
   return (
     <>
       <ScoreBand analytics={analytics} target={target} />
       <div className="mt-4 mb-4 grid gap-4 xl:grid-cols-[1.65fr_1fr]">
-        <Panel title={copy.trend} description={copy.trendDescription}>
-          <ScopeTrend analytics={analytics} targetScore={target} />
+        <Panel
+          title={copy.trend}
+          description={copy.trendDescription}
+          action={
+            analytics.trend.points.length > 0 ? (
+              <ViewDataToggle
+                open={openData === "trend"}
+                onToggle={() => toggleData("trend")}
+              />
+            ) : undefined
+          }
+        >
+          <ScopeTrend
+            analytics={analytics}
+            targetScore={target}
+            dataOpen={openData === "trend"}
+          />
         </Panel>
         {standPanel}
       </div>
@@ -1722,7 +1838,16 @@ export const PerformanceOverview = memo(function PerformanceOverview({
         <ScopeReportTable analytics={analytics} />
       )}
       {(scope === "subject" || scope === "sectional") && (
-        <GroupedScoreBars analytics={analytics} />
+        <GroupedScoreBars
+          analytics={analytics}
+          dataOpen={openData === "grouped"}
+          action={
+            <ViewDataToggle
+              open={openData === "grouped"}
+              onToggle={() => toggleData("grouped")}
+            />
+          }
+        />
       )}
       {/* The distribution needs three results to draw; below that the
           breakdown keeps the full width instead of stranding an empty
@@ -1744,27 +1869,53 @@ export const PerformanceOverview = memo(function PerformanceOverview({
           title="My target"
           description="Set a target and track your progress with time."
           action={
-            <Link
-              href="/settings"
-              className="inline-flex items-center gap-1.5 rounded-control border border-rule-soft px-2.5 py-1.5 text-[0.625rem] font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent"
-            >
-              <Pencil size={11} /> Edit target
-            </Link>
+            <div className="flex items-center gap-3">
+              {analytics.target.snapshots.length >= 2 && (
+                <ViewDataToggle
+                  open={openData === "target"}
+                  onToggle={() => toggleData("target")}
+                />
+              )}
+              <Link
+                href="/settings"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control border border-rule-soft px-2.5 py-1.5 text-[0.625rem] font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent"
+              >
+                <Pencil size={11} /> Edit target
+              </Link>
+            </div>
           }
           className="mb-4"
         >
-          <TargetPanel analytics={analytics} target={target} />
+          <TargetPanel
+            analytics={analytics}
+            target={target}
+            dataOpen={openData === "target"}
+          />
         </Panel>
       )}
       {scope !== "subject" &&
-        (analytics.deepDive ?? []).some((subject) => subject.count > 0) && (
-          <Panel
-            title="Subject deep dive"
-            description="Accuracy and pace for one subject, attempt by attempt."
-          >
-            <DeepDive analytics={analytics} />
-          </Panel>
-        )}
+        deepDiveSubjects.some((subject) => subject.count > 0) &&
+        deepDiveCurrent && (
+        <Panel
+          title="Subject deep dive"
+          description="Accuracy and pace for one subject, attempt by attempt."
+          action={
+            deepDiveCurrent.trend.length > 0 ? (
+              <ViewDataToggle
+                open={openData === "deepdive"}
+                onToggle={() => toggleData("deepdive")}
+              />
+            ) : undefined
+          }
+        >
+          <DeepDive
+            analytics={analytics}
+            dataOpen={openData === "deepdive"}
+            requested={requestedSubject}
+            onRequestedChange={setRequestedSubject}
+          />
+        </Panel>
+      )}
       {scope === "subject" && <SubjectLines analytics={analytics} />}
     </>
   );

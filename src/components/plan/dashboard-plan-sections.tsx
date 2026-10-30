@@ -551,7 +551,7 @@ function PipelineUpcomingSection({
         </h3>
         <Link
           href="/calendar"
-          className="inline-flex items-center gap-1 text-[0.625rem] font-medium text-accent hover:text-accent-hover"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[0.625rem] font-medium text-accent hover:text-accent-hover"
         >
           View all <PlainIcon name="arrowRight" size={12} />
         </Link>
@@ -748,7 +748,7 @@ export function PersonalTasksPanel({
       action={
         <Link
           href="/my-tasks"
-          className="text-[0.625rem] font-medium text-accent hover:text-accent-hover"
+          className="whitespace-nowrap text-[0.625rem] font-medium text-accent hover:text-accent-hover"
         >
           All tasks
         </Link>

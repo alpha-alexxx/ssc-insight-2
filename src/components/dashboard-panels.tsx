@@ -44,8 +44,8 @@ export function Panel({
       <div
         className={
           dense
-            ? "flex items-start justify-between gap-3 px-4 pb-2.5 pt-3.5"
-            : "flex items-start justify-between gap-3 px-4 pb-3 pt-4 sm:px-6 sm:pb-3 sm:pt-5"
+            ? "flex flex-wrap items-start justify-between gap-3 px-4 pb-2.5 pt-3.5"
+            : "flex flex-wrap items-start justify-between gap-3 px-4 pb-3 pt-4 sm:px-6 sm:pb-3 sm:pt-5"
         }
       >
         <div className="flex min-w-0 items-start gap-3">
@@ -80,7 +80,7 @@ export function Panel({
             )}
           </div>
         </div>
-        {action}
+        {action && <div className="shrink-0">{action}</div>}
       </div>
       {children}
     </section>

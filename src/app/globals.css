@@ -512,7 +512,13 @@
   textarea {
     caret-color: var(--accent);
   }
-  :where(input:not([type="checkbox"]), select, textarea) {
+  /* The explicit element selectors (not :where) matter: Tailwind v4
+     preflight resets background-color/border-radius on form elements at
+     element specificity, which would beat a zero-specificity :where rule
+     and leave selects transparent and square. */
+  input:not([type="checkbox"]),
+  select,
+  textarea {
     width: 100%;
     min-width: 0;
     border: 1px solid var(--rule);
