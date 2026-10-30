@@ -164,25 +164,44 @@ export function AiChatSheet({
         overlayClassName="bg-ink/20"
         aria-describedby="ai-sheet-description"
       >
-        <SheetHeader className="shrink-0 gap-2 border-b border-rule-soft px-5 py-5 pr-14">
-          <SheetTitle className="flex items-center gap-2.5 font-serif text-[22px] font-medium">
-            <Sparkles size={24} className="shrink-0 text-accent" /> Your study
-            coach
+        <SheetHeader className="shrink-0 gap-2 border-b border-rule-soft px-4 py-4 pr-14 sm:px-5 sm:py-5">
+          <SheetTitle className="flex items-center gap-2.5 font-serif text-xl font-medium sm:text-[22px]">
+            <Sparkles size={22} className="shrink-0 text-accent sm:hidden" />
+            <Sparkles size={24} className="hidden shrink-0 text-accent sm:block" />
+            Your study coach
           </SheetTitle>
-          <SheetDescription id="ai-sheet-description">
+          <SheetDescription
+            id="ai-sheet-description"
+            className="truncate text-[11px] sm:text-xs"
+          >
             {contextLabel ?? "Your workspace"} · Session-only conversation
           </SheetDescription>
         </SheetHeader>
         <div
-          className="flex shrink-0 gap-2 border-b border-rule-soft px-4 py-3"
+          className="flex shrink-0 gap-1.5 border-b border-rule-soft px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-3"
           role="tablist"
           aria-label="AI mode"
         >
           {(
             [
-              { id: "chat", label: "Coach chat", icon: MessageSquare },
-              { id: "todos", label: "Plan todos", icon: ListTodo },
-              { id: "log", label: "Log a mock", icon: ClipboardPaste },
+              {
+                id: "chat",
+                label: "Coach chat",
+                shortLabel: "Chat",
+                icon: MessageSquare,
+              },
+              {
+                id: "todos",
+                label: "Plan todos",
+                shortLabel: "Todos",
+                icon: ListTodo,
+              },
+              {
+                id: "log",
+                label: "Log a mock",
+                shortLabel: "Log",
+                icon: ClipboardPaste,
+              },
             ] as const
           ).map((item, index) => (
             <button
@@ -192,6 +211,7 @@ export function AiChatSheet({
               id={`ai-tab-${item.id}`}
               aria-controls={`ai-panel-${item.id}`}
               aria-selected={tab === item.id}
+              aria-label={item.label}
               tabIndex={tab === item.id ? 0 : -1}
               onClick={() => {
                 onStop();
@@ -217,14 +237,15 @@ export function AiChatSheet({
                 }
               }}
               className={cn(
-                "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-control px-2 text-[13px] transition-colors",
+                "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-control px-2 text-xs transition-colors sm:gap-2 sm:text-[13px]",
                 tab === item.id
                   ? "bg-ink text-paper"
                   : "text-muted hover:bg-soft hover:text-ink",
               )}
             >
               <item.icon size={17} className="shrink-0" />
-              {item.label}
+              <span className="hidden sm:inline">{item.label}</span>
+              <span className="sm:hidden">{item.shortLabel}</span>
             </button>
           ))}
         </div>
@@ -251,7 +272,7 @@ export function AiChatSheet({
             />
           )}
           {tab === "todos" && (
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 sm:py-5">
               <TodoAiComposer compact />
             </div>
           )}
@@ -382,7 +403,7 @@ function CoachChatTab({
                   key={question.text}
                   type="button"
                   onClick={() => submit(question.text)}
-                  className="group flex min-h-16 items-center gap-3 rounded-card border border-rule-soft bg-paper px-3 py-3 text-left text-sm leading-snug text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+                  className="group flex min-h-16 items-center gap-3 rounded-card border border-rule-soft bg-paper px-3 py-3 text-left text-sm leading-snug text-ink transition-colors hover:border-accent hover:bg-accent-soft active:border-accent active:bg-accent-soft"
                 >
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-accent-soft text-accent">
                     <question.icon size={19} />
@@ -433,11 +454,17 @@ function CoachChatTab({
       {error && (
         <div
           role="alert"
-          className="flex flex-wrap items-center justify-between gap-2 border-t border-warning bg-warning-soft px-5 py-2.5 text-[11px] text-warning"
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-warning bg-warning-soft px-4 py-2.5 text-[11px] text-warning sm:px-5"
         >
           <span className="min-w-0">{error}</span>
           {!streaming && onRetry && (
-            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 w-full sm:min-h-0 sm:w-auto"
+              onClick={onRetry}
+            >
               Try again
             </Button>
           )}
@@ -454,7 +481,7 @@ function CoachChatTab({
           submit(input);
         }}
       >
-        <div className="rounded-card border border-rule-soft bg-paper p-3.5">
+        <div className="rounded-card border border-rule-soft bg-paper p-3 sm:p-3.5">
           <div className="flex items-start gap-2">
             <MessageSquare size={16} className="mt-0.5 shrink-0 text-muted" />
             <textarea
@@ -479,28 +506,32 @@ function CoachChatTab({
               }}
             />
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex gap-2">
-              <button
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 sm:mt-3">
+            <div className="flex min-w-0 items-center gap-1">
+              <Button
                 type="button"
-                className="text-xs text-muted underline underline-offset-4 disabled:opacity-50"
+                variant="ghost"
+                size="sm"
+                className="px-2"
                 disabled={streaming || !messages.length}
                 onClick={onClear}
               >
                 Clear chat
-              </button>
+              </Button>
               {error && lastSent && (
-                <button
+                <Button
                   type="button"
-                  className="text-xs text-accent underline"
+                  variant="ghost"
+                  size="sm"
+                  className="px-2 text-accent hover:bg-accent-soft hover:text-accent"
                   onClick={() => setInput(lastSent)}
                 >
                   Edit question
-                </button>
+                </Button>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] tabular text-muted">
+            <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
+              <span className="text-[10px] tabular text-muted sm:text-[11px]">
                 {charCount}/{maxChars}
               </span>
               {streaming ? (
@@ -508,6 +539,7 @@ function CoachChatTab({
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="min-h-11 flex-1 sm:min-h-0 sm:flex-none"
                   onClick={onStop}
                 >
                   <Square size={13} /> Stop
@@ -516,6 +548,7 @@ function CoachChatTab({
                 <Button
                   type="submit"
                   size="sm"
+                  className="min-h-11 flex-1 sm:min-h-0 sm:flex-none"
                   disabled={!input.trim() || streaming}
                 >
                   Send <Send size={13} />
@@ -601,9 +634,9 @@ function ChatBubble({
           type="button"
           onClick={() => void copy()}
           aria-label={copied ? "Copied" : "Copy answer"}
-          className="mt-2 inline-flex items-center gap-1 text-[10px] text-muted transition-colors hover:text-accent"
+          className="-ml-2 mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-xs text-muted transition-colors hover:bg-soft hover:text-ink"
         >
-          {copied ? <Check size={11} /> : <Copy size={11} />}
+          {copied ? <Check size={13} /> : <Copy size={13} />}
           {copied ? "Copied" : "Copy"}
         </button>
       )}
@@ -852,6 +885,7 @@ function TaskSuggestionCard({
           <Button
             type="button"
             size="sm"
+            className="min-h-11 flex-1 sm:min-h-0 sm:flex-none"
             onClick={add}
             disabled={!taskApi || state === "busy"}
           >
@@ -861,6 +895,7 @@ function TaskSuggestionCard({
             type="button"
             variant="ghost"
             size="sm"
+            className="min-h-11 sm:min-h-0"
             onClick={() => setState("dismissed")}
             disabled={state === "busy"}
           >
@@ -975,7 +1010,7 @@ function LogMockTab({
 
   if (reviewing && draft) {
     return (
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
         <ExtractionReview
           draft={draft}
           onChange={setDraft}
@@ -992,7 +1027,7 @@ function LogMockTab({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 sm:py-5">
       <h3 className="font-serif text-2xl font-medium leading-tight">
         Log a mock test
       </h3>
@@ -1035,7 +1070,7 @@ function LogMockTab({
         </span>
         <button
           type="button"
-          className="hover:text-accent"
+          className="-my-2 inline-flex min-h-11 items-center px-1 hover:text-accent"
           onClick={() => setPaste("")}
           disabled={!paste}
         >
@@ -1056,6 +1091,7 @@ function LogMockTab({
         {aiEnabled ? (
           <Button
             type="button"
+            className="min-h-11 w-full sm:min-h-0 sm:w-auto"
             onClick={() => void importWithAi()}
             disabled={!paste.trim() || busy}
           >
@@ -1064,6 +1100,7 @@ function LogMockTab({
         ) : (
           <Button
             type="button"
+            className="min-h-11 w-full sm:min-h-0 sm:w-auto"
             onClick={importStandard}
             disabled={!paste.trim()}
           >

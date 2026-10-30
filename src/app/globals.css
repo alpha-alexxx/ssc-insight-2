@@ -911,6 +911,10 @@
     .task-editor-dialog input,
     .task-editor-dialog textarea,
     .ai-composer textarea,
+    /* The sheet renders its own inputs (paste box, ExtractionReview fields). */
+    .ai-workspace-sheet input,
+    .ai-workspace-sheet textarea,
+    .ai-workspace-sheet select,
     .personal-workspace input,
     .personal-workspace select {
       font-size: 16px;
