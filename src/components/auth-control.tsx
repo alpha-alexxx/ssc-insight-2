@@ -30,12 +30,12 @@ export function AuthControl({ enabled }: AuthControlProps) {
   return <ConnectedAuthControl />;
 }
 
-function ConnectedAuthControl() {
-  const {
-    data: session,
-    isPending,
-    error: sessionError,
-  } = authClient.useSession();
+/**
+ * Shared sign-in/sign-out actions. Dispatches the workspace-guard's custom
+ * events so every auth surface (header control, sidebar user menu) behaves
+ * identically.
+ */
+export function useAuthActions() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -65,6 +65,17 @@ function ConnectedAuthControl() {
       setBusy(false);
     }
   }
+
+  return { busy, error, setError, signIn, signOut };
+}
+
+function ConnectedAuthControl() {
+  const {
+    data: session,
+    isPending,
+    error: sessionError,
+  } = authClient.useSession();
+  const { busy, error, signIn, signOut } = useAuthActions();
 
   const visibleError =
     error ||
