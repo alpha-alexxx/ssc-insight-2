@@ -141,7 +141,7 @@ function ViewData({
 }) {
   if (!rows.length) return null;
   return (
-    <details className="px-3 pb-3 text-[11px]">
+    <details className="px-3 pb-3 text-[0.6875rem]">
       <summary className="inline-flex cursor-pointer items-center gap-1 text-accent">
         View detailed data <PlainIcon name="arrowRight" size={12} />
       </summary>
@@ -209,7 +209,7 @@ function ScopeTrend({
     return (
       <>
         <div className="flex min-h-[180px] flex-col items-center justify-center rounded-control border border-rule-soft bg-canvas px-5 py-6 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+          <p className="text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted">
             One result so far
           </p>
           <p className="mt-2 font-serif text-4xl font-medium tabular tracking-tight">
@@ -218,7 +218,7 @@ function ScopeTrend({
           <p className="mt-1 text-xs text-muted">
             {dateLabel(point.date)} · {point.name}
           </p>
-          <p className="mt-3 max-w-sm text-[11px] leading-relaxed text-muted">
+          <p className="mt-3 max-w-sm text-[0.6875rem] leading-relaxed text-muted">
             Log one more result to turn this into a trend. This point is{" "}
             {n(point.score)} / {point.maxScore}
             {target != null ? `; your target is ${n(targetPercentage(target))}%` : ""}.
@@ -379,12 +379,12 @@ function ScopeTrend({
           )}
         </AreaChart>
       </ChartContainer>
-      <p className="pb-1 text-right text-[10px] text-muted">
+      <p className="pb-1 text-right text-[0.625rem] text-muted">
         Showing {trend.points.length} recent result
         {trend.points.length === 1 ? "" : "s"}
       </p>
       {target != null && (
-        <p className="pb-1 text-center text-[10px] muted">
+        <p className="pb-1 text-center text-[0.625rem] muted">
           Dashed line: your target, {n((target / 100) * FULL_MOCK_MAX_SCORE)} /{" "}
           {FULL_MOCK_MAX_SCORE} marks
         </p>
@@ -513,7 +513,7 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
               />
             </RadarChart>
           </ChartContainer>
-          <p className="text-center text-[10px] muted">
+          <p className="text-center text-[0.625rem] muted">
             Average subject score, 0–100% scale, across full, sectional and
             subject mocks.
           </p>
@@ -559,7 +559,7 @@ function WhereYouStand({ rows }: { rows: WhereYouStandRow[] }) {
         </div>
       )}
       {missing.length > 0 && (
-        <p className="mt-3 text-[10px] muted">
+        <p className="mt-3 text-[0.625rem] muted">
           No data yet for {missing.map((row) => row.label).join(", ")}.
         </p>
       )}
@@ -833,7 +833,7 @@ function AttemptBreakdown({
               <p className="font-serif text-xl leading-none tabular text-ink">
                 {rate == null ? "—" : `${n(rate)}%`}
               </p>
-              <p className="mt-1 text-[9px] uppercase tracking-[0.08em] text-muted">
+              <p className="mt-1 text-[0.5625rem] uppercase tracking-[0.08em] text-muted">
                 Overall
               </p>
             </div>
@@ -846,7 +846,7 @@ function AttemptBreakdown({
                   style={{ background: row.color }}
                   aria-hidden="true"
                 />
-                <span className="w-[4.75rem] shrink-0 truncate text-[11px] text-muted sm:w-24 sm:text-xs">
+                <span className="w-[4.75rem] shrink-0 truncate text-[0.6875rem] text-muted sm:w-24 sm:text-xs">
                   {row.label}
                 </span>
                 <div className="h-1.5 min-w-8 flex-1 overflow-hidden rounded-pill bg-soft">
@@ -861,12 +861,12 @@ function AttemptBreakdown({
                     }}
                   />
                 </div>
-                <span className="w-8 shrink-0 text-right text-[11px] font-medium tabular text-ink sm:w-10 sm:text-xs">
+                <span className="w-8 shrink-0 text-right text-[0.6875rem] font-medium tabular text-ink sm:w-10 sm:text-xs">
                   {n(row.count)}
                 </span>
                 {/* The percentage is redundant with the bar at phone widths;
                     the count and the proportion rule already carry it. */}
-                <span className="hidden w-12 shrink-0 text-right text-[10px] tabular text-muted sm:block">
+                <span className="hidden w-12 shrink-0 text-right text-[0.625rem] tabular text-muted sm:block">
                   {summary.questions
                     ? `${n((row.count / summary.questions) * 100)}%`
                     : "—"}
@@ -1301,7 +1301,7 @@ function TargetPanel({
           <p className="mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]">
             {target == null ? "Not set" : `${n(target)} / ${FULL_MOCK_MAX_SCORE}`}
           </p>
-          <p className="mt-0.5 text-[10px] muted">
+          <p className="mt-0.5 text-[0.625rem] muted">
             {targetPercent == null
               ? "Add a score or percentage"
               : `${n(targetPercent)}% of the paper`}
@@ -1312,7 +1312,7 @@ function TargetPanel({
           <p className="mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]">
             {snapshots.length ? `${n(latest!.percentage)}%` : "—"}
           </p>
-          <p className="mt-0.5 text-[10px] muted">
+          <p className="mt-0.5 text-[0.625rem] muted">
             {latest
               ? `${latest.pointCount} result${latest.pointCount === 1 ? "" : "s"} that day`
               : "No results yet"}
@@ -1332,7 +1332,7 @@ function TargetPanel({
           >
             {gap == null ? "—" : `${gap > 0 ? "+" : ""}${n(gap)} pp`}
           </p>
-          <p className="mt-0.5 flex items-center gap-1 text-[10px] muted">
+          <p className="mt-0.5 flex items-center gap-1 text-[0.625rem] muted">
             {direction === "up" ? (
               <PlainIcon name="trend" size={12} />
             ) : direction === "down" ? (
@@ -1446,7 +1446,7 @@ function TargetPanel({
               ])}
             />
             {snapshots.length > 1 && (
-              <p className="pb-3 text-[10px] text-muted">
+              <p className="pb-3 text-[0.625rem] text-muted">
                 Average (last {snapshots.length} snapshots):{" "}
                 <span className="font-medium tabular text-accent">
                   {n(latest!.percentage)}%
@@ -1456,7 +1456,7 @@ function TargetPanel({
           </div>
         </>
       ) : snapshots.length === 1 ? (
-        <p className="mt-3 rounded-control border border-rule-soft bg-canvas px-3 py-3 text-[11px] leading-relaxed text-muted">
+        <p className="mt-3 rounded-control border border-rule-soft bg-canvas px-3 py-3 text-[0.6875rem] leading-relaxed text-muted">
           One dated snapshot is saved. Log another result to see the target
           trend.
         </p>
@@ -1464,7 +1464,7 @@ function TargetPanel({
         <EmptyChart>Your target trend appears after your first mock.</EmptyChart>
       )}
       {target == null && (
-        <p className="text-[10px] muted mt-2">
+        <p className="text-[0.625rem] muted mt-2">
           Set one target under Settings &amp; backup; it becomes a percentage
           reference on every dashboard tab.
         </p>
@@ -1528,7 +1528,7 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
       {current.trend.length > 1 ? (
       <div className="mt-3 grid md:grid-cols-2 gap-4">
         <div>
-          <p className="text-[11px] muted mb-1">
+          <p className="text-[0.6875rem] muted mb-1">
             Accuracy over attempts ·{" "}
             <span
               className="inline-block size-1.5 align-middle"
@@ -1608,7 +1608,7 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
           />
         </div>
         <div>
-          <p className="text-[11px] muted mb-1">Time per attempt (minutes)</p>
+          <p className="text-[0.6875rem] muted mb-1">Time per attempt (minutes)</p>
           {current.trend.some((point) => point.minutes != null) ? (
             <ChartContainer
               config={{ minutes: { label: "Minutes", color: "var(--chart-time)" } }}
@@ -1672,7 +1672,7 @@ function DeepDive({ analytics }: { analytics: Analytics }) {
         </div>
       </div>
       ) : (
-        <p className="mt-2 rounded-control border border-rule-soft bg-canvas px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+        <p className="mt-2 rounded-control border border-rule-soft bg-canvas px-3 py-2.5 text-[0.6875rem] leading-relaxed text-muted">
           Only one {SUBJECTS[current.id].short} result is saved. Log another to
           draw accuracy and time trends.
         </p>
@@ -1744,7 +1744,7 @@ export const PerformanceOverview = memo(function PerformanceOverview({
           action={
             <Link
               href="/settings"
-              className="inline-flex items-center gap-1.5 rounded-control border border-rule-soft px-2.5 py-1.5 text-[10px] font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent"
+              className="inline-flex items-center gap-1.5 rounded-control border border-rule-soft px-2.5 py-1.5 text-[0.625rem] font-medium text-ink transition-colors hover:border-accent/50 hover:text-accent"
             >
               <Pencil size={11} /> Edit target
             </Link>

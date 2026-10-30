@@ -64,10 +64,10 @@ export function AiCoachCard({
             onClick={onOpenChat}
             className="block w-full rounded-control border border-rule-soft bg-canvas px-4 py-3 text-left transition-colors hover:border-accent/40"
           >
-            <span className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-accent">
+            <span className="flex items-center gap-1.5 text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-accent">
               <Sparkles size={11} /> Latest insight
             </span>
-            <span className="mt-1.5 block truncate font-serif text-[15px] font-medium leading-snug">
+            <span className="mt-1.5 block truncate font-serif text-[0.9375rem] font-medium leading-snug">
               {insight.headline}
             </span>
             <span className="mt-1 block truncate text-xs text-muted">
@@ -83,7 +83,7 @@ export function AiCoachCard({
         )}
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-rule-soft pt-4">
-          <p className="text-[11px] text-muted">
+          <p className="text-[0.6875rem] text-muted">
             Only aggregates and the latest 20 full mocks are sent to the
             configured AI provider. Notes, email, and user identity are never
             sent.
@@ -94,7 +94,7 @@ export function AiCoachCard({
         </div>
 
         {usage && (
-          <p className="mt-3 text-[11px] text-muted tabular">
+          <p className="mt-3 text-[0.6875rem] text-muted tabular">
             Today: {usage.requests} / {usage.limits.requests} requests ·{" "}
             {usage.tokens.toLocaleString("en-IN")} /{" "}
             {usage.limits.tokens.toLocaleString("en-IN")} tokens charged

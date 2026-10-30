@@ -40,7 +40,7 @@ export function DashboardClock() {
         <span className="block font-serif text-sm leading-tight tabular">
           {time ?? "--:--"}
         </span>
-        <span className="block text-[10px] leading-tight text-muted">
+        <span className="block text-[0.625rem] leading-tight text-muted">
           IST
         </span>
       </span>

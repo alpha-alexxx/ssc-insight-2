@@ -188,7 +188,7 @@ function GuardNotice({ tone, checking = false, onRetry }: GuardNoticeProps) {
           <div className="flex items-baseline justify-between border-b border-ink pb-3">
             <span className="wordmark">SSC Insight</span>
             <span
-              className={`inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+              className={`inline-flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-[0.14em] ${
                 blocked ? "text-danger" : "text-accent"
               }`}
             >
@@ -229,7 +229,7 @@ function GuardNotice({ tone, checking = false, onRetry }: GuardNoticeProps) {
           </ol>
 
           <footer className="mt-8 flex items-center justify-between gap-4 border-t border-rule-soft pt-5">
-            <p className="text-[11px] leading-relaxed text-muted">
+            <p className="text-[0.6875rem] leading-relaxed text-muted">
               Re-verified on focus, on return, and every 60 seconds.
             </p>
             {blocked && onRetry && (
@@ -258,7 +258,7 @@ function GuardLedgerRow({ row, index }: { row: GuardRow; index: number }) {
 
   return (
     <li className="flex items-baseline gap-3 border-b border-rule-soft py-3 last:border-b-0">
-      <span className="w-6 shrink-0 tabular-nums text-[11px] font-medium text-muted">
+      <span className="w-6 shrink-0 tabular-nums text-[0.6875rem] font-medium text-muted">
         {String(index + 1).padStart(2, "0")}
       </span>
       <span className="shrink-0 text-sm text-ink">{row.label}</span>
@@ -267,7 +267,7 @@ function GuardLedgerRow({ row, index }: { row: GuardRow; index: number }) {
         className="min-w-4 flex-1 -translate-y-[0.15em] border-b border-dotted border-rule-soft"
       />
       <span
-        className={`shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] ${tone}`}
+        className={`shrink-0 text-[0.625rem] font-semibold uppercase tracking-[0.14em] ${tone}`}
       >
         {row.value}
       </span>
@@ -284,7 +284,7 @@ function ReverifyMark() {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed right-4 top-4 z-50 inline-flex items-center gap-2 rounded-full border border-rule-soft bg-paper/95 px-3 py-1.5 text-[11px] font-medium text-muted shadow-pop backdrop-blur-sm"
+      className="pointer-events-none fixed right-4 top-4 z-50 inline-flex items-center gap-2 rounded-full border border-rule-soft bg-paper/95 px-3 py-1.5 text-[0.6875rem] font-medium text-muted shadow-pop backdrop-blur-sm"
     >
       <span aria-hidden className="relative flex size-1.5">
         <span className="absolute inline-flex size-full rounded-full bg-accent opacity-40 motion-safe:animate-ping" />

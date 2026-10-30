@@ -327,7 +327,7 @@ export function PersonalTodos({
                   <PlainIcon name={kpi.icon} size={15} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[10px] font-medium text-muted">
+                  <span className="block text-[0.625rem] font-medium text-muted">
                     {kpi.label}
                   </span>
                   <span className="block font-serif text-xl leading-tight tabular text-ink">
@@ -511,7 +511,7 @@ export function PersonalTodos({
                   id={dashboardColumn ? "dashboard-personal-date" : undefined}
                   className={cn(
                     "font-serif",
-                    dashboardColumn ? "text-[19px]" : "text-xl",
+                    dashboardColumn ? "text-[1.1875rem]" : "text-xl",
                   )}
                 >
                   {dashboardColumn
@@ -519,7 +519,7 @@ export function PersonalTodos({
                     : `Tasks for ${longDate(date)}`}
                 </h3>
                 {!dashboardColumn && (
-                  <span className="rounded-pill bg-soft px-2 py-0.5 text-[10px] font-medium text-muted">
+                  <span className="rounded-pill bg-soft px-2 py-0.5 text-[0.625rem] font-medium text-muted">
                     {new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", {
                       weekday: "short",
                       day: "numeric",
@@ -539,7 +539,7 @@ export function PersonalTodos({
               ) : (
                 !compact && (
                   <div className="flex shrink-0 items-center gap-3">
-                    <div className="flex items-center gap-2 text-[10px] tabular text-muted">
+                    <div className="flex items-center gap-2 text-[0.625rem] tabular text-muted">
                       <span>
                         {data?.items.filter((t) => t.status === "completed")
                           .length ?? 0}
@@ -674,7 +674,7 @@ export function PersonalTodos({
                 )}
               </form>
               {dashboardColumn && (
-                <p className="text-[10px] leading-relaxed text-muted">
+                <p className="text-[0.625rem] leading-relaxed text-muted">
                   Press Enter to add. Open a task to add notes, priority, or
                   subtasks.
                 </p>
@@ -694,7 +694,7 @@ export function PersonalTodos({
                 {TASK_CATEGORIES.map((cat) => (
                   <span
                     key={cat.id}
-                    className="inline-flex items-center gap-1.5 rounded-pill border border-rule-soft bg-paper px-2.5 py-1 text-[11px] font-medium text-muted"
+                    className="inline-flex items-center gap-1.5 rounded-pill border border-rule-soft bg-paper px-2.5 py-1 text-[0.6875rem] font-medium text-muted"
                   >
                     <span
                       className={cn(
@@ -861,7 +861,7 @@ export function PersonalTodos({
                   aria-pressed={view === item.id}
                   onClick={() => selectView(item.id)}
                   className={cn(
-                    "min-h-9 border-b-2 px-3 text-[13px] font-medium transition-colors",
+                    "min-h-9 border-b-2 px-3 text-[0.8125rem] font-medium transition-colors",
                     view === item.id
                       ? "border-accent text-ink"
                       : "border-transparent text-muted hover:text-ink",
@@ -994,7 +994,7 @@ export function PersonalTodos({
                       <h3
                         className={cn(
                           "font-serif",
-                          dashboardColumn ? "text-[15px]" : "text-lg",
+                          dashboardColumn ? "text-[0.9375rem]" : "text-lg",
                         )}
                       >
                         {group?.name ?? "Ungrouped"}
@@ -1260,11 +1260,11 @@ export function PersonalTodos({
               <div className="min-w-0">
                 <h2
                   id="dashboard-personal-tasks-heading"
-                  className="font-serif text-[19px] font-medium leading-tight tracking-[-0.02em]"
+                  className="font-serif text-[1.1875rem] font-medium leading-tight tracking-[-0.02em]"
                 >
                   Personal tasks
                 </h2>
-                <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                <p className="mt-1 text-[0.6875rem] leading-relaxed text-muted">
                   Your own work for the selected day.
                 </p>
               </div>
@@ -1537,7 +1537,7 @@ function KanbanBoard({
               </p>
               <ul className="flex min-h-24 flex-col gap-2">
                 {column.items.length === 0 && (
-                  <li className="rounded-control border border-dashed border-rule px-3 py-4 text-center text-[11px] text-muted">
+                  <li className="rounded-control border border-dashed border-rule px-3 py-4 text-center text-[0.6875rem] text-muted">
                     Nothing here yet.
                   </li>
                 )}
@@ -1568,13 +1568,13 @@ function KanbanBoard({
                       >
                         <span
                           className={cn(
-                            "block break-words text-[13px] font-medium",
+                            "block break-words text-[0.8125rem] font-medium",
                             todo.status === "completed" && "text-muted line-through",
                           )}
                         >
                           {todo.title}
                         </span>
-                        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.625rem] text-muted">
                           <span
                             className={cn(
                               "inline-flex items-center gap-1 rounded-pill border border-rule-soft px-1.5 py-0.5",
