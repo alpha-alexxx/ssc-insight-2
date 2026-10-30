@@ -122,6 +122,12 @@ export const todoApplySchema = z.object({
   idempotencyKey: z.string().min(8).max(100),
   operations: z.array(todoOperationSchema).min(1).max(25),
 });
+/** Bulk trash: either an explicit id list or "everything matching the list
+ * query" (scope). Soft delete only — Trash stays restorable. */
+export const todoBulkTrashSchema = z.union([
+  z.object({ ids: z.array(z.string().min(1).max(64)).min(1).max(200) }),
+  z.object({ scope: z.literal(true) }),
+]);
 export function normalizeSubtasks(value: unknown): TodoSubtask[] {
   const r = z.array(subtaskSchema).safeParse(value);
   return r.success ? r.data : [];

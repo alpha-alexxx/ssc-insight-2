@@ -8,6 +8,7 @@ import {
   Columns3,
   Info,
   List,
+  ListChecks,
   Plus,
   Search,
   SlidersHorizontal,
@@ -146,6 +147,13 @@ export function PersonalTodos({
   const [groupFilter, setGroupFilter] = useState("all");
   const [sort, setSort] = useState("priority");
   const [confirmTrash, setConfirmTrash] = useState<Todo | null>(null);
+  /** Select mode for bulk delete (list layout, full page only). */
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /** Pending bulk confirm: "selected" ids or "all" matching the query. */
+  const [bulkConfirm, setBulkConfirm] = useState<null | "selected" | "all">(
+    null,
+  );
   const [rescheduling, setRescheduling] = useState<Todo | null>(null);
   const [newDate, setNewDate] = useState("");
   const [creating, setCreating] = useState(false);
@@ -196,15 +204,33 @@ export function PersonalTodos({
       setBusy(false);
     }
   }
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+  function toggleSelectMode(next?: boolean) {
+    const on = next ?? !selectMode;
+    setSelectMode(on);
+    clearSelection();
+  }
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   function selectView(next: View) {
     setView(next);
     setPage(1);
+    clearSelection();
   }
   function selectDate(next: string) {
     if (!next) return;
     setInternalDate(next);
     setView("day");
     setPage(1);
+    clearSelection();
   }
   const visibleGroups = [
     ...(data?.groups ?? []).map((g) => ({ id: g.id, name: g.name })),
@@ -222,6 +248,23 @@ export function PersonalTodos({
   const dashboardProgress = data?.total
     ? Math.round((dashboardCompleted / data.total) * 100)
     : 0;
+  /** Selection honored only for ids on the current page — stale ids from
+   * filters/search changes drop off without needing an effect. */
+  const pageIds = new Set((data?.items ?? []).map((task) => task.id));
+  const visibleSelected = [...selectedIds].filter((id) => pageIds.has(id));
+  async function runBulkDelete() {
+    if (!bulkConfirm) return;
+    const ok =
+      bulkConfirm === "selected"
+        ? await mutate("/api/todos", "DELETE", {
+            ids: visibleSelected,
+          })
+        : await mutate(`/api/todos?${query}`, "DELETE", { scope: true });
+    if (ok) {
+      setBulkConfirm(null);
+      clearSelection();
+    }
+  }
   const body = (
     <>
       {!dashboardColumn && (
@@ -255,7 +298,10 @@ export function PersonalTodos({
                     type="button"
                     aria-pressed={layout === item.id}
                     className="segment"
-                    onClick={() => setLayout(item.id)}
+                    onClick={() => {
+                      setLayout(item.id);
+                      clearSelection();
+                    }}
                   >
                     <item.icon size={14} className="shrink-0" />
                     {item.label}
@@ -786,6 +832,7 @@ export function PersonalTodos({
                       onChange={(e) => {
                         setCompletion(e.target.value);
                         setPage(1);
+                        clearSelection();
                       }}
                     >
                       <option value="all">All statuses</option>
@@ -801,6 +848,7 @@ export function PersonalTodos({
                       onChange={(e) => {
                         setPriority(e.target.value);
                         setPage(1);
+                        clearSelection();
                       }}
                     >
                       <option value="all">All priorities</option>
@@ -817,6 +865,7 @@ export function PersonalTodos({
                       onChange={(e) => {
                         setGroupFilter(e.target.value);
                         setPage(1);
+                        clearSelection();
                       }}
                     >
                       <option value="all">All groups</option>
@@ -836,6 +885,7 @@ export function PersonalTodos({
                       onChange={(e) => {
                         setSort(e.target.value);
                         setPage(1);
+                        clearSelection();
                       }}
                     >
                       <option value="priority">Priority</option>
@@ -880,7 +930,32 @@ export function PersonalTodos({
                 </button>
               ))}
             </div>
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+              {view !== "trash" && (
+                <Button
+                  type="button"
+                  variant={selectMode ? "default" : "outline"}
+                  size="sm"
+                  aria-pressed={selectMode}
+                  onClick={() => toggleSelectMode()}
+                >
+                  <ListChecks size={13} /> Select
+                </Button>
+              )}
+              {view !== "trash" && (data?.total ?? 0) > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-danger/40 text-danger hover:bg-danger-soft"
+                  onClick={() => setBulkConfirm("all")}
+                >
+                  <Trash2 size={13} /> Delete all
+                  {data?.total != null ? (
+                    <span className="tabular-nums">({data.total})</span>
+                  ) : null}
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -897,6 +972,7 @@ export function PersonalTodos({
                   onChange={(e) => {
                     setSearch(e.target.value);
                     setPage(1);
+                    clearSelection();
                   }}
                   placeholder="Search tasks…"
                   className="pl-9!"
@@ -976,6 +1052,51 @@ export function PersonalTodos({
             </div>
           ) : (
             <div className="space-y-5">
+              {selectMode && view !== "trash" && (
+                <div className="flex flex-wrap items-center gap-2 border border-rule-soft bg-canvas px-3 py-2">
+                  <span className="text-xs font-medium tabular-nums text-ink">
+                    {visibleSelected.length} selected
+                  </span>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy || visibleSelected.length === data?.items.length}
+                      onClick={() =>
+                        setSelectedIds(
+                          new Set((data?.items ?? []).map((task) => task.id)),
+                        )
+                      }
+                    >
+                      <ListChecks size={13} /> Select all
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy || !visibleSelected.length}
+                      onClick={clearSelection}
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={busy || !visibleSelected.length}
+                      onClick={() => setBulkConfirm("selected")}
+                    >
+                      <Trash2 size={13} /> Delete selected
+                      {visibleSelected.length > 0 && (
+                        <span className="tabular-nums">
+                          ({visibleSelected.length})
+                        </span>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
               {[...buckets.entries()].map(([key, items]) => {
                 const first = items[0];
                 const group = visibleGroups.find(
@@ -1019,6 +1140,16 @@ export function PersonalTodos({
                         )}
                       >
                         <div className="flex items-start gap-3">
+                          {selectMode && !todo.deletedAt && (
+                            <input
+                              type="checkbox"
+                              className="mt-1"
+                              aria-label={`Select ${todo.title}`}
+                              checked={selectedIds.has(todo.id)}
+                              disabled={busy}
+                              onChange={() => toggleSelected(todo.id)}
+                            />
+                          )}
                           {!todo.deletedAt && (
                             <input
                               type="checkbox"
@@ -1219,7 +1350,10 @@ export function PersonalTodos({
                   size="sm"
                   variant="outline"
                   disabled={page === 1}
-                  onClick={() => setPage(page - 1)}
+                  onClick={() => {
+                    setPage(page - 1);
+                    clearSelection();
+                  }}
                 >
                   Previous
                 </Button>
@@ -1227,7 +1361,10 @@ export function PersonalTodos({
                   size="sm"
                   variant="outline"
                   disabled={page * data.limit >= data.total}
-                  onClick={() => setPage(page + 1)}
+                  onClick={() => {
+                    setPage(page + 1);
+                    clearSelection();
+                  }}
                 >
                   Next
                 </Button>
@@ -1389,6 +1526,46 @@ export function PersonalTodos({
                       setConfirmTrash(null);
                   }}
                 >
+                  Move to Trash
+                </Button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
+      {bulkConfirm && (
+        <Dialog.Root
+          open
+          onOpenChange={(open) => {
+            if (!open && !busy) setBulkConfirm(null);
+          }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/25" />
+            <Dialog.Content {...overlayFocus} className="task-confirm-dialog">
+              <Dialog.Title className="font-serif text-xl">
+                {bulkConfirm === "selected"
+                  ? `Move ${visibleSelected.length} selected ${
+                      visibleSelected.length === 1 ? "todo" : "todos"
+                    } to Trash?`
+                  : `Move all ${data?.total ?? 0} ${
+                      (data?.total ?? 0) === 1 ? "todo" : "todos"
+                    } to Trash?`}
+              </Dialog.Title>
+              <Dialog.Description className="mt-2 text-sm text-muted">
+                {bulkConfirm === "selected"
+                  ? "Selected todos and their subtasks can be restored later."
+                  : "Applies to everything matching the current view, search, and filters. You can restore them from Trash."}
+              </Dialog.Description>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => setBulkConfirm(null)}
+                >
+                  Cancel
+                </Button>
+                <Button variant="destructive" disabled={busy} onClick={() => void runBulkDelete()}>
                   Move to Trash
                 </Button>
               </div>

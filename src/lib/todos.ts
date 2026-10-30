@@ -82,7 +82,9 @@ export async function mutateTodo(
     throw new RequestError("This todo changed. Refresh and review again.", 409);
   return tx.personalTask.findUniqueOrThrow({ where: { id } });
 }
-export async function listTodos(userId: string, params: URLSearchParams) {
+/** Shared /api/todos list-query parsing: validates view/date/search and
+ * builds the raw SQL where-clauses used by both listing and bulk trash. */
+function parseTodoScope(userId: string, params: URLSearchParams) {
   const today = istTodayIso();
   const options = todoListOptions.parse(
     Object.fromEntries(
@@ -96,15 +98,6 @@ export async function listTodos(userId: string, params: URLSearchParams) {
     throw new RequestError("Choose a valid date.", 400);
   const view = params.get("view") || "day";
   const search = (params.get("search") || "").slice(0, 200);
-  const page = Math.max(
-    1,
-    Math.min(100000, Math.floor(Number(params.get("page"))) || 1),
-  );
-  const limit = Math.max(
-    1,
-    Math.min(100, Math.floor(Number(params.get("limit"))) || 50),
-  );
-  const active: Prisma.PersonalTaskWhereInput = { userId, deletedAt: null };
   if (
     ![
       "day",
@@ -147,6 +140,19 @@ export async function listTodos(userId: string, params: URLSearchParams) {
     clauses.push(Prisma.sql`"groupId" IS NULL`);
   else if (options.group !== "all")
     clauses.push(Prisma.sql`"groupId" = ${options.group}`);
+  return { today, options, view, clauses };
+}
+export async function listTodos(userId: string, params: URLSearchParams) {
+  const { today, options, clauses } = parseTodoScope(userId, params);
+  const page = Math.max(
+    1,
+    Math.min(100000, Math.floor(Number(params.get("page"))) || 1),
+  );
+  const limit = Math.max(
+    1,
+    Math.min(100, Math.floor(Number(params.get("limit"))) || 50),
+  );
+  const active: Prisma.PersonalTaskWhereInput = { userId, deletedAt: null };
   const sort = {
     priority: Prisma.sql`CASE WHEN "status"='completed' THEN 1 ELSE 0 END, CASE "priority" WHEN 'high' THEN 0 WHEN 'low' THEN 2 ELSE 1 END,"createdAt","id"`,
     date: Prisma.sql`"dueDate" ASC NULLS LAST, CASE WHEN "status"='completed' THEN 1 ELSE 0 END,"createdAt","id"`,
@@ -211,6 +217,33 @@ export async function listTodos(userId: string, params: URLSearchParams) {
       pending: counts[7],
     },
   };
+}
+/** Bulk soft-delete by explicit ids. Like mutateTodo's trash path, version
+ * bumps so stale editors get 409s, but bulk ops skip per-item version
+ * checks — the confirm dialog is the safety gate. */
+export async function trashTodosById(userId: string, ids: string[]) {
+  const { count } = await database().personalTask.updateMany({
+    where: { userId, id: { in: ids }, deletedAt: null },
+    data: { deletedAt: new Date(), version: { increment: 1 } },
+  });
+  return { count };
+}
+/** Bulk soft-delete of everything matching the list query (view + search +
+ * filters). Reuses listTodos' clause builder so the confirm count and the
+ * deleted set always agree; trash view is rejected (restore instead). */
+export async function trashTodosByScope(
+  userId: string,
+  params: URLSearchParams,
+) {
+  const { view, clauses } = parseTodoScope(userId, params);
+  if (view === "trash")
+    throw new RequestError("Use restore in Trash instead.", 400);
+  const rows = await database().$executeRaw(
+    Prisma.sql`UPDATE "ssc_insight"."PersonalTask"
+      SET "deletedAt" = now(), "version" = "version" + 1, "updatedAt" = now()
+      WHERE ${Prisma.join(clauses, " AND ")}`,
+  );
+  return { count: rows };
 }
 export async function personalCalendar(
   userId: string,
