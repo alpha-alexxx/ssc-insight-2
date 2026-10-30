@@ -13,6 +13,12 @@ export function useHorizontalSwipe(onSwipe: (direction: 1 | -1) => void) {
 
   const onTouchStart = (event: React.TouchEvent) => {
     const touch = event.touches[0];
+    // Gestures starting in form fields (text selection, caret moves in the
+    // notes/result editors) never navigate — a horizontal drag there is
+    // editing, not paging.
+    const target = event.target as HTMLElement | null;
+    if (target?.closest?.("input, textarea, select, [contenteditable='true']"))
+      return;
     if (touch) start.current = { x: touch.clientX, y: touch.clientY };
   };
 

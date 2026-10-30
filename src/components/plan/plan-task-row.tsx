@@ -65,6 +65,34 @@ export function PlanTaskRow({
 }) {
   const compact = density === "compact";
   const startLink = !task.completed && task.url ? task.url : null;
+  const showActions = Boolean((onLogAttempt && !task.completed) || startLink);
+  /** One chip row, rendered under the meta on phones and at the right edge
+   * on sm+ — long task names keep the full row width on mobile. */
+  const actions = showActions ? (
+    <>
+      {onLogAttempt && !task.completed && (
+        <button
+          type="button"
+          onClick={onLogAttempt}
+          className="inline-flex items-center gap-1 rounded-pill border border-accent/30 px-2 py-0.5 text-[10px] font-medium text-accent transition-colors hover:border-accent/60"
+        >
+          Log attempt
+        </button>
+      )}
+      {startLink && (
+        <a
+          href={startLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Open ${task.name} in a new tab`}
+          title={`Open ${task.name}`}
+          className="inline-flex items-center gap-1 rounded-pill border border-rule-soft px-2 py-0.5 text-[10px] font-medium text-accent transition-colors hover:border-accent/60"
+        >
+          Start <PlainIcon name="arrowUpRight" size={11} />
+        </a>
+      )}
+    </>
+  ) : null;
   const body = (
     <>
       {compact ? (
@@ -104,6 +132,11 @@ export function PlanTaskRow({
           </span>
           <ResultLine task={task} />
         </span>
+        {actions && (
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
+            {actions}
+          </span>
+        )}
       </span>
     </>
   );
@@ -132,29 +165,11 @@ export function PlanTaskRow({
         ) : (
           <div className="flex min-w-0 flex-1 items-start gap-2.5">{body}</div>
         )}
-        <div className="flex shrink-0 items-center gap-1.5">
-          {onLogAttempt && !task.completed && (
-            <button
-              type="button"
-              onClick={onLogAttempt}
-              className="whitespace-nowrap text-[10px] font-medium text-accent transition-colors hover:text-accent-hover"
-            >
-              Log attempt
-            </button>
-          )}
-          {startLink && (
-            <a
-              href={startLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Open ${task.name} in a new tab`}
-              title={`Open ${task.name}`}
-              className="inline-flex items-center gap-1 rounded-control border border-rule-soft px-2 py-1 text-[10px] font-medium text-accent transition-colors hover:border-accent/50"
-            >
-              Start <PlainIcon name="arrowUpRight" size={11} />
-            </a>
-          )}
-        </div>
+        {actions && (
+          <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+            {actions}
+          </div>
+        )}
       </div>
       {children}
     </li>

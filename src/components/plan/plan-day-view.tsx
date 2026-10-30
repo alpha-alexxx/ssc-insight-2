@@ -173,50 +173,58 @@ export function PlanDayView({
   }
 
   return (
-    <div className="mx-auto max-w-6xl" {...swipe}>
+    <div className="mx-auto max-w-6xl">
       {/* ---- Top nav: prev · calendar … add record · next ---- */}
-      <div className="mb-5 flex flex-wrap items-center justify-center gap-2 sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          <div
-            role="group"
-            aria-label="Plan day navigation"
-            className="segment-group"
-          >
-            {previous ? (
-              <Link
-                href={`/plan/${previous.date}`}
-                className="segment"
-                title={`Day ${previous.day} · ${longDate(previous.date)}`}
-              >
-                <PlainIcon name="arrowLeft" size={13} /> Day {previous.day}
-              </Link>
-            ) : (
-              <span className="segment opacity-50" aria-disabled="true">
-                <PlainIcon name="arrowLeft" size={13} /> Day 1
-              </span>
-            )}
-            {next ? (
-              <Link
-                href={`/plan/${next.date}`}
-                className="segment"
-                title={`Day ${next.day} · ${longDate(next.date)}`}
-              >
-                Day {next.day} <PlainIcon name="arrowRight" size={13} />
-              </Link>
-            ) : (
-              <span className="segment opacity-50" aria-disabled="true">
-                Day 50 <PlainIcon name="arrowRight" size={13} />
-              </span>
-            )}
-          </div>
-          <Link
-            href="/calendar"
-            className="inline-flex items-center gap-1.5 rounded-control px-2 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-soft hover:text-ink"
-          >
-            <PlainIcon name="calendar" size={15} /> Calendar
-          </Link>
+      <div className="mb-5 grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
+        <div
+          role="group"
+          aria-label="Plan day navigation"
+          className="segment-group col-span-2 grid grid-cols-2 gap-0.5 sm:col-span-1 sm:inline-flex sm:w-auto"
+        >
+          {previous ? (
+            <Link
+              href={`/plan/${previous.date}`}
+              className="segment justify-center"
+              title={`Day ${previous.day} · ${longDate(previous.date)}`}
+            >
+              <PlainIcon name="arrowLeft" size={13} /> Day {previous.day}
+            </Link>
+          ) : (
+            <span
+              className="segment justify-center opacity-50"
+              aria-disabled="true"
+            >
+              <PlainIcon name="arrowLeft" size={13} /> Day 1
+            </span>
+          )}
+          {next ? (
+            <Link
+              href={`/plan/${next.date}`}
+              className="segment justify-center"
+              title={`Day ${next.day} · ${longDate(next.date)}`}
+            >
+              Day {next.day} <PlainIcon name="arrowRight" size={13} />
+            </Link>
+          ) : (
+            <span
+              className="segment justify-center opacity-50"
+              aria-disabled="true"
+            >
+              Day 50 <PlainIcon name="arrowRight" size={13} />
+            </span>
+          )}
         </div>
-        <Button size="sm" onClick={() => onAddMock(current.date)}>
+        <Link
+          href="/calendar"
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-2 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-soft hover:text-ink sm:min-h-0 sm:justify-start"
+        >
+          <PlainIcon name="calendar" size={15} /> Calendar
+        </Link>
+        <Button
+          size="sm"
+          className="w-full sm:ml-auto sm:w-auto"
+          onClick={() => onAddMock(current.date)}
+        >
           <PlainIcon name="plus" size={13} /> Add mock record
         </Button>
       </div>
@@ -233,7 +241,7 @@ export function PlanDayView({
         </p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
           <div className="min-w-0">
-            <h1 className="text-[44px] font-semibold leading-none tracking-[-0.03em] text-ink">
+            <h1 className="text-[2rem] font-semibold leading-none tracking-[-0.03em] text-ink sm:text-[44px]">
               Day {current.day}
             </h1>
             <p
@@ -263,7 +271,9 @@ export function PlanDayView({
           </div>
         </div>
 
-        {/* Next-up callout: the workflow's "what do I do now?" answer. */}
+        {/* Next-up callout: the workflow's "what do I do now?" answer.
+            Phones: label + name on one row, stats + full-width actions on
+            the next; sm+ keeps the single inline row. */}
         {(nextUp || carriedOver) && (
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-panel border border-accent/30 bg-accent-soft/40 px-4 py-3">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-accent">
@@ -272,7 +282,7 @@ export function PlanDayView({
             {carriedOver ? (
               <Link
                 href={`/plan/${carriedOver.day.date}`}
-                className="min-w-0 text-sm font-medium text-ink underline-offset-4 hover:text-accent hover:underline"
+                className="min-w-0 flex-1 basis-full text-sm font-medium text-ink underline-offset-4 hover:text-accent hover:underline sm:basis-0"
               >
                 Day {carriedOver.day.day} · {carriedOver.task.name}
                 <span className="ml-2 text-[11px] font-normal text-muted">
@@ -281,19 +291,19 @@ export function PlanDayView({
               </Link>
             ) : (
               <>
-                <p className="min-w-0 text-sm font-medium text-ink">
+                <p className="min-w-0 flex-1 basis-full break-words text-sm font-medium text-ink sm:basis-0">
                   {nextUp!.task.name}
                 </p>
                 <span className="text-[11px] tabular text-muted">
                   {nextUp!.task.questions} Q · {nextUp!.task.marks} marks
                 </span>
-                <div className="ml-auto flex items-center gap-1.5">
+                <div className="flex w-full items-center gap-1.5 sm:ml-auto sm:w-auto">
                   {nextUp!.task.url && (
                     <a
                       href={nextUp!.task.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded-control border border-rule-soft bg-paper px-2 py-1 text-[10px] font-medium text-accent transition-colors hover:border-accent/50"
+                      className="inline-flex min-h-9 flex-1 items-center justify-center gap-1 rounded-control border border-rule-soft bg-paper px-2 py-1 text-[10px] font-medium text-accent transition-colors hover:border-accent/50 sm:min-h-0 sm:flex-none"
                     >
                       Start <PlainIcon name="arrowUpRight" size={11} />
                     </a>
@@ -303,7 +313,7 @@ export function PlanDayView({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7 text-[10px] text-accent"
+                      className="min-h-9 flex-1 text-[10px] text-accent sm:min-h-0 sm:flex-none"
                       onClick={() => onAddMock(current.date, nextUp!.task)}
                     >
                       Log attempt
@@ -314,11 +324,36 @@ export function PlanDayView({
             )}
           </div>
         )}
+
+        {/* Slim plan context for phones — the desktop rail hides below lg. */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted lg:hidden">
+          <span className="truncate">
+            {phase?.name ?? `Phase ${current.phase}`} · Day {current.day} of{" "}
+            {plan.days.length} ·{" "}
+            {phaseStats.total
+              ? Math.round((phaseStats.completed / phaseStats.total) * 100)
+              : 0}
+            % of phase
+          </span>
+          {nearestToday && nearestToday.date !== current.date && (
+            <Link
+              href={`/plan/${nearestToday.date}`}
+              className="font-medium text-accent underline-offset-4 hover:underline"
+            >
+              {nearestToday.date === today
+                ? "Jump to today"
+                : `Latest day (${shortDate(nearestToday.date)})`}
+              →
+            </Link>
+          )}
+        </div>
       </header>
 
       {/* ---- Guided flow + desktop context rail ---- */}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
-        <main className="flex min-w-0 flex-col gap-5">
+        {/* Swipe scoped to the flow column (the calendar's pattern) — the
+            hook itself ignores gestures that start in form fields. */}
+        <main className="flex min-w-0 flex-col gap-5" {...swipe}>
           {/* 1 · Today's work */}
           <FlowSection
             index={1}
@@ -574,7 +609,7 @@ export function PlanDayView({
         </main>
 
         {/* Desktop context rail */}
-        <aside className="flex min-w-0 flex-col gap-5 lg:col-start-2 lg:row-start-1">
+        <aside className="hidden min-w-0 flex-col gap-5 lg:flex lg:col-start-2 lg:row-start-1">
           <section className="panel p-4 sm:p-5" aria-label="Plan context">
             <h2 className="font-serif text-lg font-medium">Plan context</h2>
             <div className="mt-3.5">
@@ -741,7 +776,7 @@ function FlowSection({
             done={Math.round(rule * 100)}
             total={100}
             label={`${label} progress`}
-            className="min-w-16 flex-1"
+            className="w-full sm:w-auto sm:min-w-16 sm:flex-1"
           />
         )}
         {action && <div className="ml-auto shrink-0">{action}</div>}
@@ -861,6 +896,7 @@ function DayNotes({
           maxLength={2000}
           value={draft.value}
           placeholder="Weak areas, recurring mistakes, formulas to revisit…"
+          className="max-sm:text-base"
           onChange={(e) =>
             setDraft((current) => ({ ...current, value: e.target.value }))
           }

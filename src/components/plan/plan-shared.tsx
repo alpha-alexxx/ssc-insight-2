@@ -113,7 +113,7 @@ export function CompleteToggle({
       aria-checked={completed}
       aria-label={label}
       onClick={onToggle}
-      className={`mt-0.5 flex size-5.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors ${
+      className={`relative mt-0.5 flex size-5.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors after:absolute after:-inset-2.5 after:content-[''] ${
         completed
           ? "border-positive bg-positive-soft text-positive"
           : "border-rule bg-paper hover:border-ink"

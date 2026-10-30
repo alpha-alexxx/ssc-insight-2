@@ -40,7 +40,7 @@ export function TaskStatusButton({
       aria-label={`Status: ${STATUS_META[display].label}. Activate to mark ${STATUS_META[next].label.toLowerCase()}.`}
       title={`Status: ${STATUS_META[display].label} — click for ${STATUS_META[next].label}`}
       className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-110 motion-reduce:transition-none motion-reduce:hover:scale-100",
+        "relative flex size-7 shrink-0 items-center justify-center rounded-full transition-transform after:absolute after:-inset-2 after:content-[''] hover:scale-110 motion-reduce:transition-none motion-reduce:hover:scale-100",
         className,
       )}
     >

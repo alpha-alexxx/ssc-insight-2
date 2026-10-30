@@ -116,7 +116,7 @@ export function ResultEditor({
       {label}
       <input
         type="number"
-        className="no-spin"
+        className="no-spin max-sm:text-base"
         min={0}
         max={max}
         step={step}
@@ -131,7 +131,7 @@ export function ResultEditor({
   return (
     <div className="mt-3 ml-0 rounded-control border border-rule-soft bg-canvas p-4 sm:ml-[52px]">
       {matched && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-control border border-accent/30 bg-accent-soft/50 px-3 py-2">
+        <div className="mb-3 flex flex-col gap-2 rounded-control border border-accent/30 bg-accent-soft/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-ink">
             <span className="font-medium">Matched attempt:</span>{" "}
             {matched.name} · {totals(matched).score}/{totals(matched).maxScore}
@@ -139,7 +139,13 @@ export function ResultEditor({
               ? ` · ${matched.percentile}%ile`
               : ""}
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={fill}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full sm:w-auto"
+            onClick={fill}
+          >
             <PlainIcon name="download" size={12} /> Fill from attempt
           </Button>
         </div>
@@ -183,6 +189,7 @@ export function ResultEditor({
           rows={2}
           maxLength={2000}
           value={notes}
+          className="max-sm:text-base"
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Tricks, formulas, mistakes to revisit"
         />
