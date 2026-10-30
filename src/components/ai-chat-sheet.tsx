@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  ArrowUp,
   BarChart3,
   BookOpen,
   Calendar,
@@ -12,9 +13,10 @@ import {
   Lightbulb,
   ListTodo,
   MessageSquare,
-  Send,
+  Pencil,
   Sparkles,
   Square,
+  Trash2,
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -474,85 +476,85 @@ function CoachChatTab({
       {/* Composer */}
       <form
         className={
-          configured ? "ai-composer shrink-0 bg-paper px-5 pb-5 pt-3" : "hidden"
+          configured
+            ? "ai-composer shrink-0 bg-paper px-3 pb-3 pt-2 sm:px-5 sm:pb-5 sm:pt-3"
+            : "hidden"
         }
         onSubmit={(event) => {
           event.preventDefault();
           submit(input);
         }}
       >
-        <div className="rounded-card border border-rule-soft bg-paper p-3 sm:p-3.5">
-          <div className="flex items-start gap-2">
-            <MessageSquare size={16} className="mt-0.5 shrink-0 text-muted" />
-            <textarea
-              ref={inputRef}
-              id="ai-chat-input"
-              rows={3}
-              maxLength={maxChars}
-              value={input}
-              aria-label="Message your study coach"
-              placeholder="Ask about a mock, a weak subject, or what to do next..."
-              className="max-h-24 flex-1 resize-none border-0 bg-transparent p-0 text-[13px] leading-relaxed placeholder:text-muted focus:outline-none focus:ring-0"
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.preventDefault();
-                  submit(input);
-                }
-              }}
-            />
-          </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 sm:mt-3">
-            <div className="flex min-w-0 items-center gap-1">
-              <Button
+        <div className="rounded-card border border-rule-soft bg-paper p-2 sm:p-2.5">
+          <textarea
+            ref={inputRef}
+            id="ai-chat-input"
+            rows={2}
+            maxLength={maxChars}
+            value={input}
+            aria-label="Message your study coach"
+            placeholder="Ask about a mock, a weak subject, or what to do next..."
+            className="max-h-28 w-full resize-none border-0 bg-transparent px-2 pt-1.5 text-[13px] leading-relaxed placeholder:text-muted focus:outline-none focus:ring-0"
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                submit(input);
+              }
+            }}
+          />
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-0.5">
+              <button
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="px-2"
+                aria-label="Clear chat"
+                title="Clear chat"
+                className="inline-flex size-11 items-center justify-center rounded-[var(--radius-pill)] text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none disabled:opacity-40 sm:size-10"
                 disabled={streaming || !messages.length}
                 onClick={onClear}
               >
-                Clear chat
-              </Button>
+                <Trash2 size={18} />
+              </button>
               {error && lastSent && (
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="px-2 text-accent hover:bg-accent-soft hover:text-accent"
+                  aria-label="Edit question"
+                  title="Edit question"
+                  className="inline-flex size-11 items-center justify-center rounded-[var(--radius-pill)] text-accent transition-colors hover:bg-accent-soft disabled:pointer-events-none disabled:opacity-40 sm:size-10"
                   onClick={() => setInput(lastSent)}
                 >
-                  Edit question
-                </Button>
+                  <Pencil size={17} />
+                </button>
               )}
             </div>
-            <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
-              <span className="text-[10px] tabular text-muted sm:text-[11px]">
+            <div className="flex items-center gap-1.5">
+              <span className="mr-1 text-[10px] tabular text-muted sm:text-[11px]">
                 {charCount}/{maxChars}
               </span>
               {streaming ? (
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="min-h-11 flex-1 sm:min-h-0 sm:flex-none"
+                  aria-label="Stop generating"
+                  title="Stop"
+                  className="inline-flex size-11 items-center justify-center rounded-[var(--radius-pill)] border border-rule bg-paper text-ink transition-colors hover:bg-canvas sm:size-10"
                   onClick={onStop}
                 >
-                  <Square size={13} /> Stop
-                </Button>
+                  <Square size={15} />
+                </button>
               ) : (
-                <Button
+                <button
                   type="submit"
-                  size="sm"
-                  className="min-h-11 flex-1 sm:min-h-0 sm:flex-none"
+                  aria-label="Send message"
+                  title="Send"
+                  className="inline-flex size-11 items-center justify-center rounded-[var(--radius-pill)] bg-accent text-paper transition-colors duration-150 hover:bg-accent-hover disabled:pointer-events-none disabled:bg-canvas disabled:text-muted sm:size-10"
                   disabled={!input.trim() || streaming}
                 >
-                  Send <Send size={13} />
-                </Button>
+                  <ArrowUp size={19} strokeWidth={2.4} />
+                </button>
               )}
             </div>
           </div>
