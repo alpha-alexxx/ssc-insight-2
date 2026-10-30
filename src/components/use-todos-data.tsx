@@ -68,6 +68,14 @@ export function useTodoQuery<T>(path: string) {
             throw error;
           });
         store.entries.set(path, current);
+        // Bound the cache: transient paths (e.g. debounced search keys) must
+        // not grow it without limit. Map preserves insertion order, so the
+        // first key is the oldest entry.
+        if (store.entries.size > 40) {
+          const oldest = store.entries.keys().next();
+          if (!oldest.done && oldest.value !== path)
+            store.entries.delete(oldest.value);
+        }
       }
       const current = entry;
       void (
@@ -110,12 +118,12 @@ export function useTodoQuery<T>(path: string) {
   };
 }
 
-export async function mutateTodoRequest(
+export async function mutateTodoRequest<T = unknown>(
   path: string,
   method: string,
   body?: unknown,
-) {
-  const result = await api(path, {
+): Promise<T> {
+  const result = await api<T>(path, {
     method,
     ...(body ? { body: JSON.stringify(body) } : {}),
   });

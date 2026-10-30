@@ -30,7 +30,7 @@ import { useAiWorkspace } from "./use-ai-workspace";
 import { useBackupImport } from "./use-backup-import";
 import { useWorkspaceData } from "./use-workspace-data";
 import { usePlanData } from "./use-plan-data";
-import { PersonalTodos } from "./plan/personal-todos";
+import { MyTasksView } from "./tasks/my-tasks-view";
 import { TodosDataProvider } from "./use-todos-data";
 import { CalendarView } from "./plan/calendar-view";
 import { PlanDayView } from "./plan/plan-day-view";
@@ -358,15 +358,23 @@ function WorkspaceShellInner({
   useKeyboardShortcuts(
     useMemo(
       () => ({
-        onAddMock: add,
+        // On My Tasks, `n` focuses the quick-add bar instead of the Add Mock
+        // form — new work means a task there, not a mock.
+        onAddMock: () => {
+          if (view === "tasks") {
+            window.dispatchEvent(new Event("ssc:tasks-quick-add"));
+            return;
+          }
+          add();
+        },
         onNavigate: navigate,
         onShowHelp: () =>
           toast.info(
             "Shortcuts",
-            "n=new mock · g d/h/c/s=navigate · /=focus search · ?=help",
+            "n=new (task on My Tasks, mock elsewhere) · g d/h/c/s=navigate · /=focus search · ?=help",
           ),
       }),
-      [add, navigate, toast],
+      [add, navigate, toast, view],
     ),
   );
 
@@ -684,7 +692,7 @@ function WorkspaceShellInner({
                         onSelectedDateChange={setPlannerDate}
                       />
                     ) : view === "tasks" ? (
-                      <PersonalTodos />
+                      <MyTasksView />
                     ) : view === "plan" ? (
                       <PlanDayView
                         date={decodeURIComponent(

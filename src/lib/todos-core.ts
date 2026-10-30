@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 export const todoListOptions = z.object({
-  completion: z.enum(["all", "pending", "completed"]).default("all"),
+  completion: z
+    .enum(["all", "pending", "in_progress", "completed"])
+    .default("all"),
   priority: z.enum(["all", "high", "normal", "low"]).default("all"),
   group: z.string().max(100).default("all"),
   sort: z.enum(["priority", "date", "newest", "title"]).default("priority"),
@@ -107,6 +109,9 @@ export const todoPatchSchema = z.object({
     .optional(),
   version: z.number().int().min(1),
   completed: z.boolean().optional(),
+  /** Full status control for the three-state UI. "in_progress" is a working
+   * state: it keeps subtask progress exactly as-is. */
+  status: z.enum(["todo", "in_progress", "completed"]).optional(),
   restore: z.boolean().optional(),
 });
 export const todoOperationSchema = z.discriminatedUnion("type", [

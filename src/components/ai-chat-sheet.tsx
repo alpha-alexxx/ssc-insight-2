@@ -30,7 +30,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "./ui/sheet";
-import { TodoAiComposer } from "./plan/personal-todos";
+import { TodoAiComposer } from "./tasks/ai-composer";
 import { AiSettingsForm } from "./ai-settings-form";
 import { ExtractionReview } from "./extraction-review";
 import { parseReport } from "@/lib/report-parser";

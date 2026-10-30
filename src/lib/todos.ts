@@ -59,12 +59,20 @@ export async function mutateTodo(
   if (old.deletedAt && !d.restore && !trash)
     throw new RequestError("Restore this todo before editing.", 409);
   await groupCheck(tx, userId, d.groupId);
-  const { version, completed, restore, ...patch } = d;
-  const state = completionState(
-    d.subtasks ?? normalizeSubtasks(old.subtasks),
-    old.status,
-    completed,
-  );
+  const { version, completed, status, restore, ...patch } = d;
+  const subtasks = d.subtasks ?? normalizeSubtasks(old.subtasks);
+  // An explicit status wins over the completed flag. "in_progress" is a
+  // working state, so subtask progress is preserved as-is; "completed" /
+  // "todo" reuse the same cascade as the completed flag (complete cascades
+  // to all subtasks, reopening clears them — the long-standing behavior).
+  const state =
+    status === "in_progress"
+      ? { subtasks, status }
+      : completionState(
+          subtasks,
+          old.status,
+          status ? status === "completed" : completed,
+        );
   const updated = await tx.personalTask.updateMany({
     where: { id, userId, version },
     data: {
@@ -128,6 +136,8 @@ function parseTodoScope(userId: string, params: URLSearchParams) {
   if (view === "needsdate") clauses.push(Prisma.sql`"dueDate" IS NULL`);
   if (view === "completed" || options.completion === "completed")
     clauses.push(Prisma.sql`"status" = 'completed'`);
+  if (options.completion === "in_progress")
+    clauses.push(Prisma.sql`"status" = 'in_progress'`);
   if (options.completion === "pending")
     clauses.push(Prisma.sql`"status" <> 'completed'`);
   if (options.priority !== "all")
@@ -191,6 +201,7 @@ export async function listTodos(userId: string, params: URLSearchParams) {
       db.personalTask.count({
         where: { ...active, status: { not: "completed" } },
       }),
+      db.personalTask.count({ where: { ...active, status: "in_progress" } }),
     ]),
   ]);
   const records = await db.personalTask.findMany({
@@ -215,6 +226,7 @@ export async function listTodos(userId: string, params: URLSearchParams) {
       trash: counts[5],
       completed: counts[6],
       pending: counts[7],
+      inProgress: counts[8],
     },
   };
 }

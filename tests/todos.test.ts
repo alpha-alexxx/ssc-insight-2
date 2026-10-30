@@ -95,6 +95,10 @@ test("list filters have compatible defaults and reject unsupported sort and stat
       excludeDate: "2027-01-01",
     },
   );
+  assert.equal(
+    todoListOptions.safeParse({ completion: "in_progress" }).success,
+    true,
+  );
 });
 const subtasks = [
   { id: "a", title: "Read", completed: false },
@@ -190,4 +194,27 @@ test("partial edits never inject create defaults or erase subtasks", () => {
     version: 1,
     completed: true,
   });
+});
+
+test("status patches accept the three-state values and never inject a default", () => {
+  for (const status of ["todo", "in_progress", "completed"]) {
+    assert.deepEqual(todoPatchSchema.parse({ version: 1, status }), {
+      version: 1,
+      status,
+    });
+  }
+  assert.equal(
+    todoPatchSchema.safeParse({ version: 1, status: "done" }).success,
+    false,
+  );
+  assert.equal(
+    todoPatchSchema.safeParse({ version: 1, status: null }).success,
+    false,
+  );
+  // A bare completed patch still parses identically (AI proposals and the
+  // checkbox stay source-compatible).
+  assert.deepEqual(
+    todoPatchSchema.parse({ version: 2, completed: false, status: "todo" }),
+    { version: 2, completed: false, status: "todo" },
+  );
 });

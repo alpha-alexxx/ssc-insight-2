@@ -402,12 +402,17 @@ export const safeHttpUrlCore = (value: string): boolean => {
  * without a due date are never overdue. The dot system renders these four.
  */
 export function effectiveStatus(
-  task: Pick<PersonalTaskView, "status" | "dueDate">,
+  task: Pick<PersonalTaskView, "dueDate"> & { status: string },
   todayIso: string,
 ): PlanTaskStatus | "overdue" {
   if (task.status === "completed") return "completed";
   if (task.dueDate && task.dueDate < todayIso) return "overdue";
-  return task.status;
+  // Stored status is a free string; known non-default states pass through
+  // and anything unrecognized reads as "todo" so the dot lookup never
+  // misses.
+  return task.status === "in_progress" || task.status === "skipped"
+    ? (task.status as PlanTaskStatus)
+    : "todo";
 }
 
 /** Host of a stored task URL, or null when the URL is missing/invalid. Used

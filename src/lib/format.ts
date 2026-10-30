@@ -29,6 +29,17 @@ const longDay = new Intl.DateTimeFormat("en-IN", {
   year: "numeric",
   timeZone: "Asia/Kolkata",
 });
+const weekdayDay = new Intl.DateTimeFormat("en-IN", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "Asia/Kolkata",
+});
+/** "Friday, 30 October 2026" — the tasks workspace dateline. */
+export function weekdayDate(date: string): string {
+  return safeFormat(weekdayDay, date);
+}
 const monthDay = new Intl.DateTimeFormat("en-IN", {
   month: "long",
   year: "numeric",
