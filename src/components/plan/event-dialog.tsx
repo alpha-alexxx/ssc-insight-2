@@ -30,7 +30,7 @@ export function EventDialog({
     <Dialog.Root open={!!task} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay fixed inset-0 bg-ink/40 z-40" />
-        <Dialog.Content className="dialog-content fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-paper border border-rule rounded-panel w-[calc(100%-32px)] max-w-lg max-h-[85vh] overflow-auto p-6 shadow-pop">
+        <Dialog.Content className="event-dialog dialog-content fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-paper border border-rule rounded-panel w-[calc(100%-32px)] max-w-lg max-h-[85vh] overflow-auto p-6 shadow-pop">
           {task && (
             <>
               <Dialog.Title className="font-serif text-2xl leading-tight pr-8">

@@ -27,8 +27,11 @@ import { DayView } from "./calendar/day-view";
 import { MonthGrid, MonthLegend } from "./calendar/month-grid";
 import { PeriodNav, stepSize } from "./calendar/period-nav";
 import { SelectedDayPanel } from "./calendar/selected-day-panel";
+import { SelectedDaySheet } from "./calendar/selected-day-sheet";
 import { CALENDAR_MODES, type CalendarMode } from "./calendar/visuals";
 import { WeekView } from "./calendar/week-view";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useHorizontalSwipe } from "@/hooks/use-horizontal-swipe";
 
 /**
  * Study calendar — four surfaces (month/week/day/agenda) over the merged
@@ -61,10 +64,29 @@ export function CalendarView({
   const [event, setEvent] = useState<
     { task: PlanTaskView; day: PlanDayView } | undefined
   >();
+  const isMobile = useIsMobile();
+  const [daySheetOpen, setDaySheetOpen] = useState(false);
 
   useEffect(() => {
     onSelectedDateChange?.(selected);
   }, [selected, onSelectedDateChange]);
+
+  /* Hooks live above the loading/error returns. `step` is inert until the
+     plan exists, which is exactly when the swipe handler can fire anyway. */
+  const step = (direction: 1 | -1) => {
+    if (!plan) return;
+    const next =
+      mode === "month"
+        ? shiftMonth(plan, selected, direction)
+        : addIsoDays(selected, direction * stepSize(mode));
+    setSelected(clampToPlan(plan, next));
+  };
+
+  /* Swipe left/right on the month/week surface steps the period on touch. */
+  const swipeHandlers = useHorizontalSwipe(step);
+
+  /* A sheet left open across a phone→desktop resize simply unmounts via
+     `open={isMobile && daySheetOpen}`; no effect needed to close it. */
 
   if (loading && !plan) return <CalendarLoading />;
   if (!plan)
@@ -86,14 +108,34 @@ export function CalendarView({
       .forEach((task) => updateTask(task.key, { completed: true }));
   };
 
-  const step = (direction: 1 | -1) => {
-    const next =
-      mode === "month"
-        ? shiftMonth(plan, selected, direction)
-        : addIsoDays(selected, direction * stepSize(mode));
-    setSelected(clampToPlan(plan, next));
-  };
   const goToday = () => setSelected(clampToPlan(plan, today));
+
+  /** Grid taps select the day and, on phones, present it in the bottom sheet
+      — the aside only exists from md up, so below that the sheet is the only
+      way to see a day's schedule without scrolling past the grid. Period
+      navigation (arrows, date input, Today) deliberately doesn't open it. */
+  const selectDay = (iso: string) => {
+    setSelected(clampToPlan(plan, iso));
+    if (isMobile) setDaySheetOpen(true);
+  };
+
+  /** Sheet actions that hand off to an overlay or route close the sheet
+      first: the dialog overlays sit at the same z-index, so a dialog opened
+      over the sheet would leave the sheet clickable through the dimmer. */
+  const sheetCallbacks = {
+    onOpenTask: (task: PlanTaskView, day: PlanDayView) => {
+      setDaySheetOpen(false);
+      setEvent({ task, day });
+    },
+    onAddMock: (date: string, task?: PlanTaskView) => {
+      setDaySheetOpen(false);
+      onAddMock(date, task);
+    },
+    onOpenAttempt: (attempt: Attempt) => {
+      setDaySheetOpen(false);
+      onOpenAttempt(attempt);
+    },
+  };
 
   const nav = (
     <PeriodNav
@@ -155,7 +197,7 @@ export function CalendarView({
         <div
           role="group"
           aria-label="Calendar view"
-          className="segment-group grid w-full grid-cols-2 gap-0.5 sm:inline-flex sm:w-auto"
+          className="segment-group grid w-full grid-cols-4 gap-0.5 sm:inline-flex sm:w-auto"
         >
           {CALENDAR_MODES.map((entry) => (
             <button
@@ -190,6 +232,7 @@ export function CalendarView({
                       : `Week of ${shortDate(weekRange(selected).from)}`
                   }
                   nav={nav}
+                  touchHandlers={swipeHandlers}
                 >
                   {mode === "month" ? (
                     <MonthGrid
@@ -198,7 +241,7 @@ export function CalendarView({
                       today={today}
                       planStart={plan.startDate}
                       planEnd={plan.endDate}
-                      onSelect={(iso) => setSelected(clampToPlan(plan, iso))}
+                      onSelect={selectDay}
                       onMonthStep={step}
                     />
                   ) : (
@@ -206,7 +249,7 @@ export function CalendarView({
                       days={plan.days}
                       selected={selected}
                       today={today}
-                      onSelect={(iso) => setSelected(clampToPlan(plan, iso))}
+                      onSelect={selectDay}
                     />
                   )}
                 </CalendarSurface>
@@ -250,7 +293,7 @@ export function CalendarView({
         </div>
 
         {asideAgenda && (
-          <aside className="min-w-0 xl:sticky xl:top-[72px] xl:self-start">
+          <aside className="hidden min-w-0 md:block xl:sticky xl:top-[72px] xl:self-start">
             <Swap swapKey={selected}>
               <SelectedDayPanel
                 day={selectedDay}
@@ -270,6 +313,25 @@ export function CalendarView({
           </aside>
         )}
       </div>
+
+      {asideAgenda && (
+        <SelectedDaySheet
+          open={isMobile && daySheetOpen}
+          onOpenChange={(open) => {
+            if (!open) setDaySheetOpen(false);
+          }}
+          day={selectedDay}
+          selected={selected}
+          planLength={plan.days.length}
+          planStart={plan.startDate}
+          planEnd={plan.endDate}
+          attempts={dayAttempts}
+          {...sheetCallbacks}
+          onMarkAllDone={
+            selectedDay ? () => markAllDone(selectedDay) : undefined
+          }
+        />
+      )}
 
       <EventDialog
         task={event?.task ?? null}

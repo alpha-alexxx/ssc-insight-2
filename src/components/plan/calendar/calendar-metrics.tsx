@@ -48,7 +48,7 @@ export function CalendarMetrics({
   const mocksDone = mocks.filter((task) => task.completed).length;
 
   return (
-    <div className="metric-strip">
+    <div className="metric-strip metric-strip-scroll">
       <MetricCell
         label="Next mock"
         icon="file"

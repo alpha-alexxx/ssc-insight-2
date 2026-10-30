@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 /**
  * Panel chrome shared by the month, week, day and agenda surfaces: a title, an
@@ -13,6 +13,7 @@ export function CalendarSurface({
   nav,
   children,
   live,
+  touchHandlers,
 }: {
   title: ReactNode;
   meta?: ReactNode;
@@ -20,6 +21,8 @@ export function CalendarSurface({
   children: ReactNode;
   /** Announce period changes to a screen reader (set on the title only). */
   live?: boolean;
+  /** Touch handlers for swipe period navigation on the surface body. */
+  touchHandlers?: Pick<ComponentProps<"div">, "onTouchStart" | "onTouchEnd">;
 }) {
   return (
     <section className="panel">
@@ -40,7 +43,9 @@ export function CalendarSurface({
           </div>
         )}
       </div>
-      <div className="px-4 pb-4 pt-3 sm:px-6">{children}</div>
+      <div className="px-4 pb-4 pt-3 sm:px-6" {...touchHandlers}>
+        {children}
+      </div>
     </section>
   );
 }

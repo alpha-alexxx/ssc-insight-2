@@ -1471,6 +1471,31 @@ html {
   .metric-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  /* The calendar's strip is one swipeable row on phones: cells keep a
+     readable minimum width and the row scrolls horizontally with snap. The
+     2×2 border pair above is neutralized so the row keeps its hairlines. */
+  .metric-strip-scroll {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .metric-strip-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .metric-strip-scroll .metric-cell {
+    flex: 0 0 9.5rem;
+    scroll-snap-align: start;
+  }
+  .metric-strip-scroll .metric-cell + .metric-cell {
+    border-left: 1px solid var(--rule-soft);
+  }
+  .metric-strip-scroll .metric-cell:nth-child(3) {
+    border-left: 1px solid var(--rule-soft);
+  }
+  .metric-strip-scroll .metric-cell:nth-child(n + 3) {
+    border-top: 0;
+  }
   .metric-cell {
     padding: 12px;
   }
@@ -1526,6 +1551,23 @@ html {
   }
   .segment {
     font-size: 0.7188rem;
+  }
+}
+
+/* The event dialog bottoms out on phones — same treatment as the task editor:
+   full-width, anchored under the header safe area, rounded top corners only.
+   Unlayered so it beats the inline utilities on the content element. */
+@media (max-width: 639px) {
+  .event-dialog {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    translate: none;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+    padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
   }
 }
 @media (prefers-reduced-motion: reduce) {

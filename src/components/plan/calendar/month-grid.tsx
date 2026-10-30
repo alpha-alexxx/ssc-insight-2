@@ -286,7 +286,12 @@ function MonthCell({
 /** The grid's own key: category tints plus the three state symbols. */
 export function MonthLegend() {
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] text-muted">
+    <div
+      className={cn(
+        "mt-3 flex items-center gap-x-4 gap-y-1.5 text-[10px] text-muted sm:flex-wrap",
+        "max-sm:whitespace-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden",
+      )}
+    >
       {TASK_LEGEND.map((item) => (
         <span key={item.label} className="inline-flex items-center gap-1.5">
           <span
