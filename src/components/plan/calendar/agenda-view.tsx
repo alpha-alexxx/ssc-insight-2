@@ -13,7 +13,7 @@ import {
 } from "@/lib/plan/view-model";
 import { CalendarSurface } from "./calendar-surface";
 import { PeriodNav } from "./period-nav";
-import { PlanTaskRow } from "./selected-day-panel";
+import { PlanTaskRow } from "../plan-task-row";
 
 /**
  * Every remaining plan day, as one continuous schedule of hairline-separated
@@ -32,6 +32,7 @@ export function AgendaView({
   onToday,
   onSelect,
   onOpenTask,
+  onToggleTask,
   onLogResult,
   onOpenAttempt,
 }: {
@@ -46,6 +47,8 @@ export function AgendaView({
   onToday: () => void;
   onSelect: (iso: string) => void;
   onOpenTask: (task: PlanTaskView, day: PlanDayView) => void;
+  /** Real completion toggle for the checkbox (optimistic via the caller). */
+  onToggleTask?: (task: PlanTaskView, next: boolean) => void;
   onLogResult: (task: PlanTaskView) => void;
   onOpenAttempt: (attempt: Attempt) => void;
 }) {
@@ -108,8 +111,14 @@ export function AgendaView({
                       <PlanTaskRow
                         key={task.key}
                         task={task}
+                        density="compact"
                         onOpen={() => onOpenTask(task, day)}
-                        onLogResult={
+                        onToggleCompleted={
+                          onToggleTask
+                            ? (completed) => onToggleTask(task, completed)
+                            : undefined
+                        }
+                        onLogAttempt={
                           isMockType(task.type) && !task.completed
                             ? () => onLogResult(task)
                             : undefined

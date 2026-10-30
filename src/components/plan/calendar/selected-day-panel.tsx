@@ -2,14 +2,9 @@
 import Link from "next/link";
 import { PlainIcon } from "../../icon";
 import { Button } from "../../ui/button";
-import { cn } from "@/lib/utils";
 import { AttemptRecordCard } from "../../attempt-outcome-card";
-import {
-  CategoryChip,
-  CompleteToggle,
-  ProgressRule,
-  ResultLine,
-} from "../plan-shared";
+import { ProgressRule } from "../plan-shared";
+import { PlanTaskRow } from "../plan-task-row";
 import { Panel } from "../../dashboard-panels";
 import { longDate, shortDate } from "@/lib/format";
 import type { Attempt } from "@/lib/domain";
@@ -20,7 +15,6 @@ import {
   type PlanDayView,
   type PlanTaskView,
 } from "@/lib/plan/view-model";
-import { taskIconName } from "./visuals";
 
 /**
  * The selected day: the sticky rail beside the grid at `xl`, and the detail
@@ -35,6 +29,7 @@ export function SelectedDayPanel({
   planEnd,
   attempts,
   onOpenTask,
+  onToggleTask,
   onAddMock,
   onOpenAttempt,
   onMarkAllDone,
@@ -46,6 +41,8 @@ export function SelectedDayPanel({
   planEnd: string;
   attempts: Attempt[];
   onOpenTask: (task: PlanTaskView, day: PlanDayView) => void;
+  /** Real completion toggle for the checkbox (optimistic via the caller). */
+  onToggleTask?: (task: PlanTaskView, next: boolean) => void;
   onAddMock: (date: string, task?: PlanTaskView) => void;
   onOpenAttempt: (attempt: Attempt) => void;
   onMarkAllDone?: () => void;
@@ -110,7 +107,12 @@ export function SelectedDayPanel({
               key={task.key}
               task={task}
               onOpen={() => onOpenTask(task, day)}
-              onLogResult={
+              onToggleCompleted={
+                onToggleTask
+                  ? (completed) => onToggleTask(task, completed)
+                  : undefined
+              }
+              onLogAttempt={
                 isMockType(task.type) && !task.completed
                   ? () => onAddMock(day.date, task)
                   : undefined
@@ -157,64 +159,5 @@ export function SelectedDayPanel({
         </Link>
       </div>
     </Panel>
-  );
-}
-
-/** Task row: toggle, glyph, name, category, and the actions that exist. */
-export function PlanTaskRow({
-  task,
-  onOpen,
-  onLogResult,
-}: {
-  task: PlanTaskView;
-  onOpen: () => void;
-  onLogResult?: () => void;
-}) {
-  return (
-    <li className="flex items-start gap-2.5 px-4 py-2.5">
-      <CompleteToggle
-        completed={task.completed}
-        label={`Mark ${task.name} ${task.completed ? "incomplete" : "complete"}`}
-        onToggle={onOpen}
-      />
-      <PlainIcon
-        name={taskIconName(task.type)}
-        size={15}
-        className={cn(
-          "mt-0.5 shrink-0",
-          task.completed ? "text-muted" : "text-accent",
-        )}
-      />
-      <button
-        type="button"
-        onClick={onOpen}
-        className="min-w-0 flex-1 text-left"
-      >
-        <span
-          className={cn(
-            "block text-[13px] font-medium leading-snug",
-            task.completed ? "text-muted line-through" : "text-ink",
-          )}
-        >
-          {task.name}
-        </span>
-        <span className="mt-1 flex flex-wrap items-center gap-1">
-          <CategoryChip type={task.type} />
-          <span className="text-[10px] tabular text-muted">
-            {task.marks} marks · {task.questions} Q
-          </span>
-          <ResultLine task={task} />
-        </span>
-      </button>
-      {onLogResult && (
-        <button
-          type="button"
-          onClick={onLogResult}
-          className="mt-0.5 shrink-0 whitespace-nowrap text-[10px] font-medium text-accent hover:text-accent-hover"
-        >
-          Log result
-        </button>
-      )}
-    </li>
   );
 }

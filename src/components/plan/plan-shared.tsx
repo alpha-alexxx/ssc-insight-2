@@ -103,7 +103,7 @@ export function CompleteToggle({
   label,
 }: {
   completed: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
   label: string;
 }) {
   return (
@@ -122,16 +122,6 @@ export function CompleteToggle({
       {completed && <PlainIcon name="check" size={12} />}
     </button>
   );
-}
-
-export function PlanStatusChip({ task }: { task: PlanTaskView }) {
-  if (task.completed)
-    return (
-      <span className="inline-flex items-center gap-1 rounded-pill border border-positive/40 bg-positive-soft px-2 py-0.5 text-[10px] font-medium text-positive">
-        <PlainIcon name="check" size={10} /> Done
-      </span>
-    );
-  return null;
 }
 
 export function ResultLine({ task }: { task: PlanTaskView }) {

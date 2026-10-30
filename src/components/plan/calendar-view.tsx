@@ -127,6 +127,9 @@ export function CalendarView({
       setDaySheetOpen(false);
       setEvent({ task, day });
     },
+    onToggleTask: (task: PlanTaskView, next: boolean) => {
+      updateTask(task.key, { completed: next });
+    },
     onAddMock: (date: string, task?: PlanTaskView) => {
       setDaySheetOpen(false);
       onAddMock(date, task);
@@ -285,6 +288,7 @@ export function CalendarView({
                 onToday={goToday}
                 onSelect={(iso) => setSelected(clampToPlan(plan, iso))}
                 onOpenTask={(task, day) => setEvent({ task, day })}
+                onToggleTask={sheetCallbacks.onToggleTask}
                 onLogResult={(task) => onAddMock(task.date, task)}
                 onOpenAttempt={onOpenAttempt}
               />
@@ -303,6 +307,7 @@ export function CalendarView({
                 planEnd={plan.endDate}
                 attempts={dayAttempts}
                 onOpenTask={(task, day) => setEvent({ task, day })}
+                onToggleTask={sheetCallbacks.onToggleTask}
                 onAddMock={onAddMock}
                 onOpenAttempt={onOpenAttempt}
                 onMarkAllDone={
