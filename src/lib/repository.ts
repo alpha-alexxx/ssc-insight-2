@@ -1,6 +1,19 @@
 import { database } from "./db";
 import { createHash, randomUUID } from "node:crypto";
-import { type AttemptInput, type Filters, filtersSchema } from "./domain";
+import type { Prisma } from "@/generated/prisma/client";
+import {
+  type AttemptInput,
+  type Filters,
+  filtersSchema,
+  type PagedAttempts,
+  type PageSize,
+  type SortKey,
+} from "./domain";
+import {
+  attemptComparator,
+  buildAttemptStats,
+  type AttemptSortRow,
+} from "./attempt-sort";
 import {
   attemptData,
   attemptInclude,
@@ -22,10 +35,12 @@ import { RequestError } from "./api";
 import { LruCache } from "./cache";
 
 /**
- * Hard server-side cap on a single listAttempts response. Protects the page
- * from a user with hundreds of mocks; the dashboard's history view paginates
- * client-side today, but the API still must not return unbounded payloads.
- * Raise the cap rather than removing it; never remove it.
+ * Hard server-side cap on a single unpaged listAttempts response. Protects
+ * the page from a user with hundreds of mocks; the dashboard, calendar, and
+ * plan views still consume the full unpaged list, but the API must never
+ * return unbounded payloads. The paged path (listAttemptsPaged) bounds its
+ * payloads independently at pageSize ≤ 100. Raise the cap rather than
+ * removing it; never remove it.
  */
 export const LIST_ATTEMPTS_MAX = 500;
 
@@ -50,6 +65,167 @@ export async function listAttempts(userId: string, filters: Filters = {}) {
     rows.length = LIST_ATTEMPTS_MAX;
   }
   return rows.map(toAttempt);
+}
+
+export type ListAttemptsPagedParams = {
+  page: number;
+  pageSize: PageSize;
+  sort: SortKey;
+  dir: "asc" | "desc";
+  /** Include the whole-filtered-set KPI aggregates (/history needs them;
+   * the compare picker does not). */
+  withStats: boolean;
+};
+
+/** Minimal projection covering the totals()-derived sort keys — a fraction
+ * of a full row (no notes, no rank/participants), so sorting the whole
+ * filtered set in JS stays cheap. */
+const sortRowSelect = {
+  id: true,
+  name: true,
+  type: true,
+  platform: true,
+  completedAt: true,
+  percentile: true,
+  scoreOverride: true,
+  overallTimeSeconds: true,
+  subjects: {
+    orderBy: { position: "asc" as const },
+    select: {
+      subjectId: true,
+      questions: true,
+      correct: true,
+      incorrect: true,
+      scoreOverride: true,
+      timeSeconds: true,
+    },
+  },
+} satisfies Prisma.MockAttemptSelect;
+
+type SortRowDb = Prisma.MockAttemptGetPayload<{ select: typeof sortRowSelect }>;
+
+function toSortRow(row: SortRowDb): AttemptSortRow {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    platform: row.platform,
+    completedAt: row.completedAt.toISOString(),
+    percentile: row.percentile,
+    scoreOverride: row.scoreOverride,
+    overallTimeSeconds: row.overallTimeSeconds,
+    subjects: row.subjects.map((s) => ({
+      subjectId: s.subjectId,
+      questions: s.questions,
+      correct: s.correct,
+      incorrect: s.incorrect,
+      scoreOverride: s.scoreOverride,
+      timeSeconds: s.timeSeconds,
+    })),
+  };
+}
+
+/**
+ * Column-backed orderBy for the direct sort keys. Percentile follows the
+ * historical client behavior, where null sorted as -1: nulls come first
+ * ascending and last descending.
+ */
+function directOrderBy(
+  sort: "name" | "type" | "platform" | "date" | "percentile",
+  dir: "asc" | "desc",
+): Prisma.MockAttemptOrderByWithRelationInput[] {
+  switch (sort) {
+    case "name":
+      return [{ name: dir }, { id: "asc" }];
+    case "type":
+      return [{ type: dir }, { id: "asc" }];
+    case "platform":
+      return [{ platform: dir }, { id: "asc" }];
+    case "date":
+      return [{ completedAt: dir }, { id: "asc" }];
+    case "percentile":
+      return [
+        { percentile: { sort: dir, nulls: dir === "asc" ? "first" : "last" } },
+        { id: "asc" },
+      ];
+  }
+}
+
+/** Full rows for an explicit id order (the computed-sort path pages by
+ * id); the given order is preserved. */
+async function attemptsByIds(userId: string, ids: string[]) {
+  if (!ids.length) return [];
+  const rows = await database().mockAttempt.findMany({
+    where: { userId, id: { in: ids } },
+    include: attemptInclude,
+  });
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids.map((id) => toAttempt(byId.get(id)!));
+}
+
+/**
+ * One server-paged page of the filtered attempt list for /history and
+ * /compare. Column-backed sorts (name/type/platform/date/percentile) sort
+ * in Postgres; score, accuracy, and time derive from totals() — the same
+ * comparators /history sorted with client-side — so those keys sort in JS
+ * over the minimal projection and the page hydrates by id. `withStats`
+ * additionally computes the KPI aggregates over the whole filtered set.
+ */
+export async function listAttemptsPaged(
+  userId: string,
+  filters: Filters,
+  params: ListAttemptsPagedParams,
+): Promise<PagedAttempts> {
+  const where = { ...attemptWhere(filters), userId };
+  const skip = (params.page - 1) * params.pageSize;
+  const meta = (total: number) => ({
+    total,
+    page: params.page,
+    pageSize: params.pageSize,
+    pageCount: Math.max(1, Math.ceil(total / params.pageSize)),
+  });
+
+  if (
+    params.sort === "score" ||
+    params.sort === "accuracy" ||
+    params.sort === "time"
+  ) {
+    const [all, total] = await Promise.all([
+      database().mockAttempt.findMany({ where, select: sortRowSelect }),
+      database().mockAttempt.count({ where }),
+    ]);
+    const sorted = all.map(toSortRow).sort(attemptComparator(params.sort));
+    if (params.dir === "desc") sorted.reverse();
+    const pageIds = sorted
+      .slice(skip, skip + params.pageSize)
+      .map((row) => row.id);
+    return {
+      items: await attemptsByIds(userId, pageIds),
+      ...(params.withStats ? { stats: buildAttemptStats(sorted) } : {}),
+      ...meta(total),
+    };
+  }
+
+  const [rows, total, statRows] = await Promise.all([
+    database().mockAttempt.findMany({
+      where,
+      include: attemptInclude,
+      orderBy: directOrderBy(params.sort, params.dir),
+      take: params.pageSize,
+      skip,
+    }),
+    database().mockAttempt.count({ where }),
+    params.withStats
+      ? database().mockAttempt.findMany({ where, select: sortRowSelect })
+      : Promise.resolve(null),
+  ]);
+  return {
+    items: rows.map(toAttempt),
+    ...(statRows
+      ? { stats: buildAttemptStats(statRows.map(toSortRow)) }
+      : {}),
+    ...meta(total),
+  };
 }
 
 /**

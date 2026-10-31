@@ -3,6 +3,7 @@ import { memo, useMemo } from "react";
 import { PlainIcon, DuotoneIcon } from "./icon";
 import { Button } from "./ui/button";
 import { EmptyChart, Panel } from "./dashboard-panels";
+import { AttemptPagination } from "./attempt-pagination";
 import {
   SUBJECTS,
   subjectIds,
@@ -11,6 +12,8 @@ import {
   formatNumber as n,
   formatTime,
   type Attempt,
+  type PagedAttempts,
+  type PageSize,
 } from "@/lib/domain";
 import { longDate, mockTypeLabel, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -55,14 +58,25 @@ function Diff({ value, unit = "pp" }: { value: number; unit?: string }) {
 
 /** Memoized: the shell re-renders per chat token/keystroke; the ledger doesn't. */
 export const CompareView = memo(function CompareView({
-  attempts,
+  data,
+  isFetching,
+  page,
+  onPageChange,
+  pageSize,
+  onPageSizeChange,
   compared,
   selected,
   onToggle,
   onClear,
   onOpen,
 }: {
-  attempts: Attempt[];
+  /** The current server-paged picker page; undefined only on first load. */
+  data: PagedAttempts | undefined;
+  isFetching: boolean;
+  page: number;
+  onPageChange: (page: number) => void;
+  pageSize: number;
+  onPageSizeChange: (pageSize: PageSize) => void;
   compared: Attempt[];
   selected: string[];
   onToggle: (id: string) => void;
@@ -70,6 +84,8 @@ export const CompareView = memo(function CompareView({
   /** Opens the attempt detail dialog from a picker row. */
   onOpen?: (attempt: Attempt) => void;
 }) {
+  const attempts = data?.items ?? [];
+  const firstLoad = data === undefined;
   // One totals() reduction per compared attempt, not ~10 per metric row.
   const totalsByAttempt = useMemo(
     () => new Map(compared.map((a) => [a.id, totals(a)])),
@@ -179,7 +195,12 @@ export const CompareView = memo(function CompareView({
         title={`Choose your mocks (${compared.length}/4)`}
         description="Select two to four records below. Filters help you find them."
       >
-        <div className="divide-y divide-rule-soft">
+        <div
+          className={cn(
+            "divide-y divide-rule-soft transition-opacity",
+            isFetching && !firstLoad && "opacity-60",
+          )}
+        >
           <div className="flex items-start gap-2.5 bg-accent-soft/50 px-6 py-3">
             <PlainIcon
               name="info"
@@ -191,7 +212,21 @@ export const CompareView = memo(function CompareView({
               Select at least two mocks to compare their results.
             </p>
           </div>
-          {attempts.length ? (
+          {firstLoad ? (
+            <div
+              className="space-y-2 p-4"
+              role="status"
+              aria-label="Loading mocks"
+            >
+              {Array.from({ length: 5 }, (_, i) => (
+                <div
+                  key={i}
+                  className="h-14 animate-pulse rounded-control bg-soft"
+                  style={{ opacity: 1 - i * 0.12 }}
+                />
+              ))}
+            </div>
+          ) : attempts.length ? (
             attempts.map((a) => {
               const checked = selected.includes(a.id);
               const tt = totals(a);
@@ -199,7 +234,7 @@ export const CompareView = memo(function CompareView({
               return (
                 <label
                   key={a.id}
-                  className={`flex flex-wrap items-center gap-3 px-4 py-3 cursor-pointer transition-colors sm:flex-nowrap sm:px-6 ${
+                  className={`flex flex-wrap items-center gap-3 px-4 py-3 cursor-pointer transition-colors sm:px-6 lg:flex-nowrap ${
                     checked ? "bg-accent-soft/50 hover:bg-accent-soft" : "hover:bg-canvas"
                   }`}
                 >
@@ -308,6 +343,16 @@ export const CompareView = memo(function CompareView({
             <EmptyChart>No mocks match these filters.</EmptyChart>
           )}
         </div>
+        {data && data.total > 0 && (
+          <AttemptPagination
+            page={page}
+            pageCount={data.pageCount}
+            total={data.total}
+            pageSize={data.pageSize}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+          />
+        )}
       </Panel>
 
       {selected.length > 0 && (
@@ -351,7 +396,7 @@ export const CompareView = memo(function CompareView({
               </span>
             )}
           </div>
-          <div className="action-row shrink-0 gap-2 sm:w-auto">
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               size="sm"
               disabled={compared.length < 2}

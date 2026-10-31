@@ -998,7 +998,7 @@ export function MyTasksView() {
               !myDayMode &&
               main.data &&
               main.data.total > main.data.limit && (
-                <div className="flex items-center justify-between border-t border-rule-soft pt-3 text-xs text-muted">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-rule-soft pt-3 text-xs text-muted">
                   <span>
                     {main.data.total} {main.data.total === 1 ? "task" : "tasks"} ·
                     Page {main.data.page} of{" "}
@@ -1171,7 +1171,7 @@ export function MyTasksView() {
                 “{confirm.task.title}” and its subtasks can be restored later
                 from Trash.
               </Dialog.Description>
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="action-row mt-4 justify-end gap-2 sm:mx-0">
                 <Button variant="ghost" disabled={busy} onClick={() => setConfirm(null)}>
                   Cancel
                 </Button>
@@ -1211,7 +1211,7 @@ export function MyTasksView() {
                   ? "Selected tasks and their subtasks can be restored from Trash."
                   : "Applies to everything matching the current view, search, and filters — not just this page. You can restore them from Trash."}
               </Dialog.Description>
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="action-row mt-4 justify-end gap-2 sm:mx-0">
                 <Button variant="ghost" disabled={busy} onClick={() => setConfirm(null)}>
                   Cancel
                 </Button>
