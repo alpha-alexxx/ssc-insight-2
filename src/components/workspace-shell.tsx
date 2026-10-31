@@ -497,20 +497,18 @@ function WorkspaceShellInner({
       historyList.data &&
       page > historyList.data.pageCount
     ) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPage(historyList.data.pageCount);
     }
-  }, [view, historyList.data, page]);
+  }, [view, historyList.data, page, setPage]);
   useEffect(() => {
     if (
       view === "compare" &&
       compareList.data &&
       comparePage > compareList.data.pageCount
     ) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setComparePage(compareList.data.pageCount);
     }
-  }, [view, compareList.data, comparePage]);
+  }, [view, compareList.data, comparePage, setComparePage]);
 
   // Screen orientation for the AI panel. This object contains only the view
   // name and (when relevant) an ISO date — never titles, notes, or IDs.
@@ -925,9 +923,7 @@ function WorkspaceShellInner({
                           <CompareView
                             data={compareList.data}
                             isFetching={compareList.isFetching}
-                            page={comparePage}
                             onPageChange={setComparePage}
-                            pageSize={pageSize}
                             onPageSizeChange={setPageSize}
                             compared={compared}
                             selected={selected}
@@ -941,9 +937,7 @@ function WorkspaceShellInner({
                             isFetching={historyList.isFetching}
                             sort={{ key: sort, dir }}
                             onSort={changeSort}
-                            page={page}
                             onPageChange={setPage}
-                            pageSize={pageSize}
                             onPageSizeChange={setPageSize}
                             search={filters.search ?? ""}
                             onSearch={searchFilter}

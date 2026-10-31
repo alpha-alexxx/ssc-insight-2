@@ -51,12 +51,18 @@ export function useWorkspaceData() {
 
   // Server-paged list state. Each view owns its page; pageSize/sort/dir are
   // shared (sort/dir only have UI on /history; the compare picker stays
-  // date-desc). Any filter/sort/size change restarts at page 1.
+  // date-desc). Any filter/sort/size change restarts at page 1. Sort key
+  // and direction are one state so the toggle is a single pure update
+  // (nested setState inside an updater double-fires under StrictMode).
   const [page, setPage] = useState(1);
   const [comparePage, setComparePage] = useState(1);
   const [pageSize, setPageSizeState] = useState<PageSize>(10);
-  const [sort, setSortState] = useState<SortKey>("date");
-  const [dir, setDirState] = useState<"asc" | "desc">("desc");
+  const [sortState, setSortState] = useState<{
+    key: SortKey;
+    dir: "asc" | "desc";
+  }>({ key: "date", dir: "desc" });
+  const sort = sortState.key;
+  const dir = sortState.dir;
 
   /** Every filter write resets the paged lists — results moved, so a stale
    * page number could point past the end. */
@@ -70,18 +76,17 @@ export function useWorkspaceData() {
    * direction; a new key starts asc for text columns, desc otherwise. */
   const changeSort = useCallback((key: SortKey) => {
     setPage(1);
-    setSortState((prev) => {
-      if (prev === key) {
-        setDirState((d) => (d === "asc" ? "desc" : "asc"));
-        return prev;
-      }
-      setDirState(
-        key === "name" || key === "type" || key === "platform"
-          ? "asc"
-          : "desc",
-      );
-      return key;
-    });
+    setSortState((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : {
+            key,
+            dir:
+              key === "name" || key === "type" || key === "platform"
+                ? "asc"
+                : "desc",
+          },
+    );
   }, []);
 
   const setPageSize = useCallback((size: PageSize) => {
@@ -136,19 +141,12 @@ export function useWorkspaceData() {
     // The one `page` param belongs to the view being restored; sort/dir and
     // the shared pageSize only have meaning on /history.
     if (pathname === "/compare") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setComparePage(state.list.page);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPageSizeState(state.list.pageSize);
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPage(state.list.page);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPageSizeState(state.list.pageSize);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSortState(state.list.sort);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDirState(state.list.dir);
+      setSortState({ key: state.list.sort, dir: state.list.dir });
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrlReady(true);

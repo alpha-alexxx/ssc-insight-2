@@ -60,9 +60,7 @@ function Diff({ value, unit = "pp" }: { value: number; unit?: string }) {
 export const CompareView = memo(function CompareView({
   data,
   isFetching,
-  page,
   onPageChange,
-  pageSize,
   onPageSizeChange,
   compared,
   selected,
@@ -73,9 +71,7 @@ export const CompareView = memo(function CompareView({
   /** The current server-paged picker page; undefined only on first load. */
   data: PagedAttempts | undefined;
   isFetching: boolean;
-  page: number;
   onPageChange: (page: number) => void;
-  pageSize: number;
   onPageSizeChange: (pageSize: PageSize) => void;
   compared: Attempt[];
   selected: string[];
@@ -345,7 +341,7 @@ export const CompareView = memo(function CompareView({
         </div>
         {data && data.total > 0 && (
           <AttemptPagination
-            page={page}
+            page={data.page}
             pageCount={data.pageCount}
             total={data.total}
             pageSize={data.pageSize}

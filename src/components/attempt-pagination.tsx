@@ -9,6 +9,7 @@ import {
   SheetTitle,
 } from "./ui/sheet";
 import {
+  Pagination,
   PaginationContent,
   PaginationEllipsis,
   PaginationItem,
@@ -99,26 +100,32 @@ export const AttemptPagination = memo(function AttemptPagination({
       </div>
       {pageCount > 1 &&
         (isMobile ? (
-          <>
-            <div className="flex items-center gap-1">
-              <PaginationPrevious
-                disabled={page === 1}
-                onClick={() => onPageChange(page - 1)}
-              />
-              <button
-                type="button"
-                onClick={() => setJumpOpen(true)}
-                aria-label={`Page ${page} of ${pageCount}. Jump to page.`}
-                className="inline-flex h-8 tap-target items-center gap-1 rounded-control border border-rule-soft px-3 text-xs font-medium tabular text-muted transition-colors hover:text-ink"
-              >
-                Page {page} of {pageCount}
-                <PlainIcon name="chevronDown" size={12} />
-              </button>
-              <PaginationNext
-                disabled={page === pageCount}
-                onClick={() => onPageChange(page + 1)}
-              />
-            </div>
+          <Pagination className="flex-1 justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  disabled={page === 1}
+                  onClick={() => onPageChange(page - 1)}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <button
+                  type="button"
+                  onClick={() => setJumpOpen(true)}
+                  aria-label={`Page ${page} of ${pageCount}. Jump to page.`}
+                  className="inline-flex h-8 tap-target items-center gap-1 rounded-control border border-rule-soft px-3 text-xs font-medium tabular text-muted transition-colors hover:text-ink"
+                >
+                  Page {page} of {pageCount}
+                  <PlainIcon name="chevronDown" size={12} />
+                </button>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  disabled={page === pageCount}
+                  onClick={() => onPageChange(page + 1)}
+                />
+              </PaginationItem>
+            </PaginationContent>
             <Sheet open={jumpOpen} onOpenChange={setJumpOpen}>
               <SheetContent
                 side="bottom"
@@ -150,36 +157,38 @@ export const AttemptPagination = memo(function AttemptPagination({
                 </div>
               </SheetContent>
             </Sheet>
-          </>
+          </Pagination>
         ) : (
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                disabled={page === 1}
-                onClick={() => onPageChange(page - 1)}
-              />
-            </PaginationItem>
-            {windowedPages(page, pageCount).map((p, index) => (
-              <PaginationItem key={`${p}-${index}`}>
-                {p === "…" ? (
-                  <PaginationEllipsis />
-                ) : (
-                  <PaginationPage
-                    isActive={p === page}
-                    onClick={() => onPageChange(p)}
-                  >
-                    {p}
-                  </PaginationPage>
-                )}
+          <Pagination className="flex-1 justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  disabled={page === 1}
+                  onClick={() => onPageChange(page - 1)}
+                />
               </PaginationItem>
-            ))}
-            <PaginationItem>
-              <PaginationNext
-                disabled={page === pageCount}
-                onClick={() => onPageChange(page + 1)}
-              />
-            </PaginationItem>
-          </PaginationContent>
+              {windowedPages(page, pageCount).map((p, index) => (
+                <PaginationItem key={`${p}-${index}`}>
+                  {p === "…" ? (
+                    <PaginationEllipsis />
+                  ) : (
+                    <PaginationPage
+                      isActive={p === page}
+                      onClick={() => onPageChange(p)}
+                    >
+                      {p}
+                    </PaginationPage>
+                  )}
+                </PaginationItem>
+              ))}
+              <PaginationItem>
+                <PaginationNext
+                  disabled={page === pageCount}
+                  onClick={() => onPageChange(page + 1)}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         ))}
     </div>
   );
