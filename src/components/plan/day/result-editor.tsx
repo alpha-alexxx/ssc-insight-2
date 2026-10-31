@@ -6,7 +6,7 @@ import { PlainIcon } from "../../icon";
 import { useToast } from "../../toast";
 import { totals, type Attempt } from "@/lib/domain";
 import type { usePlanData } from "../../use-plan-data";
-import { fillFromAttempt, matchAttemptForTask } from "./attempt-match";
+import { fillFromAttempt, matchAttemptForTask } from "@/lib/plan/attempt-match";
 import type { PlanTaskView } from "@/lib/plan/view-model";
 
 type NumberField = "score" | "wrong" | "unattempted" | "percentile";

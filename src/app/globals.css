@@ -992,6 +992,37 @@
     border-radius: 2px;
     padding: 0 1px;
   }
+  /* ---------- Drawer (vaul) ----------
+     A bottom drawer that follows the finger. Vaul owns the drag transform, so
+     these rules only supply the paper surface, the handle and the entrance for
+     programmatic opens (which vaul does not animate itself). Motion reads the
+     same tokens as the Sheet; the global reduced-motion block freezes it. */
+  .drawer-overlay {
+    animation: overlay-in var(--dur-quick) ease;
+  }
+  .drawer-overlay[data-state="closed"] {
+    animation: overlay-out 150ms ease;
+  }
+  .drawer-content {
+    animation: sheet-in-bottom var(--dur-enter) var(--ease-out-soft);
+  }
+  .drawer-content[data-state="closed"] {
+    animation: sheet-out-bottom 160ms ease;
+  }
+  /* The grab strip: a 44px hit area around a 4px bar, so the thumb finds it
+     without a 44px block of dead space in the layout. */
+  .drawer-handle {
+    display: grid;
+    place-items: center;
+    height: 22px;
+    touch-action: none;
+  }
+  .drawer-handle-bar {
+    width: 40px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--rule-soft);
+  }
   .sheet-content[data-state="closed"] {
     animation: sheet-out-right 160ms ease;
   }
@@ -2465,6 +2496,130 @@ html {
   }
 }
 
+/* ---------- Calendar page order ----------
+   Phones: header → toolbar → surface → summary, so the calendar owns the first
+   screen (four metric cells above it cost ~180px of a 640px viewport). From md
+   the summary returns above the toolbar, as DESIGN.md specifies. */
+.cal-page {
+  display: flex;
+  flex-direction: column;
+}
+.cal-page .cal-toolbar-slot {
+  order: 2;
+}
+.cal-page .cal-surface {
+  order: 3;
+}
+.cal-page .cal-strip {
+  order: 4;
+}
+@media (min-width: 768px) {
+  .cal-page .cal-strip {
+    order: 1;
+  }
+  .cal-page .cal-toolbar-slot {
+    order: 2;
+  }
+  .cal-page .cal-surface {
+    order: 3;
+  }
+}
+
+/* ---------- Calendar ledger ----------
+   The day surface reads as a printed timetable: the date sits in a narrow
+   margin with a vertical rule, the day's work runs beside it. Placed before
+   the phone token block so the phone rules below still win where they must. */
+.cal-ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px 20px;
+  padding: 16px 16px 12px;
+}
+.cal-margin {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.cal-margin-numeral {
+  font-size: 2.5rem;
+}
+.cal-margin-weekday {
+  line-height: 1;
+}
+@media (min-width: 640px) {
+  .cal-margin {
+    display: block;
+    text-align: right;
+    padding-right: 4px;
+  }
+  .cal-margin-numeral {
+    display: block;
+    font-size: 2.75rem;
+  }
+  .cal-margin-weekday {
+    display: block;
+    margin-top: 4px;
+  }
+}
+/* The rule belongs to the body, not the margin: it should start at the
+   dateline and stop at the last row, like a ledger's column divider. */
+.cal-ledger-body {
+  position: relative;
+  padding-left: 16px;
+  border-left: 1px solid var(--rule-soft);
+}
+.cal-ledger-rail .cal-ledger-body {
+  border-left: 0;
+  padding-left: 0;
+}
+@media (min-width: 640px) {
+  .cal-ledger {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    padding: 20px 20px 14px;
+  }
+}
+
+/* The rule under a section head is the only divider inside a section; rows
+   are separated by spacing, not more lines. Keeps long days calm. */
+.cal-rows > li + li {
+  border-top: 1px solid var(--rule-soft);
+}
+
+/* A busy week column scrolls inside a cap rather than compressing text. */
+.cal-week-body {
+  max-height: 15rem;
+  scrollbar-width: thin;
+}
+
+/* Month cells respond to the grid's own width, not the viewport: 768px with
+   the 15rem sidebar leaves ~488px of content, a 767px phone leaves ~735px.
+   Above 560px three ruled rows are legible; below, the cell falls back to one
+   square tick per layer. Same container-query principle as the metric strip. */
+.cal-month {
+  container-type: inline-size;
+}
+@container (min-width: 560px) {
+  .cal-cell {
+    min-height: 6.5rem;
+  }
+}
+.cal-cell-rows {
+  display: none;
+}
+.cal-cell-ticks {
+  display: flex;
+}
+@container (min-width: 560px) {
+  .cal-cell-rows {
+    display: flex;
+  }
+  .cal-cell-ticks {
+    display: none;
+  }
+}
+
 /* The event dialog bottoms out on phones — same treatment as the task editor:
    full-width, anchored under the header safe area, rounded top corners only.
    Unlayered so it beats the inline utilities on the content element. */
@@ -2491,7 +2646,9 @@ html {
   .dialog-content,
   .popover-content,
   .sheet-overlay,
-  .sheet-content {
+  .sheet-content,
+  .drawer-overlay,
+  .drawer-content {
     animation: none !important;
   }
   /* Dashboard state changes are transitions, not animations — freeze them

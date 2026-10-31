@@ -2,6 +2,7 @@
 import { Dialog } from "radix-ui";
 import { Button } from "../ui/button";
 import { PlainIcon } from "../icon";
+import { cn } from "@/lib/utils";
 import { CategoryChip, ResultLine } from "./plan-shared";
 import { longDate } from "@/lib/format";
 import type { PlanDayView, PlanTaskView } from "@/lib/plan/view-model";
@@ -19,12 +20,18 @@ export function EventDialog({
   onClose,
   onToggleComplete,
   onOpenPlanDay,
+  onToggleChecklist,
+  onToggleRevision,
 }: {
   task: PlanTaskView | null;
   day?: PlanDayView;
   onClose: () => void;
   onToggleComplete: (task: PlanTaskView) => void;
   onOpenPlanDay: (date: string) => void;
+  /** Real toggles. Without them the checklist stays a read-only list rather
+   * than looking interactive and doing nothing. */
+  onToggleChecklist?: (day: PlanDayView, itemId: string, done: boolean) => void;
+  onToggleRevision?: (day: PlanDayView, revisionIndex: number, next: boolean) => void;
 }) {
   return (
     <Dialog.Root open={!!task} onOpenChange={(open) => !open && onClose()}>
@@ -66,9 +73,52 @@ export function EventDialog({
               {day && day.revisionTasks.length > 0 && (
                 <div className="mt-4 border-t border-rule-soft pt-4">
                   <p className="section-label mb-2">Day revision</p>
-                  <ul className="space-y-1 text-xs muted">
-                    {day.revisionTasks.map((rt) => (
-                      <li key={rt}>{rt}</li>
+                  <ul className="space-y-1 text-xs">
+                    {day.revisionTasks.map((rt, revisionIndex) => (
+                      <li key={rt} className="flex items-start gap-2">
+                        {onToggleRevision ? (
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={day.revisionDone.includes(
+                              String(revisionIndex),
+                            )}
+                            aria-label={`Mark revision ${rt} ${day.revisionDone.includes(String(revisionIndex)) ? "incomplete" : "complete"}`}
+                            onClick={() =>
+                              onToggleRevision(day, revisionIndex, true)
+                            }
+                            className={cn(
+                              "relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[3px] border transition-colors after:absolute after:-inset-2.5 after:content-['']",
+                              day.revisionDone.includes(String(revisionIndex))
+                                ? "border-positive bg-positive-soft text-positive"
+                                : "border-rule bg-paper hover:border-ink",
+                            )}
+                          >
+                            {day.revisionDone.includes(String(revisionIndex)) && (
+                              <PlainIcon name="check" size={9} />
+                            )}
+                          </button>
+                        ) : (
+                          <span
+                            className={cn(
+                              "mt-0.5 size-4 shrink-0 rounded-[3px] border",
+                              day.revisionDone.includes(String(revisionIndex))
+                                ? "border-positive bg-positive-soft"
+                                : "border-rule",
+                            )}
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span
+                          className={cn(
+                            day.revisionDone.includes(String(revisionIndex))
+                              ? "text-muted line-through"
+                              : "",
+                          )}
+                        >
+                          {rt}
+                        </span>
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -80,17 +130,38 @@ export function EventDialog({
                   <ul className="space-y-1.5 text-xs">
                     {day.checklist.map((item) => (
                       <li key={item.id} className="flex items-center gap-2">
-                        <span
-                          className={`flex size-4 items-center justify-center rounded-[3px] border ${
-                            item.done
-                              ? "border-positive bg-positive-soft text-positive"
-                              : "border-rule"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          {item.done && <PlainIcon name="check" size={9} />}
-                        </span>
-                        <span className={item.done ? "muted line-through" : ""}>
+                        {onToggleChecklist ? (
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={item.done}
+                            aria-label={`Mark ${item.label} ${item.done ? "incomplete" : "complete"}`}
+                            onClick={() =>
+                              onToggleChecklist(day, item.id, !item.done)
+                            }
+                            className={cn(
+                              "relative flex size-4 shrink-0 items-center justify-center rounded-[3px] border transition-colors after:absolute after:-inset-2.5 after:content-['']",
+                              item.done
+                                ? "border-positive bg-positive-soft text-positive"
+                                : "border-rule bg-paper hover:border-ink",
+                            )}
+                          >
+                            {item.done && <PlainIcon name="check" size={9} />}
+                          </button>
+                        ) : (
+                          <span
+                            className={cn(
+                              "flex size-4 items-center justify-center rounded-[3px] border",
+                              item.done
+                                ? "border-positive bg-positive-soft text-positive"
+                                : "border-rule",
+                            )}
+                            aria-hidden="true"
+                          >
+                            {item.done && <PlainIcon name="check" size={9} />}
+                          </span>
+                        )}
+                        <span className={item.done ? "text-muted line-through" : ""}>
                           {item.label}
                         </span>
                       </li>

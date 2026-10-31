@@ -51,6 +51,14 @@ export const todoTasksQueryOptions = queryOptions({
     api<PersonalTaskView[]>("/api/tasks", { signal }),
 });
 
+/** GET /api/todos/groups — the reusable group list the task editor offers. */
+export const todoGroupsQueryOptions = queryOptions({
+  queryKey: todoKeys.groups(),
+  staleTime: 60_000,
+  queryFn: ({ signal }) =>
+    api<{ id: string; name: string }[]>("/api/todos/groups", { signal }),
+});
+
 export function todoCalendarQueryOptions<T = unknown>(range: CalendarRange) {
   return queryOptions({
     queryKey: todoKeys.calendar(range),

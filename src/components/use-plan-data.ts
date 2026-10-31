@@ -16,6 +16,9 @@ import type {
   PlanPayload,
 } from "@/lib/plan/view-model";
 
+/** Stable identity while the tasks query is pending — see EMPTY_ATTEMPTS. */
+const EMPTY_TASKS: PersonalTaskView[] = [];
+
 /**
  * Client owner of planner state: the merged 50-day plan + progress payload
  * and the user's personal tasks. The plan is one TanStack query; every
@@ -110,7 +113,7 @@ export function usePlanData() {
   const planQuery = useQuery(planQueryOptions);
   const plan = planQuery.data ?? null;
   const taskQuery = useTodoTasks();
-  const personalTasks = taskQuery.data ?? [];
+  const personalTasks = taskQuery.data ?? EMPTY_TASKS;
   // Personal-task writes must refresh every mounted todos view; the
   // invalidation replaces the old ssc:todos-changed broadcast.
   const invalidateTodos = useInvalidateTodos();

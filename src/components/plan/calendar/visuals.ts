@@ -1,46 +1,87 @@
 import type { IconName } from "../../icon";
 import type { CalendarViewMode } from "@/lib/calendar-url";
 import type { PlanTaskType } from "@/lib/plan/schema";
+import type { CalendarLayer } from "@/lib/plan/calendar-entries";
 import { isMockType } from "@/lib/plan/view-model";
 
 /**
  * Calendar presentation helpers. Pure class/data functions with no JSX, so the
- * month, week, day and agenda surfaces agree on one category grammar: a tinted
- * chip where there is room for words, a filled dot where there is not.
+ * month, week, day and agenda surfaces agree on one grammar.
+ *
+ * The calendar uses **three kinds of ink** rather than three chip colors:
+ * scheduled work is printed (a tinted row with a 2px category rule), personal
+ * work is a margin note (an outlined row with a status dot), and logged work
+ * is a stamp (a neutral row with a serif score). Form carries the layer, so the
+ * category palette can stay reserved for plan work.
  */
 
-/** The mode union lives with the URL mirror (lib/calendar-url.ts). */
+/** The mode union lives with the URL mirror. */
 export type CalendarMode = CalendarViewMode;
 
-/** Days rendered per agenda window — one bounded fortnight, not the whole
-    remaining plan. "Show remaining plan days" lifts the cap in place. */
+/** Days rendered per agenda window — one bounded fortnight. */
 export const AGENDA_WINDOW = 14;
 
 export const CALENDAR_MODES: {
   id: CalendarMode;
   label: string;
+  short: string;
   icon: IconName;
 }[] = [
-  { id: "month", label: "Month", icon: "calendar" },
-  { id: "week", label: "Week", icon: "layers" },
-  { id: "day", label: "Day", icon: "file" },
-  { id: "agenda", label: "Agenda", icon: "check" },
+  { id: "month", label: "Month", short: "M", icon: "calendar" },
+  { id: "week", label: "Week", short: "W", icon: "layers" },
+  { id: "day", label: "Day", short: "D", icon: "file" },
+  { id: "agenda", label: "Agenda", short: "A", icon: "check" },
 ];
 
-/** Category → chip tint, so a day's mix of work is readable at a glance. */
-export function taskChipClass(task: {
+/* ---------- layer toggles and legend ---------- */
+
+export const LAYER_META: Record<
+  CalendarLayer,
+  { label: string; icon: IconName; swatch: string; tick: string }
+> = {
+  plan: {
+    label: "Plan",
+    icon: "calendar",
+    /* Printed: a tinted bar with a solid category rule. */
+    swatch: "bg-accent-soft border-l-2 border-l-accent",
+    tick: "bg-accent",
+  },
+  tasks: {
+    label: "Personal",
+    icon: "check",
+    /* A margin note: outline only, no tint. */
+    swatch: "bg-paper border border-rule",
+    tick: "bg-positive",
+  },
+  mocks: {
+    label: "Logged",
+    icon: "report",
+    /* A stamp: neutral with an ink figure. */
+    swatch: "bg-soft border-l-2 border-l-ink",
+    tick: "bg-ink",
+  },
+};
+
+/* ---------- plan category grammar (unchanged meanings) ---------- */
+
+/** Category → row tint plus the 2px left rule that carries the hue. */
+export function planRowClass(task: {
   type: PlanTaskType;
   completed: boolean;
 }): string {
-  if (task.completed) return "bg-positive-soft text-positive line-through";
-  if (isMockType(task.type)) return "bg-accent-soft text-accent";
-  if (task.type.endsWith("_sectional")) return "bg-positive-soft text-positive";
-  if (task.type === "maths_topic") return "bg-warning-soft text-warning";
-  return "bg-soft text-muted";
+  if (task.completed)
+    return "border-l-2 border-l-positive bg-positive-soft/50 text-muted";
+  if (isMockType(task.type))
+    return "border-l-2 border-l-accent bg-accent-soft text-ink";
+  if (task.type.endsWith("_sectional"))
+    return "border-l-2 border-l-positive bg-positive-soft text-ink";
+  if (task.type === "maths_topic")
+    return "border-l-2 border-l-warning bg-warning-soft text-ink";
+  return "border-l-2 border-l-rule bg-soft text-ink";
 }
 
-/** Category → a solid dot fill for the compact (<sm) month cell. */
-export function taskDotClass(task: {
+/** The solid fill for the <sm compact marker. */
+export function planTickClass(task: {
   type: PlanTaskType;
   completed: boolean;
 }): string {
@@ -51,7 +92,7 @@ export function taskDotClass(task: {
   return "bg-rule";
 }
 
-/** Per-category glyph, shared by the day list and the selected-day panel. */
+/** Per-category glyph, shared by every surface. */
 export function taskIconName(type: PlanTaskType): IconName {
   if (isMockType(type)) return "file";
   if (type.endsWith("_sectional")) return "book";
@@ -59,10 +100,13 @@ export function taskIconName(type: PlanTaskType): IconName {
   return "layers";
 }
 
-/** Legend entries, in the same order as the tint scale above. */
+/** Plan-category legend. Layer identity is stated separately by the toggles. */
 export const TASK_LEGEND: { label: string; swatch: string }[] = [
-  { label: "Mock test", swatch: "bg-accent-soft text-accent" },
-  { label: "Sectional test", swatch: "bg-positive-soft text-positive" },
-  { label: "Topic test", swatch: "bg-warning-soft text-warning" },
-  { label: "Other", swatch: "bg-soft text-muted" },
+  { label: "Mock test", swatch: "bg-accent-soft border-l-2 border-l-accent" },
+  {
+    label: "Sectional",
+    swatch: "bg-positive-soft border-l-2 border-l-positive",
+  },
+  { label: "Topic test", swatch: "bg-warning-soft border-l-2 border-l-warning" },
+  { label: "Other", swatch: "bg-soft border-l-2 border-l-rule" },
 ];

@@ -1,43 +1,53 @@
 "use client";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { longDate, shortDate } from "@/lib/format";
+import { shortDate } from "@/lib/format";
 import {
   addIsoDays,
-  dayAssignmentStats,
   isoWeekdayShort,
   weekRange,
-  type PlanDayView,
 } from "@/lib/plan/view-model";
-import { taskChipClass } from "./visuals";
+import {
+  countEntries,
+  entriesFor,
+  type CalendarEntry,
+  type CalendarIndex,
+  type CalendarLayer,
+  type EntryCounts,
+} from "@/lib/plan/calendar-entries";
+import { LAYER_META, planTickClass } from "./visuals";
+import { categoryLabel } from "./entry-rows";
+
+const MAX_ROWS = 3;
 
 /**
- * Seven days around the selection: columns at `md+`, a single-column day list
- * below it. The list is the point — a two-column grid leaves a ragged 4+3 tail
- * and nothing to discover, while a row list reads as the schedule it is.
+ * Seven days around the selection. Columns at `md+`, a single-column day list
+ * below it — a two-column grid leaves a ragged 4+3 tail, while a row list
+ * reads as the schedule it is.
  *
- * Like the month grid, each column is one button with one border treatment per
- * state (in plan / today / selected), so the same click-and-keyboard mental
- * model carries across both grids. The category legend under the surface is
- * the CalendarLegend the month uses.
+ * Each column shows up to three ruled rows per layer and, when the day is
+ * busy, scrolls inside a capped column rather than compressing text. The head
+ * is the day selector (one button); the rows are presentational, so a busy
+ * week stays scannable without nesting controls inside controls.
  */
-export function WeekView({
-  days,
+export const WeekView = memo(function WeekView({
+  index,
+  layers,
   selected,
   today,
   onSelect,
 }: {
-  days: PlanDayView[];
+  index: CalendarIndex;
+  layers: readonly CalendarLayer[];
   selected: string;
   today: string;
   onSelect: (iso: string) => void;
 }) {
-  const byDate = useMemo(
-    () => new Map(days.map((day) => [day.date, day])),
-    [days],
-  );
   const from = weekRange(selected).from;
-  const week = Array.from({ length: 7 }, (_, index) => addIsoDays(from, index));
+  const week = useMemo(
+    () => Array.from({ length: 7 }, (_, at) => addIsoDays(from, at)),
+    [from],
+  );
 
   return (
     <>
@@ -50,7 +60,8 @@ export function WeekView({
           <li key={iso} className="min-w-0">
             <WeekDayCell
               iso={iso}
-              day={byDate.get(iso)}
+              entries={entriesFor(index, iso, layers)}
+              counts={countEntries(entriesFor(index, iso, layers))}
               isToday={iso === today}
               isSelected={iso === selected}
               layout="column"
@@ -60,7 +71,7 @@ export function WeekView({
         ))}
       </ul>
 
-      {/* <md — one row per day */}
+      {/* <md — one row per day, still inside the week */}
       <ul
         className="flex flex-col md:hidden"
         aria-label={`Week of ${shortDate(from)}`}
@@ -69,7 +80,8 @@ export function WeekView({
           <li key={iso} className="border-b border-rule-soft last:border-0">
             <WeekDayCell
               iso={iso}
-              day={byDate.get(iso)}
+              entries={entriesFor(index, iso, layers)}
+              counts={countEntries(entriesFor(index, iso, layers))}
               isToday={iso === today}
               isSelected={iso === selected}
               layout="row"
@@ -80,38 +92,45 @@ export function WeekView({
       </ul>
     </>
   );
-}
+});
 
 function WeekDayCell({
   iso,
-  day,
+  entries,
+  counts,
   isToday,
   isSelected,
   layout,
   onSelect,
 }: {
   iso: string;
-  day: PlanDayView | undefined;
+  entries: readonly CalendarEntry[];
+  counts: EntryCounts;
   isToday: boolean;
   isSelected: boolean;
   layout: "column" | "row";
   onSelect: () => void;
 }) {
-  const stats = day ? dayAssignmentStats(day) : null;
-  const tasks = day?.tasks ?? [];
-  const label = `${isoWeekdayShort(iso)} ${longDate(iso)}${
+  const shown = layout === "column" ? MAX_ROWS : 2;
+  const label = `${isoWeekdayShort(iso)} ${shortDate(iso)}${
     isToday ? ", today" : ""
-  }${stats ? `, ${stats.completed} of ${stats.total} done` : ", nothing scheduled"}`;
-  const shown = layout === "column" ? 5 : 3;
+  }${
+    counts.plan.total
+      ? `, ${counts.plan.done} of ${counts.plan.total} scheduled done`
+      : ""
+  }${counts.tasks.total ? `, ${counts.tasks.total} personal` : ""}${
+    counts.mocks ? `, ${counts.mocks} logged` : ""
+  }${!entries.length ? ", nothing scheduled" : ""}`;
 
   const numeral = (
     <span
       className={cn(
-        "grid size-5 place-items-center rounded-control text-[11px] tabular",
+        "font-serif leading-none tabular",
+        layout === "column" ? "text-[17px]" : "text-base",
         isSelected
-          ? "bg-ink font-semibold text-paper"
+          ? "text-ink"
           : isToday
-            ? "font-semibold text-accent"
+            ? "text-accent"
             : "text-ink",
       )}
     >
@@ -139,22 +158,14 @@ function WeekDayCell({
           {numeral}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          {tasks.length ? (
+          {entries.length ? (
             <>
-              {tasks.slice(0, shown).map((task) => (
-                <span
-                  key={task.key}
-                  className={cn(
-                    "truncate rounded-control px-1.5 py-0.5 text-[10px] font-medium leading-tight",
-                    taskChipClass(task),
-                  )}
-                >
-                  {task.name}
-                </span>
+              {entries.slice(0, shown).map((entry) => (
+                <CompactRow key={entry.id} entry={entry} layout={layout} />
               ))}
-              {tasks.length > shown && (
+              {entries.length > shown && (
                 <span className="px-1.5 text-[10px] text-muted">
-                  +{tasks.length - shown} more
+                  +{entries.length - shown} more
                 </span>
               )}
             </>
@@ -162,11 +173,7 @@ function WeekDayCell({
             <span className="py-0.5 text-[11px] text-muted">No assignments</span>
           )}
         </span>
-        {stats && stats.total > 0 && (
-          <span className="shrink-0 pt-0.5 text-[10px] tabular text-muted">
-            {stats.completed}/{stats.total}
-          </span>
-        )}
+        <DayTicks counts={counts} className="shrink-0 pt-1" />
       </button>
     );
   }
@@ -187,38 +194,100 @@ function WeekDayCell({
             : "border-rule-soft bg-paper hover:border-accent/50 hover:bg-soft",
       )}
     >
-      <span className="flex flex-wrap items-center justify-center gap-1 border-b border-rule-soft px-1.5 py-2 text-center">
-        <span className="text-[11px] font-medium text-muted">
+      <span className="flex flex-col items-center gap-0.5 border-b border-rule-soft px-1.5 py-2">
+        <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted">
           {isoWeekdayShort(iso)}
         </span>
         {numeral}
-        {stats && stats.total > 0 && (
+        {counts.plan.total > 0 && (
           <span className="text-[10px] tabular text-muted">
-            {stats.completed}/{stats.total}
+            {counts.plan.done}/{counts.plan.total}
           </span>
         )}
       </span>
-      <span className="flex flex-1 flex-col gap-1 p-1.5">
-        {tasks.slice(0, shown).map((task) => (
-          <span
-            key={task.key}
-            className={cn(
-              "truncate rounded-control px-1.5 py-1 text-[10px] font-medium leading-tight",
-              taskChipClass(task),
-            )}
-          >
-            {task.name}
-          </span>
+      <span className="cal-week-body flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-1.5">
+        {entries.slice(0, shown).map((entry) => (
+          <CompactRow key={entry.id} entry={entry} layout="column" />
         ))}
-        {tasks.length > shown && (
+        {entries.length > shown && (
           <span className="px-1 text-[10px] text-muted">
-            +{tasks.length - shown} more
+            +{entries.length - shown} more
           </span>
         )}
-        {!tasks.length && (
-          <span className="px-1 py-1 text-[10px] text-muted">No assignments</span>
+        {!entries.length && (
+          <span className="px-1 py-1 text-[10px] text-muted">Nothing</span>
         )}
       </span>
     </button>
+  );
+}
+
+function CompactRow({ entry, layout }: { entry: CalendarEntry; layout: "column" | "row" }) {
+  /* A 7-column week leaves ~90px per column: the full assignment name is
+     unreadable there, so a column shows the category and its marks and the
+     row layout (phones, where there is width) keeps the name. */
+  if (entry.kind === "plan-task")
+    return (
+      <span
+        className={cn(
+          "flex items-center gap-1 overflow-hidden rounded-[2px] py-0.5 pl-1 text-[10px] leading-tight",
+          entry.task.completed ? "text-muted line-through" : "text-ink",
+        )}
+      >
+        <span
+          className={cn("h-3 w-0.5 shrink-0 rounded-[1px]", planTickClass(entry.task))}
+          aria-hidden="true"
+        />
+        <span className="truncate">
+          {layout === "row" ? entry.task.name : categoryLabel(entry.task)}
+        </span>
+      </span>
+    );
+  if (entry.kind === "revision")
+    return (
+      <span className="flex items-center gap-1 truncate rounded-[2px] py-0.5 pl-1 text-[10px] leading-tight text-muted">
+        <span className="h-3 w-0.5 shrink-0 rounded-[1px] bg-rule" aria-hidden="true" />
+        <span className="truncate">Revision</span>
+      </span>
+    );
+  if (entry.kind === "personal")
+    return (
+      <span
+        className={cn(
+          "flex items-center gap-1 truncate rounded-[2px] border border-rule-soft px-1 py-0.5 text-[10px] leading-tight",
+          entry.status === "completed" ? "text-muted line-through" : "text-ink",
+        )}
+      >
+        <span className="truncate">{entry.task.title}</span>
+      </span>
+    );
+  return (
+    <span className="flex items-center gap-1 truncate rounded-[2px] border-l-2 border-l-ink/60 bg-soft px-1 py-0.5 text-[10px] leading-tight text-ink">
+      <span className="truncate">{entry.attempt.name}</span>
+      <span className="ml-auto tabular text-muted">{entry.scorePct}</span>
+    </span>
+  );
+}
+
+function DayTicks({
+  counts,
+  className,
+}: {
+  counts: EntryCounts;
+  className?: string;
+}) {
+  const layers = (["plan", "tasks", "mocks"] as const).filter((layer) =>
+    layer === "mocks" ? counts.mocks > 0 : counts[layer].total > 0,
+  );
+  if (!layers.length) return null;
+  return (
+    <span className={cn("flex items-center gap-0.5", className)} aria-hidden="true">
+      {layers.map((layer) => (
+        <span
+          key={layer}
+          className={cn("h-1.5 w-1 rounded-[1px]", LAYER_META[layer].tick)}
+        />
+      ))}
+    </span>
   );
 }

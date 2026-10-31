@@ -1,6 +1,11 @@
 "use client";
 import { PlainIcon } from "../../icon";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../ui/popover";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -21,17 +26,21 @@ export function stepSize(mode: CalendarMode): number {
 }
 
 /**
- * Period stepping: two arrows, a return-to-today chip, and a date jump. The
- * arrows are disabled at the plan's edges so a student never scrolls into an
- * empty calendar, and the Today chip is only shown while it can do something —
- * a control that reads "Today" but does nothing on press reads as broken.
+ * Period stepping: two arrows, a return-to-today chip, and a date jump.
+ *
+ * The arrows are **never disabled**. The calendar now shows personal tasks and
+ * logged results, so every date in the addressable range is legitimate — the
+ * old plan-edge lock made personal work outside 26 Oct – 14 Dec unreachable.
+ *
+ * The date jump is a Popover rather than an inline field: the native date
+ * input is awkward inside a toolbar row on phones, and the popover gives it a
+ * full-width row plus Radix focus management. It must stay outside any drawer
+ * (overlays share z-50), which is why it lives in the toolbar.
  */
 export function PeriodNav({
   mode,
   selected,
   today,
-  planStart,
-  planEnd,
   onStep,
   onToday,
   onSelect,
@@ -39,8 +48,6 @@ export function PeriodNav({
   mode: CalendarMode;
   selected: string;
   today: string;
-  planStart: string;
-  planEnd: string;
   onStep: (direction: 1 | -1) => void;
   onToday: () => void;
   onSelect: (iso: string) => void;
@@ -53,9 +60,8 @@ export function PeriodNav({
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="day-nav-step"
+              className="day-nav-step tap-target"
               aria-label={`Previous ${unit}`}
-              disabled={selected <= planStart}
               onClick={() => onStep(-1)}
             >
               <PlainIcon name="arrowLeft" size={14} />
@@ -67,9 +73,8 @@ export function PeriodNav({
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="day-nav-step"
+              className="day-nav-step tap-target"
               aria-label={`Next ${unit}`}
-              disabled={selected >= planEnd}
               onClick={() => onStep(1)}
             >
               <PlainIcon name="arrowRight" size={14} />
@@ -78,33 +83,41 @@ export function PeriodNav({
           <TooltipContent>Next {unit}</TooltipContent>
         </Tooltip>
       </div>
-      {/* Today + the date jump stay one glued cluster so the phone row reads
-          as two ends — arrows here, jump-to-date there — never three
-          scattered controls. */}
+
       <span className="flex items-center gap-2">
         {selected !== today && (
           <button type="button" className="day-nav-today" onClick={onToday}>
             Today
           </button>
         )}
-        <label className="flex items-center gap-2 text-xs">
-          <span className="sr-only">Jump to a plan date</span>
-          {/* Base CSS sets `width: 100%` on form fields through a zero-specificity
-              `:where(...)` rule, so the plain `w-auto` utility already wins — no
-              `!important` needed. */}
-          <input
-            type="date"
-            className="h-8 w-auto rounded-control border border-rule bg-paper px-2 py-0 text-xs tabular"
-            title="Jump to a date"
-            aria-label="Jump to a plan date"
-            min={planStart}
-            max={planEnd}
-            value={selected}
-            onChange={(event) => {
-              if (event.target.value) onSelect(event.target.value);
-            }}
-          />
-        </label>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="day-nav-today tap-target inline-flex items-center gap-1.5"
+              aria-label="Jump to a date"
+            >
+              <PlainIcon name="calendar" size={13} />
+              <span className="hidden sm:inline">Jump</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64">
+            <label className="block text-[10px] font-medium text-muted">
+              Jump to a date
+              <input
+                type="date"
+                className="mt-1 h-9 w-full rounded-control border border-rule bg-paper px-2 py-0 text-sm tabular"
+                value={selected}
+                onChange={(event) => {
+                  if (event.target.value) onSelect(event.target.value);
+                }}
+              />
+            </label>
+            <p className="mt-2 text-[10px] text-muted">
+              Any date works, including outside the study plan.
+            </p>
+          </PopoverContent>
+        </Popover>
       </span>
     </>
   );

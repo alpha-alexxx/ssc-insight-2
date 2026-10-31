@@ -33,6 +33,10 @@ const STATUSES: { id: TaskStatus; label: string }[] = [
  * "More options". `onSave` resolves true when persisted, so "Save & add
  * another" can reset the form. Renders as a bottom sheet on phones via the
  * shared .task-editor-dialog CSS.
+ *
+ * The form body is exported separately as `TaskEditorForm` so a host that
+ * already owns an overlay — the calendar's bottom drawer — can render the same
+ * editor without nesting a second dialog.
  */
 export function TaskEditor({
   todo,
@@ -42,7 +46,49 @@ export function TaskEditor({
   onSave,
   onCreateGroup,
   onClose,
-}: {
+}: TaskEditorProps) {
+  const viewport = useOverlayViewport(true);
+  const overlayFocus = useOverlayFocus();
+
+  return (
+    <Dialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/40" />
+        <Dialog.Content
+          {...overlayFocus}
+          style={
+            viewport
+              ? ({
+                  "--task-viewport-height": `${viewport.height}px`,
+                  "--task-viewport-top": `${viewport.top}px`,
+                } as CSSProperties)
+              : undefined
+          }
+          aria-describedby="task-editor-description"
+          className="task-editor-dialog"
+        >
+          <TaskEditorForm
+            todo={todo}
+            groups={groups}
+            busy={busy}
+            error={error}
+            onSave={onSave}
+            onCreateGroup={onCreateGroup}
+            onClose={onClose}
+            variant="dialog"
+          />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+export type TaskEditorProps = {
   todo: Task;
   groups: TaskGroup[];
   busy?: boolean;
@@ -52,9 +98,23 @@ export function TaskEditor({
   /** Inline group creation; resolves the new group id, or null on failure. */
   onCreateGroup?: (name: string) => Promise<string | null>;
   onClose: () => void;
-}) {
-  const viewport = useOverlayViewport(true);
-  const overlayFocus = useOverlayFocus();
+};
+
+/**
+ * The editor's actual controls, with no overlay of its own. `variant="dialog"`
+ * keeps the dialog heading and close button; `"drawer"` defers the title to
+ * the host so the drawer's handle and head stay the single chrome.
+ */
+export function TaskEditorForm({
+  todo,
+  groups,
+  busy = false,
+  error = "",
+  onSave,
+  onCreateGroup,
+  onClose,
+  variant = "dialog",
+}: TaskEditorProps & { variant?: "dialog" | "drawer" }) {
   const editing = Boolean(todo.id);
   const [title, setTitle] = useState(todo.title);
   const [date, setDate] = useState(todo.dueDate ?? "");
@@ -150,52 +210,41 @@ export function TaskEditor({
   }
 
   return (
-    <Dialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open && !busy) onClose();
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/40" />
-        <Dialog.Content
-          {...overlayFocus}
-          style={
-            viewport
-              ? ({
-                  "--task-viewport-height": `${viewport.height}px`,
-                  "--task-viewport-top": `${viewport.top}px`,
-                } as CSSProperties)
-              : undefined
-          }
-          aria-describedby="task-editor-description"
-          className="task-editor-dialog"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Dialog.Title className="font-serif text-2xl">
-                {editing ? "Edit task" : "Add task"}
-              </Dialog.Title>
-              <Dialog.Description
-                id="task-editor-description"
-                className="mt-1 text-xs text-muted"
-              >
-                {editing
-                  ? "Update the details below; status also cycles from the list."
-                  : "Start with the essentials — subtasks and links can be added anytime."}
-              </Dialog.Description>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Close editor"
-              disabled={busy}
-              onClick={onClose}
+    <>
+      {variant === "dialog" && (
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Dialog.Title className="font-serif text-2xl">
+              {editing ? "Edit task" : "Add task"}
+            </Dialog.Title>
+            <Dialog.Description
+              id="task-editor-description"
+              className="mt-1 text-xs text-muted"
             >
-              <X size={18} />
-            </Button>
+              {editing
+                ? "Update the details below; status also cycles from the list."
+                : "Start with the essentials — subtasks and links can be added anytime."}
+            </Dialog.Description>
           </div>
-          <form
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Close editor"
+            disabled={busy}
+            onClick={onClose}
+          >
+            <X size={18} />
+          </Button>
+        </div>
+      )}
+      {variant === "drawer" && (
+        <p className="text-xs text-muted">
+          {editing
+            ? "Update the details below; status also cycles from the calendar row."
+            : "Start with the essentials — subtasks and links can be added anytime."}
+        </p>
+      )}
+      <form
             className="mt-5 space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
@@ -502,8 +551,6 @@ export function TaskEditor({
               </div>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </>
   );
 }

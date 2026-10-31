@@ -1,33 +1,45 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { PlainIcon } from "../../icon";
 import { cn } from "@/lib/utils";
 import { longDate, monthDate } from "@/lib/format";
 import {
   addIsoDays,
-  dayAssignmentStats,
   isoWeekdayName,
   monthGridDays,
   weekStartIso,
-  type PlanDayView,
 } from "@/lib/plan/view-model";
-import { TASK_LEGEND, taskChipClass, taskDotClass } from "./visuals";
+import {
+  countEntries,
+  entriesFor,
+  type CalendarEntry,
+  type CalendarIndex,
+  type CalendarLayer,
+  type EntryCounts,
+} from "@/lib/plan/calendar-entries";
+import { LAYER_META, TASK_LEGEND, planTickClass } from "./visuals";
+import { categoryLabel } from "./entry-rows";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MAX_ROWS = 3;
 
 /**
  * The month surface. Cells come from `monthGridDays`, so the grid is always
- * whole Monday-led weeks — never a ragged last row. One border treatment per
- * state (in plan / outside the plan window / outside the displayed month /
- * today / selected), and the compact cell swaps chips for category dots rather
- * than stacking four colour-only bars.
+ * whole Monday-led weeks — never a ragged last row.
  *
- * Keyboard: a roving tabindex makes the grid one tab stop; arrows, Home/End and
- * PageUp/PageDown move focus without selecting. Enter or Space is the native
- * click, because every cell is a button.
+ * Cells switch on **container width**, not viewport width: 768px with the
+ * 15rem sidebar leaves ~488px of content while a 767px phone leaves ~735px,
+ * and a viewport query cannot see that. Above 560px of container three ruled
+ * entry rows are legible; below, the cell falls back to one square tick per
+ * occupied layer plus a count, which keeps the 7-column grid usable at 320px.
+ *
+ * Keyboard: a roving tabindex makes the grid one tab stop; arrows, Home/End
+ * and PageUp/PageDown move focus without selecting. Enter or Space is the
+ * native click, because every cell is a button.
  */
-export function MonthGrid({
-  days,
+export const MonthGrid = memo(function MonthGrid({
+  index,
+  layers,
   selected,
   today,
   planStart,
@@ -35,7 +47,8 @@ export function MonthGrid({
   onSelect,
   onMonthStep,
 }: {
-  days: PlanDayView[];
+  index: CalendarIndex;
+  layers: readonly CalendarLayer[];
   selected: string;
   today: string;
   planStart: string;
@@ -43,10 +56,6 @@ export function MonthGrid({
   onSelect: (iso: string) => void;
   onMonthStep: (direction: 1 | -1) => void;
 }) {
-  const byDate = useMemo(
-    () => new Map(days.map((day) => [day.date, day])),
-    [days],
-  );
   const cells = useMemo(() => monthGridDays(selected), [selected]);
   const [focusIso, setFocusIso] = useState(selected);
   const refs = useRef(new Map<string, HTMLButtonElement>());
@@ -71,9 +80,9 @@ export function MonthGrid({
     const step = steps[event.key];
     if (step != null) {
       event.preventDefault();
-      const index = cells.indexOf(activeFocus);
+      const indexAt = cells.indexOf(activeFocus);
       const target = Math.min(
-        Math.max((index < 0 ? 0 : index) + step, 0),
+        Math.max((indexAt < 0 ? 0 : indexAt) + step, 0),
         cells.length - 1,
       );
       focusCell(cells[target]!);
@@ -96,12 +105,13 @@ export function MonthGrid({
   };
 
   const weeks: string[][] = [];
-  for (let index = 0; index < cells.length; index += 7) {
-    weeks.push(cells.slice(index, index + 7));
+  for (let at = 0; at < cells.length; at += 7) {
+    weeks.push(cells.slice(at, at + 7));
   }
 
   return (
     <div
+      className="cal-month"
       role="group"
       aria-label={`${monthDate(selected)} schedule`}
       onKeyDown={onKeyDown}
@@ -121,48 +131,36 @@ export function MonthGrid({
       <div className="flex flex-col gap-1.5">
         {weeks.map((week) => (
           <div key={week[0]} className="grid grid-cols-7 gap-1.5">
-            {week.map((iso) => {
-              const day = byDate.get(iso);
-              const stats = day ? dayAssignmentStats(day) : null;
-              const inMonth = iso.slice(0, 7) === selected.slice(0, 7);
-              const inPlan = iso >= planStart && iso <= planEnd;
-              return (
-                <MonthCell
-                  key={iso}
-                  iso={iso}
-                  day={day}
-                  completed={stats?.completed ?? 0}
-                  total={stats?.total ?? 0}
-                  allDone={
-                    !!stats && stats.total > 0 && stats.completed === stats.total
-                  }
-                  inMonth={inMonth}
-                  inPlan={inPlan}
-                  isToday={iso === today}
-                  isSelected={iso === selected}
-                  isTabStop={iso === activeFocus}
-                  registerRef={(node) => {
-                    if (node) refs.current.set(iso, node);
-                    else refs.current.delete(iso);
-                  }}
-                  onFocus={() => setFocusIso(iso)}
-                  onSelect={() => onSelect(iso)}
-                />
-              );
-            })}
+            {week.map((iso) => (
+              <MonthCell
+                key={iso}
+                iso={iso}
+                entries={entriesFor(index, iso, layers)}
+                counts={countEntries(entriesFor(index, iso, layers))}
+                inMonth={iso.slice(0, 7) === selected.slice(0, 7)}
+                inPlan={iso >= planStart && iso <= planEnd}
+                isToday={iso === today}
+                isSelected={iso === selected}
+                isTabStop={iso === activeFocus}
+                registerRef={(node) => {
+                  if (node) refs.current.set(iso, node);
+                  else refs.current.delete(iso);
+                }}
+                onFocus={() => setFocusIso(iso)}
+                onSelect={() => onSelect(iso)}
+              />
+            ))}
           </div>
         ))}
       </div>
     </div>
   );
-}
+});
 
 function MonthCell({
   iso,
-  day,
-  completed,
-  total,
-  allDone,
+  entries,
+  counts,
   inMonth,
   inPlan,
   isToday,
@@ -173,10 +171,8 @@ function MonthCell({
   onSelect,
 }: {
   iso: string;
-  day: PlanDayView | undefined;
-  completed: number;
-  total: number;
-  allDone: boolean;
+  entries: readonly CalendarEntry[];
+  counts: EntryCounts;
   inMonth: boolean;
   inPlan: boolean;
   isToday: boolean;
@@ -186,15 +182,27 @@ function MonthCell({
   onFocus: () => void;
   onSelect: () => void;
 }) {
-  const tasks = day?.tasks ?? [];
   const label = [
     `${isoWeekdayName(iso)} ${longDate(iso)}`,
-    total > 0 ? `${completed} of ${total} done` : "nothing scheduled",
+    counts.plan.total
+      ? `${counts.plan.done} of ${counts.plan.total} scheduled done`
+      : null,
+    counts.tasks.total
+      ? `${counts.tasks.total} personal task${counts.tasks.total === 1 ? "" : "s"}${counts.tasks.overdue ? `, ${counts.tasks.overdue} overdue` : ""}`
+      : null,
+    counts.mocks ? `${counts.mocks} result${counts.mocks === 1 ? "" : "s"} logged` : null,
+    !counts.plan.total && !counts.tasks.total && !counts.mocks
+      ? "nothing scheduled"
+      : null,
     isToday ? "today" : null,
     !inMonth ? "outside the month" : null,
+    !inPlan ? "outside the plan" : null,
   ]
     .filter(Boolean)
     .join(" · ");
+
+  const done =
+    counts.plan.total > 0 && counts.plan.done === counts.plan.total;
 
   return (
     <button
@@ -207,127 +215,179 @@ function MonthCell({
       onFocus={onFocus}
       onClick={onSelect}
       className={cn(
-        "flex min-h-14 flex-col gap-1 rounded-control border p-1.5 text-left transition-colors sm:min-h-24",
+        "cal-cell flex min-w-0 flex-col gap-1 rounded-control border p-1.5 text-left transition-colors",
         inPlan
           ? "border-rule-soft bg-paper hover:border-accent/50 hover:bg-soft"
-          : "border-rule-soft/60 bg-canvas text-muted",
-        !inMonth && "text-muted",
-        /* One border treatment per state: today gets the half-accent rule the
-           week columns use, and a selected cell always wins over it. */
-        isToday && !isSelected && "border-accent/50",
-        isSelected && "border-accent bg-accent-soft hover:border-accent hover:bg-accent-soft",
+          : "border-dashed border-rule-soft/70 bg-canvas text-muted",
+        !inMonth && "opacity-60",
+        isToday && !isSelected && "border-accent/60",
+        isSelected &&
+          "border-accent bg-accent-soft hover:border-accent hover:bg-accent-soft opacity-100 ring-1 ring-accent/40",
       )}
     >
       <span className="flex items-center justify-between gap-1">
         <span
           className={cn(
-            "grid size-5 place-items-center rounded-control text-[11px] tabular",
+            "font-serif tabular leading-none",
+            "text-[15px] sm:text-base",
             isSelected
-              ? "bg-ink font-semibold text-paper"
+              ? "font-semibold text-ink"
               : isToday
                 ? "font-semibold text-accent"
-                : "text-muted",
+                : inPlan
+                  ? "text-ink"
+                  : "text-muted",
           )}
         >
           {Number(iso.slice(8))}
         </span>
-        {total > 0 && (
-          <span className="text-[0.625rem] tabular text-muted">
-            {allDone ? (
+        {counts.plan.total > 0 && (
+          <span className="text-[10px] tabular text-muted">
+            {done ? (
               <PlainIcon name="check" size={10} className="text-positive" />
             ) : (
-              `${completed}/${total}`
+              `${counts.plan.done}/${counts.plan.total}`
             )}
           </span>
         )}
       </span>
 
-      {/* ≥sm: up to two chips plus an overflow count. `+N more` is a span,
-          never a nested button — the full count is in the cell's label. */}
-      {tasks.length > 0 && (
-        <span className="mt-auto hidden flex-col gap-0.5 sm:flex">
-          {tasks.slice(0, 2).map((task) => (
-            <span
-              key={task.key}
-              className={cn(
-                "truncate rounded-control px-1 py-0.5 text-[10px] font-medium leading-tight",
-                taskChipClass(task),
-              )}
-            >
-              {task.name}
-            </span>
+      {/* Wide cell: three ruled rows, one per layer — the three-ink grammar. */}
+      {entries.length > 0 && (
+        <span className="cal-cell-rows mt-auto flex-col gap-0.5">
+          {entries.slice(0, MAX_ROWS).map((entry) => (
+            <CellRow key={entry.id} entry={entry} />
           ))}
-          {tasks.length > 2 && (
-            <span className="px-1 text-[10px] text-muted">
-              +{tasks.length - 2} more
+          {entries.length > MAX_ROWS && (
+            <span className="px-1 text-[10px] leading-tight text-muted">
+              +{entries.length - MAX_ROWS} more
             </span>
           )}
         </span>
       )}
 
-      {/* <sm: one dot per task category. The cell's aria-label carries the
-          counts, so nothing here is colour-only for a screen reader. */}
-      {tasks.length > 0 && (
-        <span className="mt-auto flex items-center gap-0.5 sm:hidden" aria-hidden="true">
-          {tasks.slice(0, 3).map((task) => (
-            <span
-              key={task.key}
-              className={cn("size-1.5 rounded-full", taskDotClass(task))}
-            />
-          ))}
-          {tasks.length > 3 && (
-            <span className="text-[0.625rem] leading-none text-muted">
-              +{tasks.length - 3}
-            </span>
-          )}
+      {/* Narrow cell: one square tick per occupied layer plus a count. */}
+      {entries.length > 0 && (
+        <span className="cal-cell-ticks mt-auto items-center gap-1">
+          {(["plan", "tasks", "mocks"] as const).map((layer) => {
+            const present =
+              layer === "mocks"
+                ? counts.mocks > 0
+                : counts[layer].total > 0;
+            return present ? (
+              <span
+                key={layer}
+                className={cn("h-1.5 w-1 rounded-[1px]", LAYER_META[layer].tick)}
+                aria-hidden="true"
+              />
+            ) : null;
+          })}
+          <span className="ml-auto text-[10px] tabular leading-none text-muted">
+            {entries.length}
+          </span>
         </span>
       )}
     </button>
   );
 }
 
+/** A single ruled row inside a wide month cell. */
+function CellRow({ entry }: { entry: CalendarEntry }) {
+  if (entry.kind === "plan-task")
+    return (
+      <span
+        className={cn(
+          "flex items-center gap-1 truncate rounded-[2px] py-0.5 pl-1 pr-1 text-[10px] font-medium leading-tight",
+          planTickClass(entry.task),
+          entry.task.completed
+            ? "text-muted line-through"
+            : "text-ink",
+        )}
+      >
+        <span
+          className={cn("h-3 w-0.5 shrink-0 rounded-[1px]", planTickClass(entry.task))}
+          aria-hidden="true"
+        />
+        <span className="truncate">{categoryLabel(entry.task)}</span>
+      </span>
+    );
+  if (entry.kind === "revision")
+    return (
+      <span className="flex items-center gap-1 truncate rounded-[2px] py-0.5 pl-1 pr-1 text-[10px] leading-tight text-muted">
+        <span className="h-3 w-0.5 shrink-0 rounded-[1px] bg-rule" aria-hidden="true" />
+        <span className="truncate">{entry.label}</span>
+      </span>
+    );
+  if (entry.kind === "personal")
+    return (
+      <span
+        className={cn(
+          "flex items-center gap-1 truncate rounded-[2px] border border-rule-soft bg-paper px-1 py-0.5 text-[10px] leading-tight",
+          entry.status === "completed" ? "text-muted line-through" : "text-ink",
+        )}
+      >
+        <span className="truncate">{entry.task.title}</span>
+      </span>
+    );
+  return (
+    <span className="flex items-center gap-1 truncate rounded-[2px] border-l-2 border-l-ink/60 bg-soft px-1 py-0.5 text-[10px] leading-tight text-ink">
+      <span className="truncate">{entry.attempt.name}</span>
+      <span className="ml-auto tabular text-muted">{entry.scorePct}</span>
+    </span>
+  );
+}
+
 /**
- * The grid's key: category tints plus the three state symbols. Shared by the
- * month and week surfaces — both speak the same chip grammar, so both carry
- * the same legend (the day and agenda rows are labelled in words instead).
+ * The grid's key: the three layer forms, then the plan category tints, then
+ * the two date states. Layer identity is form (tint / outline / stamp); the
+ * hues belong to plan categories only.
  */
 export function CalendarLegend() {
   return (
-    <div
-      className={cn(
-        "mt-3 flex items-center gap-x-4 gap-y-1.5 text-[10px] text-muted sm:flex-wrap",
-        "max-sm:whitespace-nowrap max-sm:overflow-x-auto max-sm:[scrollbar-width:none] max-sm:[&::-webkit-scrollbar]:hidden",
-      )}
-    >
-      {TASK_LEGEND.map((item) => (
-        <span key={item.label} className="inline-flex items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 pt-3 text-[10px] text-muted">
+      {(["plan", "tasks", "mocks"] as const).map((layer) => (
+        <span key={layer} className="inline-flex items-center gap-1.5">
           <span
-            className={cn("inline-block size-2 rounded-control", item.swatch)}
+            className={cn(
+              "inline-block h-2.5 w-3.5 rounded-[1px]",
+              LAYER_META[layer].swatch,
+            )}
             aria-hidden="true"
           />
-          {item.label}
+          {LAYER_META[layer].label}
         </span>
       ))}
       <span className="inline-flex items-center gap-1.5">
         <span
-          className="inline-block size-2 rounded-control border border-accent"
+          className="inline-block size-2.5 rounded-[1px] border border-accent"
           aria-hidden="true"
         />
         Selected
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="text-[10px] font-semibold text-accent" aria-hidden="true">
+        <span className="font-serif text-[11px] font-semibold text-accent" aria-hidden="true">
           1
         </span>
         Today
       </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className="inline-block size-2 rounded-control bg-positive-soft text-positive line-through"
-          aria-hidden="true"
-        />
-        Done
-      </span>
     </div>
   );
 }
+
+/** Plan-category key, shown under the grid in the plan layer. */
+export function PlanCategoryLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 pb-1 text-[10px] text-muted">
+      {TASK_LEGEND.map((item) => (
+        <span key={item.label} className="inline-flex items-center gap-1.5">
+          <span
+            className={cn("inline-block h-2.5 w-3.5 rounded-[1px]", item.swatch)}
+            aria-hidden="true"
+          />
+          {item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
