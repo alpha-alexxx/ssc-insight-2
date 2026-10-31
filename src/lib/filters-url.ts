@@ -1,10 +1,20 @@
-import { dashboardScopeSchema, filtersSchema, type DashboardScope, type Filters } from "./domain";
+import { z } from "zod";
+import {
+  ATTEMPT_SORT_KEYS,
+  PAGE_SIZES,
+  dashboardScopeSchema,
+  filtersSchema,
+  type DashboardScope,
+  type Filters,
+  type PageSize,
+  type SortKey,
+} from "./domain";
 
 /**
  * URL ⇄ filter-state mapping for the workspace views.
  *
- * The URL is a shareable mirror of the shell's filter/scope state, not the
- * source of truth. State changes are written to the address bar with
+ * The URL is a shareable mirror of the shell's filter/scope/list state, not
+ * the source of truth. State changes are written to the address bar with
  * history.replaceState — no Next.js navigation, no RSC round-trip, and no
  * history entry per keystroke. A hard load of a shared URL restores the
  * state once on mount (after hydration, so there is no mismatch). Browser
@@ -23,7 +33,45 @@ const lenientFiltersSchema = filtersSchema.extend({
   to: filtersSchema.shape.to.catch(undefined),
 });
 
-export type WorkspaceUrlState = { filters: Filters; scope: DashboardScope };
+// List-state mirror (page/pageSize/sort/dir). One `page` param serves both
+// /history and /compare — each view owns its own page state and only the
+// active view's is written, matching how filters reset on navigation.
+const lenientPageSchema = z.coerce
+  .number()
+  .int()
+  .min(1)
+  .max(100_000)
+  .optional()
+  .catch(undefined);
+const lenientPageSizeSchema = z.coerce
+  .number()
+  .int()
+  .pipe(z.union([z.literal(10), z.literal(20), z.literal(50), z.literal(100)]))
+  .optional()
+  .catch(undefined);
+const lenientSortSchema = z.enum(ATTEMPT_SORT_KEYS).optional().catch(undefined);
+const lenientDirSchema = z.enum(["asc", "desc"]).optional().catch(undefined);
+
+/** Server-paged list state mirrored alongside the filters. */
+export type WorkspaceListState = {
+  page: number;
+  pageSize: PageSize;
+  sort: SortKey;
+  dir: "asc" | "desc";
+};
+
+export const defaultListState: WorkspaceListState = {
+  page: 1,
+  pageSize: 10,
+  sort: "date",
+  dir: "desc",
+};
+
+export type WorkspaceUrlState = {
+  filters: Filters;
+  scope: DashboardScope;
+  list: WorkspaceListState;
+};
 
 /** Views whose address bar mirrors the shared filter/scope state. */
 export function mirrorsWorkspaceState(pathname: string): boolean {
@@ -71,13 +119,21 @@ export function parseWorkspaceState(search: string): WorkspaceUrlState {
   const scope = dashboardScopeSchema
     .catch("full")
     .parse(params.get("scope") ?? "full");
-  return { filters, scope };
+  const list: WorkspaceListState = {
+    page: lenientPageSchema.parse(params.get("page")) ?? defaultListState.page,
+    pageSize:
+      lenientPageSizeSchema.parse(params.get("pageSize")) ??
+      defaultListState.pageSize,
+    sort: lenientSortSchema.parse(params.get("sort")) ?? defaultListState.sort,
+    dir: lenientDirSchema.parse(params.get("dir")) ?? defaultListState.dir,
+  };
+  return { filters, scope, list };
 }
 
 /** Serialize only non-default values so clean views keep clean URLs. */
 export function serializeWorkspaceState(
   pathname: string,
-  { filters, scope }: WorkspaceUrlState,
+  { filters, scope, list }: WorkspaceUrlState,
 ): string {
   const params = new URLSearchParams();
   if (filters.type && filters.type !== "all") params.set("type", filters.type);
@@ -89,6 +145,10 @@ export function serializeWorkspaceState(
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
   if (scope !== "full") params.set("scope", scope);
+  if (list.page > 1) params.set("page", String(list.page));
+  if (list.pageSize !== 10) params.set("pageSize", String(list.pageSize));
+  if (list.sort !== "date") params.set("sort", list.sort);
+  if (list.dir !== "desc") params.set("dir", list.dir);
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 }

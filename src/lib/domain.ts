@@ -205,6 +205,63 @@ export const filtersSchema = z.object({
   from: z.iso.date().or(z.literal("")).optional(),
   to: z.iso.date().or(z.literal("")).optional(),
 });
+
+/** Server-paged list columns, in table order. Score/accuracy/time are
+ * totals()-derived, so the repository sorts those in JS (attempt-sort.ts). */
+export const ATTEMPT_SORT_KEYS = [
+  "name",
+  "type",
+  "platform",
+  "date",
+  "score",
+  "accuracy",
+  "percentile",
+  "time",
+] as const;
+export type SortKey = (typeof ATTEMPT_SORT_KEYS)[number];
+
+/** Rows per page offered by the /history and /compare pickers. */
+export const PAGE_SIZES = [10, 20, 50, 100] as const;
+export type PageSize = (typeof PAGE_SIZES)[number];
+
+/** Strict validation for GET /api/mock-attempts list params: the shared
+ * filters plus the paging contract. A request without `page` stays the
+ * legacy unpaged array response the dashboard and shell caches depend on. */
+export const attemptListSchema = filtersSchema.extend({
+  page: z.coerce.number().int().min(1).max(100_000).optional(),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .refine((v): v is PageSize => (PAGE_SIZES as readonly number[]).includes(v))
+    .optional(),
+  sort: z.enum(ATTEMPT_SORT_KEYS).optional(),
+  dir: z.enum(["asc", "desc"]).optional(),
+  stats: z.literal("1").optional(),
+});
+
+/** KPI strip aggregates for /history, computed server-side over the whole
+ * filtered set (see buildAttemptStats). Null averages mean no data. */
+export type AttemptStats = {
+  totalMocks: number;
+  avgScore: number | null;
+  avgScorePct: number | null;
+  avgAccuracy: number | null;
+  accuracyDelta: number | null;
+  avgTime: number | null;
+  timeDelta: number | null;
+  newThisMonth: number;
+};
+
+/** One server-paged page of attempts, plus the count metadata the shadcn
+ * pagination UI needs and the optional KPI stats block. */
+export type PagedAttempts = {
+  items: Attempt[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  stats?: AttemptStats;
+};
 export function subjectStats(s: SubjectResult) {
   const attempted = s.correct + s.incorrect;
   const score = s.scoreOverride ?? s.correct * 3 - s.incorrect;
@@ -218,7 +275,15 @@ export function subjectStats(s: SubjectResult) {
     accuracy: attempted ? (s.correct / attempted) * 100 : null,
   };
 }
-export function totals(a: Omit<AttemptInput, "notes">) {
+/** Accepts any attempt-shaped object carrying the scoring inputs — full
+ * Attempt records as well as the minimal projections the repository sorts
+ * server-side. Only these four fields feed the math. */
+export function totals(
+  a: Pick<
+    AttemptInput,
+    "type" | "subjects" | "scoreOverride" | "overallTimeSeconds"
+  >,
+) {
   const scoringSubjects =
     a.type === "full"
       ? a.subjects.filter((s) => s.subjectId !== "computer")

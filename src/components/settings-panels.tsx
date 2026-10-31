@@ -113,7 +113,7 @@ export function SettingsPanels({
           every unselected panel was also hidden. */}
       <nav
         aria-label="Settings sections"
-        className="-mx-4 flex gap-1 overflow-x-auto border-b border-rule-soft px-4 lg:hidden"
+        className="-mx-3 flex gap-1 overflow-x-auto border-b border-rule-soft px-3 pb-px lg:hidden"
       >
         {sections.map((item) => (
           <button
@@ -209,7 +209,10 @@ export function SettingsPanels({
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-3">
-                <Button disabled={busy || !dirty || !valid || saveState === "saving"}>
+                <Button
+                  className="max-sm:w-full"
+                  disabled={busy || !dirty || !valid || saveState === "saving"}
+                >
                   {saveState === "saving" ? "Saving…" : "Save target"}
                 </Button>
                 <span

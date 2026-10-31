@@ -8,7 +8,11 @@ import {
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   AnimatePresence,
   motion,
@@ -30,6 +34,11 @@ import { AiChatSheet, type LogMockPayload } from "./ai-chat-sheet";
 import { PageHeader } from "./page-header";
 import { useAiWorkspace } from "./use-ai-workspace";
 import { useBackupImport } from "./use-backup-import";
+import {
+  collectSelectedAttempts,
+  useAttemptPage,
+  useAttemptsByIds,
+} from "./use-attempt-list";
 import { useWorkspaceData } from "./use-workspace-data";
 import { usePlanData } from "./use-plan-data";
 import { MyTasksView } from "./tasks/my-tasks-view";
@@ -67,8 +76,10 @@ import { Dialog } from "radix-ui";
  * derived from the pathname and navigation is router.push.
  *
  * Composition:
- * - useWorkspaceData — filters/scope (+ URL mirror), attempts, analytics,
- *   target, refresh; one deduplicated request set per change.
+ * - useWorkspaceData — filters/scope/list-state (+ URL mirror), the
+ *   unfiltered attempts, analytics, target, refresh.
+ * - useAttemptPage — the server-paged /history and /compare lists on
+ *   TanStack Query, keyed on that state.
  * - useAiWorkspace — optional AI coach card and chat drawer state.
  * - useBackupImport — preview/fingerprint/confirm import flow.
  * The shell owns view routing, the shared `busy` flag, and the handlers.
@@ -156,6 +167,7 @@ function WorkspaceShellInner({
   const reduced = useReducedMotion();
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const { style: themeStyle } = useThemePrefs();
   // The view follows the URL; the (workspace) layout keeps this component
   // mounted across navigations so workspace state persists.
@@ -168,12 +180,20 @@ function WorkspaceShellInner({
   const planApi = usePlanData();
   const {
     filters,
-    setFilters,
+    updateFilters,
     scope,
     setScope,
-    attempts,
     allAttempts,
     analytics,
+    page,
+    setPage,
+    comparePage,
+    setComparePage,
+    pageSize,
+    setPageSize,
+    sort,
+    dir,
+    changeSort,
     target,
     setTarget,
     targetInput,
@@ -183,6 +203,26 @@ function WorkspaceShellInner({
     refresh,
     loadSettings,
   } = useWorkspaceData();
+  // Server-paged attempt lists (TanStack Query). Each view fetches only
+  // while it is active; keepPreviousData keeps the previous page visible
+  // while a filter/sort/page change loads.
+  const historyList = useAttemptPage({
+    filters,
+    page,
+    pageSize,
+    sort,
+    dir,
+    withStats: true,
+    enabled: view === "history",
+  });
+  const compareList = useAttemptPage({
+    filters,
+    page: comparePage,
+    pageSize,
+    sort: "date",
+    dir: "desc",
+    enabled: view === "compare",
+  });
   const ai = useAiWorkspace();
   const {
     insight: coachInsight,
@@ -195,6 +235,9 @@ function WorkspaceShellInner({
   const [editing, setEditing] = useState<Attempt>();
   const [detail, setDetail] = useState<Attempt | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  // Full objects for the compare selection, hydrated per id so selections
+  // made anywhere (detail dialog, another picker page) still land.
+  const selectedResults = useAttemptsByIds(selected);
   const [busy, setBusy] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [plannerDate, setPlannerDate] = useState(istTodayIso());
@@ -226,18 +269,18 @@ function WorkspaceShellInner({
   const navigate = useCallback(
     (next: AppView) => {
       setEditing(undefined);
-      if (next === "history") setFilters((f) => ({ ...f, type: "all" }));
+      if (next === "history") updateFilters((f) => ({ ...f, type: "all" }));
       go(next);
     },
-    [go, setFilters],
+    [go, updateFilters],
   );
   /** Sidebar/header link intent: reset stale edit state without navigating. */
   const routeIntent = useCallback(
     (next: AppView) => {
       setEditing(undefined);
-      if (next === "history") setFilters((f) => ({ ...f, type: "all" }));
+      if (next === "history") updateFilters((f) => ({ ...f, type: "all" }));
     },
-    [setFilters],
+    [updateFilters],
   );
   const add = useCallback(() => navigate("add"), [navigate]);
   const openSearch = useCallback(() => setSearchOpen(true), []);
@@ -260,15 +303,25 @@ function WorkspaceShellInner({
   );
   const changeFilter = useCallback(
     (key: keyof Filters, value: string) => {
-      setFilters((f) => ({ ...f, [key]: value }));
+      updateFilters((f) => ({ ...f, [key]: value }));
     },
-    [setFilters],
+    [updateFilters],
   );
   const searchFilter = useCallback(
     (value: string) => changeFilter("search", value),
     [changeFilter],
   );
   const viewAllHistory = useCallback(() => navigate("history"), [navigate]);
+
+  // Post-mutation reload for both data layers: TanStack's paged lists and
+  // per-id selection cache, plus the shell's analytics/unfiltered fetches.
+  const refreshAfterMutation = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["mock-attempts"] }),
+      queryClient.invalidateQueries({ queryKey: ["mock-attempt"] }),
+    ]);
+    await refresh();
+  }, [queryClient, refresh]);
 
   const remove = useCallback(
     async (a: Attempt) => {
@@ -280,9 +333,10 @@ function WorkspaceShellInner({
         });
         setDetail(null);
         setSelected((ids) => ids.filter((id) => id !== a.id));
+        queryClient.removeQueries({ queryKey: ["mock-attempt", a.id] });
         clearCoach();
         toast.success("Mock deleted");
-        await refresh();
+        await refreshAfterMutation();
       } catch (e) {
         toast.error(
           "Couldn’t delete",
@@ -292,7 +346,7 @@ function WorkspaceShellInner({
         setBusy(false);
       }
     },
-    [clearCoach, refresh, toast],
+    [clearCoach, refreshAfterMutation, queryClient, toast],
   );
 
   const download = useCallback(
@@ -374,7 +428,7 @@ function WorkspaceShellInner({
 
   const backup = useBackupImport({
     download,
-    refresh,
+    refresh: refreshAfterMutation,
     onTargetApplied: loadSettings,
     setBusy,
     fileRef,
@@ -413,11 +467,8 @@ function WorkspaceShellInner({
   // Derived view inputs. Memoized so the memoized panels below skip
   // re-renders while chat streams or unrelated shell state changes.
   const compared = useMemo(
-    () =>
-      selected
-        .map((id) => allAttempts.find((a) => a.id === id))
-        .filter((a): a is Attempt => !!a),
-    [allAttempts, selected],
+    () => collectSelectedAttempts(selectedResults),
+    [selectedResults],
   );
   const platforms = useMemo(
     () => [...new Set(allAttempts.map((a) => a.platform))].sort(),
@@ -430,7 +481,29 @@ function WorkspaceShellInner({
       .filter((attempt): attempt is Attempt => !!attempt)
       .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
   }, [allAttempts, analytics]);
-  const visibleAttempts = view === "dashboard" ? dashboardAttempts : attempts;
+
+  // A filter/sort/page-size change can leave the stored page past the end
+  // of the new result set; clamp to the last page once the server answers.
+  useEffect(() => {
+    if (
+      view === "history" &&
+      historyList.data &&
+      page > historyList.data.pageCount
+    ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage(historyList.data.pageCount);
+    }
+  }, [view, historyList.data, page]);
+  useEffect(() => {
+    if (
+      view === "compare" &&
+      compareList.data &&
+      comparePage > compareList.data.pageCount
+    ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setComparePage(compareList.data.pageCount);
+    }
+  }, [view, compareList.data, comparePage]);
 
   // Screen orientation for the AI panel. This object contains only the view
   // name and (when relevant) an ISO date — never titles, notes, or IDs.
@@ -445,6 +518,14 @@ function WorkspaceShellInner({
           : undefined;
     return date ? { view: aiView, date } : { view: aiView };
   }, [view, effectivePlannerDate]);
+  // The paged lists own their loading surfaces on /history and /compare;
+  // the shell banner only relays their failures for the retry button.
+  const activeList = view === "compare" ? compareList : historyList;
+  const listError =
+    view === "history" || view === "compare"
+      ? activeList.error?.message
+      : undefined;
+  const listFetching = activeList.isFetching;
   const aiContextLabel =
     aiScreenContext?.date != null
       ? `${VIEW_META[view].label} · ${shortDate(`${aiScreenContext.date}T12:00:00+05:30`)}`
@@ -508,7 +589,7 @@ function WorkspaceShellInner({
   );
   const savedMock = useCallback(
     async (returnTo?: string | null) => {
-      await refresh();
+      await refreshAfterMutation();
       setEditing(undefined);
       if (returnTo) {
         const date = returnTo.match(/^\/plan\/(\d{4}-\d{2}-\d{2})/)?.[1];
@@ -519,7 +600,7 @@ function WorkspaceShellInner({
       }
       toast.success("Mock saved", "Your progress is up to date.");
     },
-    [navigate, refresh, router, toast],
+    [navigate, refreshAfterMutation, router, toast],
   );
   const closeForm = useCallback(() => navigate("dashboard"), [navigate]);
 
@@ -559,7 +640,9 @@ function WorkspaceShellInner({
           onOpenAi={() => openAiChat("chat")}
           onOpenSearch={openSearch}
         >
-          <div className="workspace-content mx-auto w-full max-w-[1560px] px-4 py-4 sm:px-5 md:py-5">
+          {/* px-3 on phones is deliberate: at 375px the 2×2 metric strip needs
+              every pixel for "Personal overdue" before it ellipsizes. */}
+          <div className="workspace-content mx-auto w-full max-w-[1560px] px-3 py-4 sm:px-5 md:py-5">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={view === "add" ? "add" : view}
@@ -685,7 +768,7 @@ function WorkspaceShellInner({
                         description="Target, appearance, account data, and the private workspace."
                       />
                     )}
-                    {error && (
+                    {(error || listError) && (
                       <div
                         role="alert"
                         className="mb-5 flex flex-wrap gap-3 justify-between items-center bg-warning-soft text-warning border border-warning rounded-control px-5 py-4"
@@ -694,18 +777,25 @@ function WorkspaceShellInner({
                           <p className="font-medium text-sm">
                             Database connection needs attention
                           </p>
-                          <p className="text-xs mt-1 max-w-2xl">{error}</p>
+                          <p className="text-xs mt-1 max-w-2xl">
+                            {error || listError}
+                          </p>
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => void refresh()}
-                          disabled={loading}
+                          onClick={() => {
+                            void refresh();
+                            void activeList.refetch();
+                          }}
+                          disabled={loading || listFetching}
                         >
                           <PlainIcon
                             name="refresh"
                             size={13}
-                            className={loading ? "animate-spin" : ""}
+                            className={
+                              loading || listFetching ? "animate-spin" : ""
+                            }
                           />{" "}
                           Retry
                         </Button>
@@ -790,7 +880,7 @@ function WorkspaceShellInner({
                             scope={scope}
                             setScope={setScope}
                             filters={filters}
-                            setFilters={setFilters}
+                            setFilters={updateFilters}
                             changeFilter={changeFilter}
                             platforms={platforms}
                           />
@@ -811,12 +901,12 @@ function WorkspaceShellInner({
                             scope={scope}
                             setScope={setScope}
                             filters={filters}
-                            setFilters={setFilters}
+                            setFilters={updateFilters}
                             changeFilter={changeFilter}
                             platforms={platforms}
                           />
                         </div>
-                        {loading && (
+                        {listFetching && (
                           <p
                             role="status"
                             className="mb-3 flex items-center gap-2 text-xs text-muted"
@@ -831,7 +921,12 @@ function WorkspaceShellInner({
                         )}
                         {view === "compare" ? (
                           <CompareView
-                            attempts={attempts}
+                            data={compareList.data}
+                            isFetching={compareList.isFetching}
+                            page={comparePage}
+                            onPageChange={setComparePage}
+                            pageSize={pageSize}
+                            onPageSizeChange={setPageSize}
                             compared={compared}
                             selected={selected}
                             onToggle={toggleCompare}
@@ -840,13 +935,16 @@ function WorkspaceShellInner({
                           />
                         ) : (
                           <HistoryPanel
-                            mode="history"
-                            attempts={visibleAttempts}
-                            totalCount={allAttempts.length}
-                            sourceCount={analytics?.sourceAttemptCount ?? 0}
+                            data={historyList.data}
+                            isFetching={historyList.isFetching}
+                            sort={{ key: sort, dir }}
+                            onSort={changeSort}
+                            page={page}
+                            onPageChange={setPage}
+                            pageSize={pageSize}
+                            onPageSizeChange={setPageSize}
                             search={filters.search ?? ""}
                             onSearch={searchFilter}
-                            onViewAll={viewAllHistory}
                             onOpen={openDetail}
                             onAdd={add}
                           />
@@ -990,7 +1088,8 @@ function ScopeFilters({
   scope: DashboardScope;
   setScope: (scope: DashboardScope) => void;
   filters: Filters;
-  setFilters: React.Dispatch<React.SetStateAction<Filters>>;
+  /** Function-form-only filter writer; resets the paged lists' pages. */
+  setFilters: (updater: (prev: Filters) => Filters) => void;
   changeFilter: (key: keyof Filters, value: string) => void;
   platforms: string[];
 }) {
@@ -1038,14 +1137,15 @@ function ScopeFilters({
           );
         })}
       </div>
-      {/* Filters close the control group: a full-width 2-up grid on phones
-          (deterministic rows, no ragged wrap), right-aligned inline from sm
-          up. The date filter spans both grid columns only when the subject
-          select makes it the third cell. */}
-      <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto sm:justify-end">
+      {/* Filters close the control group: one full-width row per filter on
+          phones. A 2-up grid was the earlier choice, but a 16px field font
+          plus the chevron padding no longer fits "All platforms" in half of
+          a 375px panel — stacking keeps the label readable and the target
+          full width. Right-aligned inline from sm up. */}
+      <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:ml-auto sm:flex sm:w-auto sm:justify-end">
         <select
           aria-label="Filter by platform"
-          className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[10.5rem]"
+          className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[11.5rem]"
           value={filters.platform ?? "all"}
           onChange={(e) => changeFilter("platform", e.target.value)}
         >
@@ -1057,7 +1157,7 @@ function ScopeFilters({
         {view !== "dashboard" && (
           <select
             aria-label="Filter by subject"
-            className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[10.5rem]"
+            className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[11.5rem]"
             value={filters.subject ?? "all"}
             onChange={(e) => changeFilter("subject", e.target.value)}
           >

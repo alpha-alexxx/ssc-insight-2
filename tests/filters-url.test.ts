@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  defaultListState,
   mirrorsWorkspaceState,
   parseWorkspaceState,
   safeWorkspaceReturnTo,
@@ -19,6 +20,7 @@ test("workspace url state round-trips through serialize and parse", () => {
       to: "2026-02-01",
     },
     scope: "sectional" as const,
+    list: defaultListState,
   };
   const url = serializeWorkspaceState("/history", state);
   assert.equal(url, "/history?type=full&subject=quant&platform=Testbook&search=mock+12&from=2026-01-01&to=2026-02-01&scope=sectional");
@@ -29,8 +31,25 @@ test("default values keep the URL bare", () => {
   const url = serializeWorkspaceState("/dashboard", {
     filters: { type: "all", subject: "all", platform: "all", search: "" },
     scope: "full",
+    list: defaultListState,
   });
   assert.equal(url, "/dashboard");
+});
+
+test("paged list state round-trips and non-defaults serialize", () => {
+  const state = {
+    filters: {},
+    scope: "full" as const,
+    list: { page: 3, pageSize: 50, sort: "score", dir: "asc" } as const,
+  };
+  const url = serializeWorkspaceState("/history", state);
+  assert.equal(url, "/history?page=3&pageSize=50&sort=score&dir=asc");
+  assert.deepEqual(parseWorkspaceState(url.slice(url.indexOf("?"))), state);
+});
+
+test("malformed list params fall back to defaults per field", () => {
+  const state = parseWorkspaceState("?page=bogus&pageSize=17&sort=nope&dir=sideways&page=0");
+  assert.deepEqual(state.list, defaultListState);
 });
 
 test("malformed deep-link params fall back to defaults per field", () => {
@@ -48,8 +67,16 @@ test("over-long platform and search values are dropped, not errors", () => {
 });
 
 test("parse tolerates empty and absent query strings", () => {
-  assert.deepEqual(parseWorkspaceState(""), { filters: {}, scope: "full" });
-  assert.deepEqual(parseWorkspaceState("?scope=all"), { filters: {}, scope: "all" });
+  assert.deepEqual(parseWorkspaceState(""), {
+    filters: {},
+    scope: "full",
+    list: defaultListState,
+  });
+  assert.deepEqual(parseWorkspaceState("?scope=all"), {
+    filters: {},
+    scope: "all",
+    list: defaultListState,
+  });
 });
 
 test("planner/Add Mock routes are excluded from the filter URL mirror", () => {

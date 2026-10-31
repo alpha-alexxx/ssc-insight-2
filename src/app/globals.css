@@ -1194,6 +1194,9 @@
      each cell is a single large hit target for its destination. */
   .metric-strip {
     display: grid;
+    /* Cells stretch to equal height per row; the tallest cell wins, so the
+       2×2 fold keeps clean horizontal rules instead of ragged ones. */
+    align-content: stretch;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     /* Editorial ink band: strong rules above and below the figures, hairlines
        between cells. --stat-rule-width lets sera double the rule weight. */
@@ -1244,7 +1247,7 @@
   .metric-label {
     min-width: 0;
     color: var(--muted);
-    font-size: 0.625rem;
+    font-size: var(--type-section-label);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -2347,7 +2350,6 @@ html {
     --type-panel-title-dense: 1rem;
     --type-section-title: 1.25rem;
     --type-metric: 1.5rem;
-    --type-section-label: 0.6875rem;
   }
   /* Explicit so a future re-ordering of the mira block cannot resurrect its
      compact 20px title on phones. */

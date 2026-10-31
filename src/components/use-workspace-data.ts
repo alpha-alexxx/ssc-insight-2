@@ -6,29 +6,34 @@ import {
   mirrorsWorkspaceState,
   parseWorkspaceState,
   serializeWorkspaceState,
+  type WorkspaceListState,
 } from "@/lib/filters-url";
 import type { Analytics } from "@/lib/analytics";
 import type { Attempt } from "@/lib/domain";
-import type { DashboardScope, Filters } from "@/lib/domain";
+import type { DashboardScope, Filters, PageSize, SortKey } from "@/lib/domain";
 
 /**
  * Workspace data layer: persisted-record filters, the dashboard scope, the
- * attempts/analytics payloads behind them, and the user's target.
+ * analytics/unfiltered-attempts payloads behind them, the user's target,
+ * and the server-paged list state (page/pageSize/sort/dir) for /history and
+ * /compare.
  *
  * Ownership:
- * - filters/scope live here; the URL mirrors them via history.replaceState
- *   (see lib/filters-url.ts) so views stay shareable without RSC round-trips.
- * - One refresh covers filtered attempts, analytics, and the unfiltered
- *   list; the two attempt fetches share one request while no filter is set.
- * - A new refresh aborts the previous one's network work, not just its state
- *   application, and settings load once (they change only on explicit
+ * - filters/scope and the list state live here; the URL mirrors them via
+ *   history.replaceState (see lib/filters-url.ts) so views stay shareable
+ *   without RSC round-trips.
+ * - The paged list itself is fetched through TanStack Query
+ *   (use-attempt-list.ts), keyed on this state; this hook keeps the
+ *   unfiltered attempt list (dashboard/calendar/plan/add consumers) and
+ *   analytics.
+ * - A new refresh aborts the previous one's network work, not just its
+ *   state application, and settings load once (they change only on explicit
  *   user actions, not on filter changes).
  */
 export function useWorkspaceData() {
   const pathname = usePathname();
   const [filters, setFilters] = useState<Filters>({});
   const [scope, setScope] = useState<DashboardScope>("full");
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [target, setTarget] = useState<number | null>(null);
@@ -38,6 +43,47 @@ export function useWorkspaceData() {
   const requestId = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Server-paged list state. Each view owns its page; pageSize/sort/dir are
+  // shared (sort/dir only have UI on /history; the compare picker stays
+  // date-desc). Any filter/sort/size change restarts at page 1.
+  const [page, setPage] = useState(1);
+  const [comparePage, setComparePage] = useState(1);
+  const [pageSize, setPageSizeState] = useState<PageSize>(10);
+  const [sort, setSortState] = useState<SortKey>("date");
+  const [dir, setDirState] = useState<"asc" | "desc">("desc");
+
+  /** Every filter write resets the paged lists — results moved, so a stale
+   * page number could point past the end. */
+  const updateFilters = useCallback((updater: (prev: Filters) => Filters) => {
+    setFilters(updater);
+    setPage(1);
+    setComparePage(1);
+  }, []);
+
+  /** Column-sort toggle with the historical defaults: same key flips the
+   * direction; a new key starts asc for text columns, desc otherwise. */
+  const changeSort = useCallback((key: SortKey) => {
+    setPage(1);
+    setSortState((prev) => {
+      if (prev === key) {
+        setDirState((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setDirState(
+        key === "name" || key === "type" || key === "platform"
+          ? "asc"
+          : "desc",
+      );
+      return key;
+    });
+  }, []);
+
+  const setPageSize = useCallback((size: PageSize) => {
+    setPageSizeState(size);
+    setPage(1);
+    setComparePage(1);
+  }, []);
+
   const refresh = useCallback(async () => {
     const id = ++requestId.current;
     abortRef.current?.abort();
@@ -45,20 +91,11 @@ export function useWorkspaceData() {
     abortRef.current = abort;
     setLoading(true);
     setError("");
-    // Search obeys the unified search contract: a one-character query is too
-    // broad to fetch, so it holds until the second character (or clears).
-    const gatedFilters: Filters = {
-      ...filters,
-      search:
-        filters.search && filters.search.length >= 2 ? filters.search : "",
-    };
-    const query = new URLSearchParams(
-      Object.entries(gatedFilters).filter(([, v]) => !!v),
-    );
-    // Dashboard analytics has its own analytical scope. Persisted type and
-    // subject filters still drive Mock history and Compare.
+    // Dashboard analytics has its own analytical scope: platform and date
+    // filters still drive it, while type/subject/search belong to the paged
+    // list views (their KPI aggregates now arrive from the paged endpoint).
     const analyticsQuery = new URLSearchParams(
-      Object.entries(gatedFilters).filter(
+      Object.entries(filters).filter(
         ([key, value]) =>
           !!value &&
           key !== "type" &&
@@ -68,23 +105,13 @@ export function useWorkspaceData() {
     );
     analyticsQuery.set("view", scope);
     try {
-      const allPromise = api<Attempt[]>("/api/mock-attempts", { signal: abort.signal });
-      // With no filters active the filtered list is the unfiltered list —
-      // share one request instead of fetching the same payload twice.
-      const filteredPromise: Promise<Attempt[]> = Object.values(
-        gatedFilters,
-      ).some(Boolean)
-        ? api<Attempt[]>(`/api/mock-attempts?${query}`, { signal: abort.signal })
-        : allPromise;
-      const [rows, stats, all] = await Promise.all([
-        filteredPromise,
+      const [stats, all] = await Promise.all([
         api<Analytics>(`/api/analytics?${analyticsQuery}`, {
           signal: abort.signal,
         }),
-        allPromise,
+        api<Attempt[]>("/api/mock-attempts", { signal: abort.signal }),
       ]);
       if (id !== requestId.current) return;
-      setAttempts(rows);
       setAnalytics(stats);
       setAllAttempts(all);
     } catch (e) {
@@ -114,15 +141,13 @@ export function useWorkspaceData() {
     [],
   );
 
-  // Restore the shareable URL state (filters + scope) whenever the view
-  // changes — the shell persists across client-side navigation, so a
-  // palette/programmatic handoff like /history?search=… would otherwise be
-  // stripped by the mirror effect below (its one-shot restore never re-ran).
-  // Declared before the mirror effect so a deep link's query is read before
-  // anything writes back, and it runs before the refresh debounce fires, so
-  // the fetch already uses the restored filters. Synchronous setState is the
-  // point here: this is the sync with an external system (the address bar)
-  // that React's effect rules carve out.
+  // Restore the shareable URL state (filters, scope, list paging) whenever
+  // the view changes — the shell persists across client-side navigation, so
+  // a palette/programmatic handoff like /history?search=…&page=3 would
+  // otherwise be stripped by the mirror effect below. Declared before the
+  // mirror effect so a deep link's query is read before anything writes
+  // back. Synchronous setState is the point here: this is the sync with an
+  // external system (the address bar) that React's effect rules carve out.
   const [urlReady, setUrlReady] = useState(false);
   useEffect(() => {
     const state = parseWorkspaceState(window.location.search);
@@ -133,6 +158,23 @@ export function useWorkspaceData() {
     setFilters(state.filters);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setScope(state.scope);
+    // The one `page` param belongs to the view being restored; sort/dir and
+    // the shared pageSize only have meaning on /history.
+    if (pathname === "/compare") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setComparePage(state.list.page);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPageSizeState(state.list.pageSize);
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPage(state.list.page);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPageSizeState(state.list.pageSize);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSortState(state.list.sort);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDirState(state.list.dir);
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrlReady(true);
   }, [pathname]);
@@ -146,10 +188,26 @@ export function useWorkspaceData() {
     // that context. Only the views that actually consume filters/scope own
     // the address bar.
     if (!mirrorsWorkspaceState(pathname)) return;
-    const url = serializeWorkspaceState(pathname, { filters, scope });
+    const list: WorkspaceListState = {
+      page: pathname === "/compare" ? comparePage : page,
+      pageSize,
+      sort,
+      dir,
+    };
+    const url = serializeWorkspaceState(pathname, { filters, scope, list });
     if (window.location.pathname + window.location.search !== url)
       window.history.replaceState(null, "", url);
-  }, [pathname, filters, scope, urlReady]);
+  }, [
+    pathname,
+    filters,
+    scope,
+    urlReady,
+    page,
+    comparePage,
+    pageSize,
+    sort,
+    dir,
+  ]);
 
   // Settings (the target) change only through explicit user actions, so they
   // load once on mount and after import/save — not on every data refresh.
@@ -182,12 +240,20 @@ export function useWorkspaceData() {
 
   return {
     filters,
-    setFilters,
+    updateFilters,
     scope,
     setScope,
-    attempts,
     allAttempts,
     analytics,
+    page,
+    setPage,
+    comparePage,
+    setComparePage,
+    pageSize,
+    setPageSize,
+    sort,
+    dir,
+    changeSort,
     target,
     setTarget,
     targetInput,

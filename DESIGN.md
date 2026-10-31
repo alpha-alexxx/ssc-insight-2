@@ -160,7 +160,9 @@ Subject charts use terracotta for Quant, blue for Reasoning, aqua for English, o
 
 Source Serif 4 Variable supplies page headings, panel titles, metrics, and the typographic wordmark. DM Sans Variable supplies body text, tables, forms, and navigation. Both fonts are self-hosted through Fontsource imports in the root layout. Use the declared fallbacks while fonts load.
 
-Supporting text is generally 10–13px; section labels use 10px uppercase lettering, weight 600, and 0.12em tracking. Use tabular figures for comparison values and timings. Below 768px, metrics reduce to 35px and panel titles to 21px. The mobile wordmark uses 23px. Keep units in muted ink rather than reducing their contrast.
+Supporting text is generally 10–13px; section labels use 10px uppercase lettering, weight 600, and 0.12em tracking. Use tabular figures for comparison values and timings. Keep units in muted ink rather than reducing their contrast.
+
+Type sizes are tokens (`--type-page-title`, `--type-workspace-title`, `--type-section-title`, `--type-panel-title`, `--type-panel-title-dense`, `--type-metric`, `--type-stat`) read by the `.page-title`, `.workspace-title`, `.section-title`, `.panel-title`, `.panel-title-dense`, `.metric-value` and `.stat-value` classes. A style or breakpoint resizes type by overriding a token, never by re-declaring the class. Below 640px (and on coarse pointers below 1280px) the phone block steps them: workspace title 28px, section title 20px, panel title 16px, metric values 24px. Panel titles are never larger on a phone than on desktop — the old 21px mobile override was an inversion and is gone. Nothing renders below 10px; the one exception is a single initial glyph inside a fixed-size host tile.
 
 ## Layout
 
@@ -168,7 +170,13 @@ The workspace follows shadcn sidebar-07 composition: header branding, navigation
 
 Main content is centered within a 1560px maximum width with 12–20px horizontal padding at small widths and 20px at desktop. The dashboard is composed as a compact overview strip followed by a primary/secondary two-column workspace at `xl`; both columns stack below that breakpoint. The planner uses calendar-plus-selected-day at `xl` and a single-column date/schedule flow on mobile.
 
-The summary is one divided metric strip, not individual floating cards: soft rules, four columns on desktop, two below 768px, 13–15px cell padding, 23–28px serif values. Each cell is a single link target with a 2px square progress rule and a chevron that appears on hover or focus. The performance section keeps a quiet metadata row (labels, values, hairline dividers) and charts below the operational overview rather than repeating the headline metrics.
+The summary is one divided metric strip, not individual floating cards: soft rules, 12–18px cell padding, 24–34px serif values. Each cell is a single link target with a 2px square progress rule and a chevron that appears on hover or focus. The performance section keeps a quiet metadata row (labels, values, hairline dividers) and charts below the operational overview rather than repeating the headline metrics.
+
+The strip folds to 2×2 based on **its own width, not the viewport**: `.workspace-content` and any `.strip-frame` are query containers, and below 680px of content the strip (and `.score-band`) reflow to two columns with the border pairs re-declared. This is what keeps a 768px tablet — where the 15rem sidebar leaves only ~488px — from squeezing four cells into ~120px each. From 680px up the strip is four-across, so 1024 and every desktop width keep their shipped geometry. The My Tasks swipe row (`.metric-strip-scroll`) opts out and stays a horizontal snap row on phones.
+
+**Touch density.** Controls are 40px (compact 32px) at desktop density, and 44px on phones and coarse pointers for every style, including mira — 44px is an accessibility floor, not a style choice, so the phone token block sits last in `globals.css` and supersedes the `[data-style]` density. Icon-only controls that must stay visually small use `.tap-target`, whose pseudo-element grows the hit area without moving layout. Primary page actions use `.action-row`: full-width and stacked on phones, intrinsic and inline from `sm`.
+
+**Form fields.** Every text, select and textarea control is 16px on phones and coarse pointers, unlayered and app-wide, including portaled sheets and dialogs — anything under 16px makes iOS zoom the viewport on focus.
 
 **The Frame Rule.** Rules, tracks, bars, and progress fills are square; only status dots and the answer-distribution ring are round. A percentage rule is never a pill, and a metric strip is never a row of separate rounded cards.
 
@@ -196,7 +204,7 @@ Google sign-in starts from the public landing page, which is the only sign-in su
 
 The signed-in header shows the account and a compact outline sign-out control. Session errors hide and unmount the private workspace until verification succeeds; account changes remount it. Preserve square geometry and paper/ink tokens throughout.
 
-Primary buttons use terracotta with paper text and a darker hover. Outline buttons use a rule border; ghost buttons gain a soft fill; destructive buttons use danger red. Standard and icon controls are 40px high; compact buttons are 32px. Disabled controls reduce opacity and block pointer interaction. Keyboard focus remains explicit with an accent outline and offset.
+Primary buttons use terracotta with paper text and a darker hover. Outline buttons use a rule border; ghost buttons gain a soft fill; destructive buttons use danger red. Standard and icon controls are 40px high; compact buttons are 32px, and both become 44px on phones and coarse pointers (see Touch density above). Disabled controls reduce opacity and block pointer interaction. Keyboard focus remains explicit with an accent outline and offset.
 
 Fields use paper fill, rule borders, square corners, and 10px by 12px padding. Labels sit 7px above controls. Read-only fields use the soft fill. Checkboxes use ink. Selected mock filters and Manual/Paste toggles expose `aria-pressed`.
 
@@ -222,7 +230,9 @@ Personal month calendars live in My Tasks and Today's Plan, independent of the S
 - Do preserve the divided stat strip and horizontal table scrolling.
 - Do use semantic paper, ink, accent, and chart variables.
 - Do keep one bold action per screen; secondary AI actions stay outline.
+- Do let a divider strip respond to its container's width, and keep every control at 44px and every field at 16px on phones.
 - Don't add rounded dashboard cards or colorful icon tiles.
+- Don't add a second mobile-only control system; phone density is a token override, not a parallel set of components.
 - Don't repeat the headline metrics in a second stat strip further down a view.
 - Don't introduce paper textures or heavy shadows.
 - Don't animate charts or ignore reduced-motion preferences.
