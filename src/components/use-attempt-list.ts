@@ -1,26 +1,25 @@
 "use client";
 import {
-  keepPreviousData,
   useQueries,
   useQuery,
   type UseQueryResult,
 } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { api } from "@/lib/api-client";
-import type {
-  Attempt,
-  Filters,
-  PagedAttempts,
-  SortKey,
-} from "@/lib/domain";
+import {
+  attemptDetailQueryOptions,
+  attemptListQueryOptions,
+  type AttemptListParams,
+} from "@/lib/queries/attempts";
+import type { Attempt, Filters } from "@/lib/domain";
 
 /**
  * TanStack data layer for the server-paged attempt lists behind /history
- * and /compare. Mirrors the search half's conventions: the query key
- * carries the full request shape so identical requests deduplicate and
- * repeat pages resolve from cache; obsolete in-flight requests abort the
- * moment the key changes; `keepPreviousData` keeps the previous page
- * visible (dimmed) while the next one loads instead of flashing a skeleton.
+ * and /compare. Keys and options live in lib/queries/attempts.ts — the
+ * query key carries the full request shape so identical requests
+ * deduplicate and repeat pages resolve from cache; obsolete in-flight
+ * requests abort the moment the key changes; `keepPreviousData` keeps the
+ * previous page visible (dimmed) while the next one loads instead of
+ * flashing a skeleton.
  *
  * Search follows the unified contract — a one-character query is too broad
  * to fetch, so it holds until the second character (or clears) — with the
@@ -28,14 +27,7 @@ import type {
  * date filter fetch immediately.
  */
 
-export type AttemptPageParams = {
-  filters: Filters;
-  page: number;
-  pageSize: number;
-  sort: SortKey;
-  dir: "asc" | "desc";
-  /** /history requests the whole-filtered-set KPI aggregates. */
-  withStats?: boolean;
+export type AttemptPageParams = AttemptListParams & {
   /** Only fetch while the owning view is active. */
   enabled?: boolean;
 };
@@ -55,20 +47,8 @@ export function useAttemptPage({
     search: debouncedSearch.length >= 2 ? debouncedSearch : "",
   };
   return useQuery({
-    queryKey: ["mock-attempts", gated, page, pageSize, sort, dir, !!withStats],
+    ...attemptListQueryOptions({ filters: gated, page, pageSize, sort, dir, withStats }),
     enabled,
-    placeholderData: keepPreviousData,
-    queryFn: ({ signal }) => {
-      const params = new URLSearchParams(
-        Object.entries(gated).filter(([, v]) => !!v),
-      );
-      params.set("page", String(page));
-      params.set("pageSize", String(pageSize));
-      params.set("sort", sort);
-      params.set("dir", dir);
-      if (withStats) params.set("stats", "1");
-      return api<PagedAttempts>(`/api/mock-attempts?${params}`, { signal });
-    },
   });
 }
 
@@ -81,9 +61,7 @@ export function useAttemptPage({
 export function useAttemptsByIds(ids: string[]) {
   return useQueries({
     queries: ids.map((id) => ({
-      queryKey: ["mock-attempt", id],
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        api<Attempt>(`/api/mock-attempts/${id}`, { signal }),
+      ...attemptDetailQueryOptions(id),
       enabled: !!id,
     })),
   });

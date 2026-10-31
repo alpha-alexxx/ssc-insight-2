@@ -8,11 +8,7 @@ import {
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AnimatePresence,
   motion,
@@ -32,6 +28,7 @@ import { DashboardView } from "./dashboard-view";
 import { AiCoachCard } from "./ai-coach-card";
 import { AiChatSheet, type LogMockPayload } from "./ai-chat-sheet";
 import { PageHeader } from "./page-header";
+import { QueryProvider } from "./query-provider";
 import { useAiWorkspace } from "./use-ai-workspace";
 import { useBackupImport } from "./use-backup-import";
 import {
@@ -52,6 +49,7 @@ import { useThemePrefs, viewTransition } from "./theme-style-provider";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { api } from "@/lib/api-client";
+import { settingsKeys, updateSettingsRequest } from "@/lib/queries/settings";
 import { BACKUP_MAX_BYTES } from "@/lib/backup";
 import {
   SUBJECTS,
@@ -119,22 +117,11 @@ export function WorkspaceShell({
 }) {
   // ToastProvider wraps the inner component so useToast works inside it.
   // ErrorBoundary already wraps the whole tree in layout.tsx.
-  // QueryClientProvider scopes TanStack Query to the workspace — search
-  // surfaces use it; the rest of the shell keeps its own data layer.
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            refetchOnWindowFocus: false,
-            retry: 1,
-            staleTime: 30_000,
-          },
-        },
-      }),
-  );
+  // QueryProvider scopes the TanStack cache to the workspace session —
+  // lib/query-client.ts owns the client config, devtools are dev-only, and
+  // unmounting the shell (logout) drops the cache with it.
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryProvider>
       <ToastProvider>
         <TodosDataProvider>
           <WorkspaceShellInner
@@ -146,7 +133,7 @@ export function WorkspaceShell({
           />
         </TodosDataProvider>
       </ToastProvider>
-    </QueryClientProvider>
+    </QueryProvider>
   );
 }
 
@@ -195,13 +182,12 @@ function WorkspaceShellInner({
     dir,
     changeSort,
     target,
-    setTarget,
     targetInput,
     setTargetInput,
     loading,
     error,
     refresh,
-    loadSettings,
+    reloadSettings,
   } = useWorkspaceData();
   // Server-paged attempt lists (TanStack Query). Each view fetches only
   // while it is active; keepPreviousData keeps the previous page visible
@@ -408,11 +394,10 @@ function WorkspaceShellInner({
     setBusy(true);
     try {
       const value = targetInput.trim() ? Number(targetInput) : null;
-      await api("/api/settings", {
-        method: "PUT",
-        body: JSON.stringify({ targetScore: value }),
-      });
-      setTarget(value);
+      // Write-through: the PUT response is the fresh settings payload, so
+      // the cache updates without a refetch (lib/queries/settings.ts).
+      const fresh = await updateSettingsRequest(value);
+      queryClient.setQueryData(settingsKeys.current(), fresh);
       toast.success("Target updated");
       return true;
     } catch (e) {
@@ -424,12 +409,12 @@ function WorkspaceShellInner({
     } finally {
       setBusy(false);
     }
-  }, [setTarget, targetInput, toast]);
+  }, [queryClient, targetInput, toast]);
 
   const backup = useBackupImport({
     download,
     refresh: refreshAfterMutation,
-    onTargetApplied: loadSettings,
+    onTargetApplied: reloadSettings,
     setBusy,
     fileRef,
   });

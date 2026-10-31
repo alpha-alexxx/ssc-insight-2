@@ -1,7 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { settingsKeys, settingsQueryOptions } from "@/lib/queries/settings";
 import {
   mirrorsWorkspaceState,
   parseWorkspaceState,
@@ -32,11 +34,16 @@ import type { DashboardScope, Filters, PageSize, SortKey } from "@/lib/domain";
  */
 export function useWorkspaceData() {
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<Filters>({});
   const [scope, setScope] = useState<DashboardScope>("full");
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [target, setTarget] = useState<number | null>(null);
+  // The target lives in the query cache (lib/queries/settings.ts) and
+  // changes only through explicit user actions; only the text input is
+  // component state, seeded from the cached settings payload.
+  const { data: settings } = useQuery(settingsQueryOptions);
+  const target = settings?.targetScore ?? null;
   const [targetInput, setTargetInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -209,34 +216,19 @@ export function useWorkspaceData() {
     dir,
   ]);
 
-  // Settings (the target) change only through explicit user actions, so they
-  // load once on mount and after import/save — not on every data refresh.
-  const loadSettings = useCallback(async () => {
-    try {
-      const settings = await api<{ targetScore: number | null }>(
-        "/api/settings",
-      );
-      setTarget(settings.targetScore);
-      setTargetInput(settings.targetScore?.toString() ?? "");
-    } catch {
-      // Non-critical: the target panel falls back to "Not set".
-    }
-  }, []);
+  // Seed the input from the cached settings payload whenever it changes —
+  // on first load and after a backup import applies an incoming target.
   useEffect(() => {
-    let cancelled = false;
-    api<{ targetScore: number | null }>("/api/settings")
-      .then((settings) => {
-        if (cancelled) return;
-        setTarget(settings.targetScore);
-        setTargetInput(settings.targetScore?.toString() ?? "");
-      })
-      .catch(() => {
-        // Non-critical: the target panel falls back to "Not set".
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!settings) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTargetInput(settings.targetScore?.toString() ?? "");
+  }, [settings]);
+
+  // Backup import may apply an incoming target: invalidating the settings
+  // query refetches it, and the seed effect above updates the input.
+  const reloadSettings = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: settingsKeys.all });
+  }, [queryClient]);
 
   return {
     filters,
@@ -255,12 +247,11 @@ export function useWorkspaceData() {
     dir,
     changeSort,
     target,
-    setTarget,
     targetInput,
     setTargetInput,
     loading,
     error,
     refresh,
-    loadSettings,
+    reloadSettings,
   };
 }

@@ -1,6 +1,7 @@
 "use client";
 import { useInfiniteQuery, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { searchKeys } from "@/lib/queries/search";
 import { normalizeSearchQuery, SEARCH_QUERY_MIN } from "@/lib/search-core";
 import type { SearchResponse, SearchResultItem } from "@/lib/search";
 
@@ -40,7 +41,7 @@ export function useSearch({ query, enabled, limit = 15 }: UseSearchOptions) {
   const ready = q.length >= SEARCH_QUERY_MIN;
 
   return useInfiniteQuery({
-    queryKey: ["search", q, limit],
+    queryKey: searchKeys.page(q, limit),
     enabled: enabled && ready,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
