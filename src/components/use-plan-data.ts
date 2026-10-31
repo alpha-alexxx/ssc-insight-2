@@ -1,36 +1,32 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "./toast";
 import { api } from "@/lib/api-client";
 import { useTodoQuery } from "./use-todos-data";
+import {
+  planKeys,
+  planQueryOptions,
+  postPlanProgress,
+  type PlanPayloadWithToday,
+  type TaskPatchInput,
+} from "@/lib/queries/plan";
 import type {
   PersonalTaskView,
   PlanPayload,
-  PlanTaskView,
 } from "@/lib/plan/view-model";
 
 /**
  * Client owner of planner state: the merged 50-day plan + progress payload
- * and the user's personal tasks. Mutations patch local state optimistically
- * and persist through the API; a failed call reverts by refetching, so the
- * calendar, My Tasks, the daily workspace, and the dashboard sections all
- * read one authoritative copy (this hook — the shell mounts it once).
+ * and the user's personal tasks. The plan is one TanStack query; every
+ * progress write patches the cached payload optimistically (onMutate
+ * snapshot), rolls back on failure, and the calendar, My Tasks, the daily
+ * workspace, and the dashboard sections all read one authoritative copy
+ * (this hook — the shell mounts it once).
  */
 
-export type TaskPatchInput = Partial<
-  Pick<
-    PlanTaskView,
-    | "completed"
-    | "score"
-    | "percentile"
-    | "wrong"
-    | "unattempted"
-    | "rev1"
-    | "rev2"
-    | "rev3"
-    | "notes"
-  >
->;
+// Kept exported from here (re-export) so existing imports keep working.
+export type { TaskPatchInput } from "@/lib/queries/plan";
 
 export type PersonalTaskInput = {
   title: string;
@@ -42,8 +38,6 @@ export type PersonalTaskInput = {
   priority: string;
   status: string;
 };
-
-type PlanApi = PlanPayload & { today: string };
 
 function patchTaskInPlan<T extends PlanPayload>(
   plan: T,
@@ -72,140 +66,134 @@ function patchDayInPlan<T extends PlanPayload>(
   };
 }
 
+/**
+ * Shared optimistic plan mutation: cancel in-flight plan reads, snapshot
+ * the payload, apply the local patch, then persist. A failure rolls back
+ * to the snapshot, surfaces the toast, and refetches the authoritative
+ * copy from the server.
+ */
+function usePlanOptimistic<TVars>(
+  failureTitle: string,
+  optimistic: (plan: PlanPayloadWithToday, vars: TVars) => PlanPayloadWithToday,
+  request: (vars: TVars) => Promise<unknown>,
+) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: request,
+    onMutate: async (vars: TVars) => {
+      await queryClient.cancelQueries({ queryKey: planKeys.all });
+      const previous = queryClient.getQueryData<PlanPayloadWithToday>(
+        planKeys.current(),
+      );
+      queryClient.setQueryData<PlanPayloadWithToday>(
+        planKeys.current(),
+        (prev) => (prev ? optimistic(prev, vars) : prev),
+      );
+      return { previous };
+    },
+    onError: (error: unknown, _vars: TVars, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(planKeys.current(), context.previous);
+      toast.error(
+        failureTitle,
+        error instanceof Error ? error.message : "Could not save — retrying.",
+      );
+      void queryClient.invalidateQueries({ queryKey: planKeys.all });
+    },
+  });
+}
+
 export function usePlanData() {
   const toast = useToast();
-  const [plan, setPlan] = useState<PlanApi | null>(null);
+  const queryClient = useQueryClient();
+  const planQuery = useQuery(planQueryOptions);
+  const plan = planQuery.data ?? null;
   const taskQuery = useTodoQuery<PersonalTaskView[]>("/api/tasks");
   const personalTasks = taskQuery.data ?? [];
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const requestId = useRef(0);
 
   const refresh = useCallback(async () => {
-    const id = ++requestId.current;
-    try {
-      const planPayload = await api<PlanApi>("/api/plan");
-      if (id !== requestId.current) return;
-      setPlan(planPayload);
-      setError("");
-    } catch (e) {
-      if (id === requestId.current)
-        setError(e instanceof Error ? e.message : "Could not load the plan");
-    } finally {
-      if (id === requestId.current) setLoading(false);
-    }
-  }, []);
+    await queryClient.invalidateQueries({ queryKey: planKeys.all });
+  }, [queryClient]);
 
-  useEffect(() => {
-    // Deferred like the tracker's refresh effect: the fetch starts on the
-    // next tick so the effect body itself performs no synchronous updates.
-    const timer = setTimeout(() => void refresh(), 0);
-    return () => clearTimeout(timer);
-  }, [refresh]);
+  const updateTaskMut = usePlanOptimistic(
+    "Couldn't update the task",
+    (p, vars: { key: string; patch: TaskPatchInput }) =>
+      patchTaskInPlan(p, vars.key, vars.patch),
+    ({ key, patch }) => postPlanProgress({ kind: "task", key, patch }),
+  );
+  const toggleChecklistMut = usePlanOptimistic(
+    "Couldn't update the checklist",
+    (p, vars: { day: number; itemId: string; done: boolean }) =>
+      patchDayInPlan(p, vars.day, (d) => ({
+        ...d,
+        checklist: d.checklist.map((item) =>
+          item.id === vars.itemId ? { ...item, done: vars.done } : item,
+        ),
+      })),
+    ({ day, itemId, done }) =>
+      postPlanProgress({ kind: "checklist", day, itemId, done }),
+  );
+  const toggleDayRevisionMut = usePlanOptimistic(
+    "Couldn't update the revision",
+    (p, vars: { day: number; revisionIndex: number; done: boolean }) =>
+      patchDayInPlan(p, vars.day, (d) => ({
+        ...d,
+        revisionDone: vars.done
+          ? [...new Set([...d.revisionDone, String(vars.revisionIndex)])]
+          : d.revisionDone.filter((v) => v !== String(vars.revisionIndex)),
+      })),
+    ({ day, revisionIndex, done }) =>
+      postPlanProgress({ kind: "revision", day, revisionIndex, done }),
+  );
+  const saveDayNotesMut = usePlanOptimistic(
+    "Couldn't save the notes",
+    (p, vars: { day: number; notes: string }) =>
+      patchDayInPlan(p, vars.day, (d) => ({ ...d, notes: vars.notes })),
+    ({ day, notes }) => postPlanProgress({ kind: "day-notes", day, notes }),
+  );
 
-  const mutate = useCallback(
-    async (
-      optimistic: () => void,
-      request: () => Promise<unknown>,
-      failureTitle: string,
-    ) => {
-      optimistic();
+  // Same contract as before: the write starts immediately, errors are
+  // surfaced as a toast + rollback, and the returned promise never rejects.
+  const updateTask = useCallback(
+    async (key: string, patch: TaskPatchInput) => {
       try {
-        await request();
-      } catch (e) {
-        toast.error(
-          failureTitle,
-          e instanceof Error ? e.message : "Could not save — retrying.",
-        );
-        void refresh();
+        await updateTaskMut.mutateAsync({ key, patch });
+      } catch {
+        // Already surfaced by onError.
       }
     },
-    [refresh, toast],
+    [updateTaskMut],
   );
-
-  const updateTask = useCallback(
-    (key: string, patch: TaskPatchInput) =>
-      mutate(
-        () =>
-          setPlan((prev) => (prev ? patchTaskInPlan(prev, key, patch) : prev)),
-        () =>
-          api("/api/plan/progress", {
-            method: "POST",
-            body: JSON.stringify({ kind: "task", key, patch }),
-          }),
-        "Couldn't update the task",
-      ),
-    [mutate],
-  );
-
   const toggleChecklist = useCallback(
-    (day: number, itemId: string, done: boolean) =>
-      mutate(
-        () =>
-          setPlan((prev) =>
-            prev
-              ? patchDayInPlan(prev, day, (d) => ({
-                  ...d,
-                  checklist: d.checklist.map((item) =>
-                    item.id === itemId ? { ...item, done } : item,
-                  ),
-                }))
-              : prev,
-          ),
-        () =>
-          api("/api/plan/progress", {
-            method: "POST",
-            body: JSON.stringify({ kind: "checklist", day, itemId, done }),
-          }),
-        "Couldn't update the checklist",
-      ),
-    [mutate],
+    async (day: number, itemId: string, done: boolean) => {
+      try {
+        await toggleChecklistMut.mutateAsync({ day, itemId, done });
+      } catch {
+        // Already surfaced by onError.
+      }
+    },
+    [toggleChecklistMut],
   );
-
   const toggleDayRevision = useCallback(
-    (day: number, revisionIndex: number, done: boolean) =>
-      mutate(
-        () =>
-          setPlan((prev) =>
-            prev
-              ? patchDayInPlan(prev, day, (d) => ({
-                  ...d,
-                  revisionDone: done
-                    ? [...new Set([...d.revisionDone, String(revisionIndex)])]
-                    : d.revisionDone.filter((v) => v !== String(revisionIndex)),
-                }))
-              : prev,
-          ),
-        () =>
-          api("/api/plan/progress", {
-            method: "POST",
-            body: JSON.stringify({
-              kind: "revision",
-              day,
-              revisionIndex,
-              done,
-            }),
-          }),
-        "Couldn't update the revision",
-      ),
-    [mutate],
+    async (day: number, revisionIndex: number, done: boolean) => {
+      try {
+        await toggleDayRevisionMut.mutateAsync({ day, revisionIndex, done });
+      } catch {
+        // Already surfaced by onError.
+      }
+    },
+    [toggleDayRevisionMut],
   );
-
   const saveDayNotes = useCallback(
-    (day: number, notes: string) =>
-      mutate(
-        () =>
-          setPlan((prev) =>
-            prev ? patchDayInPlan(prev, day, (d) => ({ ...d, notes })) : prev,
-          ),
-        () =>
-          api("/api/plan/progress", {
-            method: "POST",
-            body: JSON.stringify({ kind: "day-notes", day, notes }),
-          }),
-        "Couldn't save the notes",
-      ),
-    [mutate],
+    async (day: number, notes: string) => {
+      try {
+        await saveDayNotesMut.mutateAsync({ day, notes });
+      } catch {
+        // Already surfaced by onError.
+      }
+    },
+    [saveDayNotesMut],
   );
 
   const createPersonalTask = useCallback(async (input: PersonalTaskInput) => {
@@ -247,8 +235,8 @@ export function usePlanData() {
     plan,
     today: plan?.today,
     personalTasks,
-    loading,
-    error,
+    loading: planQuery.isPending,
+    error: planQuery.error?.message ?? "",
     refresh,
     updateTask,
     toggleChecklist,
