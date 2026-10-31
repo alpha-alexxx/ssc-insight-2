@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   ATTEMPT_SORT_KEYS,
-  PAGE_SIZES,
   dashboardScopeSchema,
   filtersSchema,
   type DashboardScope,

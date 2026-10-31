@@ -141,9 +141,7 @@ export const HistoryPanel = memo(function HistoryPanel({
   isFetching,
   sort,
   onSort,
-  page,
   onPageChange,
-  pageSize,
   onPageSizeChange,
   search,
   onSearch,
@@ -155,9 +153,7 @@ export const HistoryPanel = memo(function HistoryPanel({
   isFetching: boolean;
   sort: { key: SortKey; dir: "asc" | "desc" };
   onSort: (key: SortKey) => void;
-  page: number;
   onPageChange: (page: number) => void;
-  pageSize: number;
   onPageSizeChange: (pageSize: PageSize) => void;
   search: string;
   onSearch: (value: string) => void;
@@ -449,7 +445,7 @@ export const HistoryPanel = memo(function HistoryPanel({
         </div>
         {data && data.total > 0 && (
           <AttemptPagination
-            page={page}
+            page={data.page}
             pageCount={data.pageCount}
             total={data.total}
             pageSize={data.pageSize}
