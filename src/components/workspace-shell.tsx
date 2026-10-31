@@ -48,8 +48,12 @@ import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import { useThemePrefs, viewTransition } from "./theme-style-provider";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
-import { api } from "@/lib/api-client";
 import { settingsKeys, updateSettingsRequest } from "@/lib/queries/settings";
+import {
+  attemptKeys,
+  deleteAttemptRequest,
+} from "@/lib/queries/attempts";
+import { analyticsKeys } from "@/lib/queries/analytics";
 import { BACKUP_MAX_BYTES } from "@/lib/backup";
 import {
   SUBJECTS,
@@ -299,27 +303,24 @@ function WorkspaceShellInner({
   );
   const viewAllHistory = useCallback(() => navigate("history"), [navigate]);
 
-  // Post-mutation reload for both data layers: TanStack's paged lists and
-  // per-id selection cache, plus the shell's analytics/unfiltered fetches.
+  // Post-mutation reload for every attempt-scope query (paged lists, the
+  // unfiltered lookup list, per-id details) plus the dashboard analytics.
   const refreshAfterMutation = useCallback(async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["mock-attempts"] }),
-      queryClient.invalidateQueries({ queryKey: ["mock-attempt"] }),
+      queryClient.invalidateQueries({ queryKey: attemptKeys.all }),
+      queryClient.invalidateQueries({ queryKey: analyticsKeys.all }),
     ]);
-    await refresh();
-  }, [queryClient, refresh]);
+  }, [queryClient]);
 
   const remove = useCallback(
     async (a: Attempt) => {
       setBusy(true);
       try {
-        await api(`/api/mock-attempts/${a.id}`, {
-          method: "DELETE",
-          body: "{}",
-        });
+        await deleteAttemptRequest(a.id);
         setDetail(null);
         setSelected((ids) => ids.filter((id) => id !== a.id));
-        queryClient.removeQueries({ queryKey: ["mock-attempt", a.id] });
+        // Drop the deleted record's detail cache entry without refetching.
+        queryClient.removeQueries({ queryKey: attemptKeys.detail(a.id) });
         clearCoach();
         toast.success("Mock deleted");
         await refreshAfterMutation();

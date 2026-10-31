@@ -1,16 +1,20 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
-import { settingsKeys, settingsQueryOptions } from "@/lib/queries/settings";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   mirrorsWorkspaceState,
   parseWorkspaceState,
   serializeWorkspaceState,
   type WorkspaceListState,
 } from "@/lib/filters-url";
-import type { Analytics } from "@/lib/analytics";
+import {
+  analyticsKeys,
+  analyticsQueryOptions,
+} from "@/lib/queries/analytics";
+import { allAttemptsQueryOptions, attemptKeys } from "@/lib/queries/attempts";
+import { settingsKeys, settingsQueryOptions } from "@/lib/queries/settings";
 import type { Attempt } from "@/lib/domain";
 import type { DashboardScope, Filters, PageSize, SortKey } from "@/lib/domain";
 
@@ -25,30 +29,26 @@ import type { DashboardScope, Filters, PageSize, SortKey } from "@/lib/domain";
  *   history.replaceState (see lib/filters-url.ts) so views stay shareable
  *   without RSC round-trips.
  * - The paged list itself is fetched through TanStack Query
- *   (use-attempt-list.ts), keyed on this state; this hook keeps the
- *   unfiltered attempt list (dashboard/calendar/plan/add consumers) and
- *   analytics.
- * - A new refresh aborts the previous one's network work, not just its
- *   state application, and settings load once (they change only on explicit
- *   user actions, not on filter changes).
+ *   (use-attempt-list.ts), keyed on this state.
+ * - Analytics and the unfiltered attempt list are TanStack queries keyed by
+ *   (scope, debounced filters): instant on mount, 350ms behind typing
+ *   bursts, superseded requests aborted by the query client, and
+ *   `keepPreviousData` holds the previous view visible while a new filter
+ *   combination loads instead of flashing a skeleton.
+ * - Settings (the target) live in their own query — they change only on
+ *   explicit user actions, not on filter changes.
  */
 export function useWorkspaceData() {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<Filters>({});
   const [scope, setScope] = useState<DashboardScope>("full");
-  const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
   // The target lives in the query cache (lib/queries/settings.ts) and
   // changes only through explicit user actions; only the text input is
   // component state, seeded from the cached settings payload.
   const { data: settings } = useQuery(settingsQueryOptions);
   const target = settings?.targetScore ?? null;
   const [targetInput, setTargetInput] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const requestId = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
 
   // Server-paged list state. Each view owns its page; pageSize/sort/dir are
   // shared (sort/dir only have UI on /history; the compare picker stays
@@ -91,62 +91,31 @@ export function useWorkspaceData() {
     setComparePage(1);
   }, []);
 
-  const refresh = useCallback(async () => {
-    const id = ++requestId.current;
-    abortRef.current?.abort();
-    const abort = new AbortController();
-    abortRef.current = abort;
-    setLoading(true);
-    setError("");
-    // Dashboard analytics has its own analytical scope: platform and date
-    // filters still drive it, while type/subject/search belong to the paged
-    // list views (their KPI aggregates now arrive from the paged endpoint).
-    const analyticsQuery = new URLSearchParams(
-      Object.entries(filters).filter(
-        ([key, value]) =>
-          !!value &&
-          key !== "type" &&
-          key !== "subject" &&
-          key !== "search",
-      ),
-    );
-    analyticsQuery.set("view", scope);
-    try {
-      const [stats, all] = await Promise.all([
-        api<Analytics>(`/api/analytics?${analyticsQuery}`, {
-          signal: abort.signal,
-        }),
-        api<Attempt[]>("/api/mock-attempts", { signal: abort.signal }),
-      ]);
-      if (id !== requestId.current) return;
-      setAnalytics(stats);
-      setAllAttempts(all);
-    } catch (e) {
-      // A superseded refresh was aborted on purpose; only real failures of
-      // the current request surface as errors.
-      if (abort.signal.aborted || id !== requestId.current) return;
-      setError(e instanceof Error ? e.message : "Could not load data");
-    } finally {
-      if (id === requestId.current && !abort.signal.aborted)
-        setLoading(false);
-    }
-  }, [filters, scope]);
-
-  // The first load is instant; filter churn (typing included) settles for
-  // 350ms before a request fires — the unified search debounce.
-  const mountedRef = useRef(false);
-  useEffect(() => {
-    const delay = mountedRef.current ? 350 : 0;
-    mountedRef.current = true;
-    const timer = setTimeout(() => void refresh(), delay);
-    return () => clearTimeout(timer);
-  }, [refresh]);
-  useEffect(
-    () => () => {
-      abortRef.current?.abort();
-    },
-    [],
+  // Dashboard analytics has its own analytical scope: platform and date
+  // filters still drive it, while type/subject/search belong to the paged
+  // list views (their KPI aggregates now arrive from the paged endpoint).
+  // The debounce is the unified 350ms search debounce; useDebouncedValue
+  // seeds instantly, so the first load is not delayed.
+  const debouncedFilters = useDebouncedValue(filters, 350);
+  const analyticsQuery = useQuery(
+    analyticsQueryOptions(scope, debouncedFilters),
   );
+  const allAttemptsQuery = useQuery(allAttemptsQueryOptions);
+  const analytics = analyticsQuery.data ?? null;
+  const allAttempts = allAttemptsQuery.data ?? [];
+  const loading = analyticsQuery.isPending || allAttemptsQuery.isPending;
+  const error =
+    analyticsQuery.error?.message ?? allAttemptsQuery.error?.message ?? "";
+
+  /** Post-mutation reload for the shell-owned queries (analytics + the
+   * unfiltered attempt list). The paged lists and per-id details are
+   * invalidated by the callers that know a write happened. */
+  const refresh = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: analyticsKeys.all }),
+      queryClient.invalidateQueries({ queryKey: attemptKeys.full() }),
+    ]);
+  }, [queryClient]);
 
   // Restore the shareable URL state (filters, scope, list paging) whenever
   // the view changes — the shell persists across client-side navigation, so
