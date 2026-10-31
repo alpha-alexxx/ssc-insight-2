@@ -197,6 +197,11 @@ function WorkspaceShellInner({
     refresh,
     reloadSettings,
   } = useWorkspaceData();
+  const examScope = useExamScope();
+  // Nothing enabled yet: the workspace guides the user to the exams panel
+  // instead of rendering empty views, and /add never resolves a pattern.
+  const noScope =
+    examScope.exams != null && examScope.exams.enabledTiers.length === 0;
   // Server-paged attempt lists (TanStack Query). Each view fetches only
   // while it is active; keepPreviousData keeps the previous page visible
   // while a filter/sort/page change loads.
@@ -419,7 +424,8 @@ function WorkspaceShellInner({
       );
       const fresh = await updateSettingsRequest({
         activeExamId: current?.activeExamId ?? "cgl",
-        enabledExams: current?.enabledExams ?? ["cgl"],
+        activeTierId: current?.activeTierId ?? "tier2",
+        enabledTiers: current?.enabledTiers ?? [],
         examTargets: {
           ...(current?.examTargets ?? {}),
           [current?.activeExamId ?? "cgl"]: value,
@@ -662,6 +668,7 @@ function WorkspaceShellInner({
           {/* px-3 on phones is deliberate: at 375px the 2×2 metric strip needs
               every pixel for "Personal overdue" before it ellipsizes. */}
           <div className="workspace-content mx-auto w-full max-w-[1560px] px-3 py-4 sm:px-5 md:py-5">
+            {noScope && view !== "settings" && <EmptyScopeNotice />}
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={view === "add" ? "add" : view}
@@ -670,7 +677,9 @@ function WorkspaceShellInner({
                 exit={reduced ? undefined : { opacity: 0, y: -6 }}
                 transition={viewMotion}
               >
-                {view === "add" ? (
+                {view === "add" && noScope ? (
+                  <EmptyScopeNotice />
+                ) : view === "add" ? (
                   <Suspense
                     fallback={
                       <div className="mx-auto max-w-6xl">
@@ -1221,14 +1230,37 @@ function ScopeFilters({
   );
 }
 
-/** The active exam's display name, from the workspace exam scope. */
+/** The active scope's display name ("SSC CGL · Tier 2", "· All tiers"). */
 function ActiveExamName() {
   const scope = useExamScope();
   if (!scope.exams) return "SSC CGL";
+  if (scope.activeTierId === "all") {
+    const examName =
+      scope.exams.builtIn.find((exam) => exam.id === scope.activeExamId)
+        ?.name ??
+      scope.exams.customExams.find((exam) => exam.id === scope.activeExamId)
+        ?.name ??
+      "SSC CGL";
+    return `${examName} · All tiers`;
+  }
+  return scope.examLabel(scope.activeExamId, scope.activeTierId);
+}
+
+/** Shown while nothing is enabled: the workspace has no scope yet. */
+function EmptyScopeNotice() {
+  const router = useRouter();
   return (
-    scope.exams.builtIn.find((exam) => exam.id === scope.activeExamId)?.name ??
-    scope.exams.customExams.find((exam) => exam.id === scope.activeExamId)
-      ?.name ??
-    "SSC CGL"
+    <section className="panel mx-auto max-w-2xl p-6 text-center sm:p-8">
+      <h2 className="panel-title">Pick your exams to start</h2>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
+        Enable the tiers you are preparing for — Tier 1, Tier 2, or both of an
+        exam — and the workspace scopes every chart, list, and form to them.
+      </p>
+      <div className="mt-5 flex justify-center">
+        <Button onClick={() => router.push("/settings")}>
+          <PlainIcon name="settings" size={15} /> Choose exams
+        </Button>
+      </div>
+    </section>
   );
 }

@@ -12,21 +12,29 @@ import {
 import { Button } from "./ui/button";
 import { PlainIcon } from "./icon";
 import { useExamScope } from "./exam-context";
-import { saveScopeRequest, type ExamsResponse } from "@/lib/queries/exams";
+import {
+  saveScopeRequest,
+  switcherEntries,
+  type SwitcherEntry,
+} from "@/lib/queries/exams";
 import { settingsKeys, type TrackerSettings } from "@/lib/queries/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
 /**
- * The header exam switcher: every enabled exam (built-ins + the user's
- * custom exams) with the active one checked. Switching persists the scope
- * (PUT /api/settings), and the whole workspace — dashboard, history, add
- * form, analytics — re-scopes through the exam context.
+ * The header exam switcher: one entry per enabled tier ("SSC CGL · Tier 2")
+ * plus a combined "· All tiers" entry when an exam has two or more enabled
+ * tiers. Switching persists the full scope (PUT /api/settings), and the
+ * workspace — dashboard, history, add form, analytics — re-scopes through
+ * the exam context.
  */
 export function ExamSwitcher({
   onManageExams,
+  // Compact rendering for tight headers (mobile pass); cosmetic only.
+  compact = false,
 }: {
   onManageExams: () => void;
+  compact?: boolean;
 }) {
   const scope = useExamScope();
   const queryClient = useQueryClient();
@@ -42,19 +50,21 @@ export function ExamSwitcher({
   }
 
   const { exams } = scope;
-  const options = examOptions(exams);
-  const active = options.find((exam) => exam.id === scope.activeExamId);
+  const entries = switcherEntries(exams);
+  const activeKey = `${exams.activeExamId}:${exams.activeTierId}`;
+  const active = entries.find((entry) => entry.key === activeKey);
 
-  const switchExam = async (examId: string) => {
-    if (examId === scope.activeExamId || busy) return;
+  const switchScope = async (entry: SwitcherEntry) => {
+    if (entry.key === activeKey || busy) return;
     setBusy(true);
     try {
       const current =
         queryClient.getQueryData<TrackerSettings>(settingsKeys.current()) ??
         null;
       const settings: TrackerSettings = {
-        activeExamId: examId,
-        enabledExams: current?.enabledExams ?? exams.enabledExams,
+        activeExamId: entry.examId,
+        activeTierId: entry.tierId,
+        enabledTiers: current?.enabledTiers ?? exams.enabledTiers,
         examTargets: current?.examTargets ?? exams.examTargets,
       };
       const fresh = await saveScopeRequest(settings);
@@ -76,38 +86,51 @@ export function ExamSwitcher({
           variant="ghost"
           size="sm"
           disabled={busy}
-          aria-label={`Active exam: ${active?.name ?? "exam"}. Switch exam.`}
+          aria-label={`Active scope: ${active?.label ?? "exam"}. Switch exam or tier.`}
           className={cn(
-            "h-8 max-w-[9rem] gap-1.5 px-2.5 sm:max-w-[13rem]",
+            "h-8 max-w-[10rem] gap-1.5 px-2.5 sm:max-w-[16rem]",
+            compact && "max-w-8 px-0 sm:max-w-[16rem] sm:px-2.5",
             "data-[state=open]:ring-2 data-[state=open]:ring-rule",
           )}
         >
           <PlainIcon name="layers" size={14} tone="accent" aria-hidden="true" />
-          <span className="truncate text-sm font-medium">{active?.name}</span>
-          <PlainIcon name="chevronDown" size={12} aria-hidden="true" />
+          <span className="truncate text-sm font-medium">
+            {compact ? null : active?.label}
+          </span>
+          {compact ? null : (
+            <PlainIcon name="chevronDown" size={12} aria-hidden="true" />
+          )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[13rem]">
+      <DropdownMenuContent align="end" className="min-w-[14rem]">
         <DropdownMenuLabel className="normal-case tracking-normal">
-          Your exams
+          Your exam tiers
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {options.map((exam) => (
+        {entries.length === 0 && (
+          <DropdownMenuItem disabled>No tiers enabled yet</DropdownMenuItem>
+        )}
+        {entries.map((entry) => (
           <DropdownMenuItem
-            key={exam.id}
-            onSelect={() => void switchExam(exam.id)}
-            className={cn(exam.id === scope.activeExamId && "bg-soft/70")}
+            key={entry.key}
+            onSelect={() => void switchScope(entry)}
+            className={cn(entry.key === activeKey && "bg-soft/70")}
           >
             <span className="flex-1 truncate">
-              {exam.name}
-              {exam.isCustom ? (
+              {entry.label}
+              {entry.isCustom ? (
                 <span className="ml-1.5 text-[0.625rem] uppercase tracking-wide text-muted">
                   custom
                 </span>
               ) : null}
             </span>
-            {exam.id === scope.activeExamId && (
-              <PlainIcon name="check" size={13} tone="accent" aria-hidden="true" />
+            {entry.key === activeKey && (
+              <PlainIcon
+                name="check"
+                size={13}
+                tone="accent"
+                aria-hidden="true"
+              />
             )}
           </DropdownMenuItem>
         ))}
@@ -118,19 +141,4 @@ export function ExamSwitcher({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-type ExamOption = { id: string; name: string; isCustom: boolean };
-
-function examOptions(exams: ExamsResponse): ExamOption[] {
-  const enabled = new Set(exams.enabledExams);
-  const builtIn = exams.builtIn
-    .filter((exam) => enabled.has(exam.id) || exam.id === exams.activeExamId)
-    .map((exam) => ({ id: exam.id, name: exam.name, isCustom: false }));
-  const custom = exams.customExams.map((exam) => ({
-    id: exam.id,
-    name: exam.name,
-    isCustom: true,
-  }));
-  return [...builtIn, ...custom];
 }

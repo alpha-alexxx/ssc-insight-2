@@ -10,7 +10,10 @@ import { api } from "@/lib/api-client";
 
 export type TrackerSettings = {
   activeExamId: string;
-  enabledExams: string[];
+  /** Tier id of the active exam, or "all" for the combined view. */
+  activeTierId: string;
+  /** Enabled selectable tiers as "examId:tierId" keys. */
+  enabledTiers: string[];
   examTargets: Record<string, number | null>;
 };
 

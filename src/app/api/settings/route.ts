@@ -3,8 +3,9 @@ import {
   loadExamContext,
   resolvePrimary,
   saveTrackerSettings,
+  tierKeyResolves,
 } from "@/lib/exam-settings";
-import { patternMaxScore } from "@/lib/exams";
+import { ALL_TIERS_ID, parseTierKey, patternMaxScore } from "@/lib/exams";
 import { readBody, RequestError } from "@/lib/api";
 import { defineRoute } from "@/lib/route-handler";
 import { audit } from "@/lib/audit";
@@ -16,7 +17,8 @@ const examTargetsSchema = z.record(
 
 const settingsSchema = z.object({
   activeExamId: z.string().min(1).max(40),
-  enabledExams: z.array(z.string().min(1).max(40)).max(10),
+  activeTierId: z.string().min(1).max(40),
+  enabledTiers: z.array(z.string().min(3).max(81)).max(20),
   examTargets: examTargetsSchema,
 });
 
@@ -27,7 +29,8 @@ export const GET = defineRoute({ kind: "read" }, async ({ user }) => {
   return {
     data: {
       activeExamId: ctx.activeExamId,
-      enabledExams: ctx.enabledExams,
+      activeTierId: ctx.activeTierId,
+      enabledTiers: ctx.enabledTiers,
       examTargets: ctx.examTargets,
     },
     cache: { maxAgeSec: 5, swrSec: 30 },
@@ -47,21 +50,35 @@ export const PUT = defineRoute(
   async ({ request, user, startedAt }) => {
     const input = settingsSchema.parse(await readBody(request));
     const ctx = await loadExamContext(user.id);
-    const customIds = new Set(ctx.customExams.map((exam) => exam.id));
-    const enabledBuiltIns = input.enabledExams.filter(
-      (id) => !customIds.has(id),
-    );
-    if (enabledBuiltIns.some((id) => !["cgl", "chsl", "cpo"].includes(id)))
-      throw new RequestError("Unknown exam in enabled list", 400);
-    // Custom exams are always enabled once created.
-    const enabledExams = [
-      ...new Set([...enabledBuiltIns, ...ctx.customExams.map((e) => e.id)]),
-    ];
-    if (!enabledExams.includes(input.activeExamId))
-      throw new RequestError(
-        "The active exam must be one of the enabled exams",
-        400,
+
+    // Every enabled key must resolve to a real exam+tier for this user.
+    for (const key of input.enabledTiers) {
+      if (!tierKeyResolves(ctx, key))
+        throw new RequestError(`Unknown exam tier: ${key}`, 400);
+    }
+    const enabled = [...new Set(input.enabledTiers)];
+
+    // The active context must be a real, enabled tier — or the combined
+    // "all" view of an exam with enabled tiers. An EMPTY scope (fresh
+    // account, nothing picked yet) skips the check: nothing is active.
+    if (input.activeTierId === ALL_TIERS_ID) {
+      const anyEnabled = enabled.some(
+        (key) => parseTierKey(key)?.examId === input.activeExamId,
       );
+      if (!anyEnabled)
+        throw new RequestError(
+          "The combined view needs at least one enabled tier of the exam",
+          400,
+        );
+    } else if (enabled.length > 0) {
+      const key = `${input.activeExamId}:${input.activeTierId}`;
+      if (!enabled.includes(key))
+        throw new RequestError(
+          "The active tier must be one of the enabled tiers",
+          400,
+        );
+    }
+
     // A target is a score against that exam's primary tier maximum.
     for (const [examId, target] of Object.entries(input.examTargets)) {
       if (target == null) continue;
@@ -75,14 +92,19 @@ export const PUT = defineRoute(
           400,
         );
     }
+
     const result = await saveTrackerSettings(user.id, {
       activeExamId: input.activeExamId,
-      enabledExams,
+      activeTierId: input.activeTierId,
+      enabledTiers: enabled,
       examTargets: input.examTargets,
     });
     audit("settings.save", user.id, {
       ms: Date.now() - startedAt,
-      meta: { activeExamId: result.activeExamId },
+      meta: {
+        activeExamId: result.activeExamId,
+        activeTierId: result.activeTierId,
+      },
     });
     return { data: result };
   },

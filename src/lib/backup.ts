@@ -8,9 +8,10 @@ import {
 import type { CustomExamDef } from "./exams";
 
 export const BACKUP_FORMAT = "ssc-insight-backup";
-/** 3 = multi-exam: attempts carry exam/tier/marking, settings are per-exam,
- * custom exams are included. 2 = pre-multi-exam (single CGL Tier 2). */
-export const BACKUP_FORMAT_VERSION = 3;
+/** 4 = tier-level scope: settings carry "examId:tierId" enablement keys and
+ * custom exams hold per-tier patterns. 3 = exam-level scope (attempts already
+ * carried exam/tier). 2 = pre-multi-exam (single CGL Tier 2). */
+export const BACKUP_FORMAT_VERSION = 4;
 export const BACKUP_MAX_BYTES = 4 * 1024 * 1024;
 export const BACKUP_REQUEST_MAX_BYTES = BACKUP_MAX_BYTES + 256 * 1024;
 export const BACKUP_MAX_ATTEMPTS = 10_000;
@@ -19,7 +20,9 @@ export const BACKUP_SAMPLE_LIMIT = 5;
 export type ImportMode = "merge" | "replace";
 export type BackupSettings = {
   activeExamId: string;
-  enabledExams: string[];
+  activeTierId: string;
+  /** "examId:tierId" keys. */
+  enabledTiers: string[];
   examTargets: Record<string, number | null>;
 };
 export type BackupSummary = {
@@ -28,7 +31,7 @@ export type BackupSummary = {
   firstCompletedAt: string | null;
   lastCompletedAt: string | null;
 };
-export type BackupV3 = {
+export type BackupV4 = {
   format: typeof BACKUP_FORMAT;
   formatVersion: typeof BACKUP_FORMAT_VERSION;
   exportedAt: string;
@@ -39,8 +42,8 @@ export type BackupV3 = {
   warnings: string[];
 };
 export type ParsedBackup = {
-  /** 3 = multi-exam; 2 = pre-multi-exam; 1 = legacy hand-rolled schema. */
-  version: 1 | 2 | 3;
+  /** 4 = current; 3 = exam-level scope; 2 = pre-multi-exam; 1 = legacy. */
+  version: 1 | 2 | 3 | 4;
   legacy: boolean;
   exportedAt: string | null;
   summary: BackupSummary | null;
@@ -74,7 +77,7 @@ export type SettingsPreview = {
 };
 export type BackupPreview = {
   mode: ImportMode;
-  formatVersion: 1 | 2 | 3;
+  formatVersion: 1 | 2 | 3 | 4;
   legacy: boolean;
   exportedAt: string | null;
   total: number;
@@ -120,10 +123,32 @@ const examTargetsSchema = z.record(
 );
 const backupSettingsSchema = z.object({
   activeExamId: z.string().min(1).max(40),
-  enabledExams: z.array(z.string().min(1).max(40)).max(10),
+  activeTierId: z.string().min(1).max(40),
+  enabledTiers: z.array(z.string().min(3).max(81)).max(20),
   examTargets: examTargetsSchema,
 });
+const customTierSchema = z.object({
+  id: z.string().min(1).max(40),
+  label: z.string().trim().min(1).max(40),
+  subjects: z
+    .array(
+      z.object({
+        subjectId: z.enum(["quant", "reasoning", "english", "ga", "computer"]),
+        questions: z.number().int().min(1).max(500),
+        qualifying: z.boolean().default(false),
+      }),
+    )
+    .min(1)
+    .max(5),
+  marking: markingSchema,
+});
 const customExamSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(80),
+  tiers: z.array(customTierSchema).min(1).max(4),
+});
+/** v3 custom exams carried one flat pattern (subjects + marking). */
+const v3CustomExamSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(80),
   subjects: z
@@ -212,13 +237,28 @@ const backupAttemptsWithBounds = z
     });
   });
 
-const backupV3Schema = z.object({
+const backupV4Schema = z.object({
   format: z.literal(BACKUP_FORMAT),
   formatVersion: z.literal(BACKUP_FORMAT_VERSION),
   exportedAt: z.iso.datetime(),
   summary: summarySchema,
   settings: backupSettingsSchema,
   customExams: z.array(customExamSchema).max(20).default([]),
+  attempts: backupAttemptsWithBounds,
+  warnings: z.array(z.string().max(500)).max(20).default([]),
+});
+/** v3 imports: exam-level settings + single-pattern custom exams. */
+const backupV3ImportSchema = z.object({
+  format: z.literal(BACKUP_FORMAT),
+  formatVersion: z.literal(3),
+  exportedAt: z.iso.datetime(),
+  summary: summarySchema,
+  settings: z.object({
+    activeExamId: z.string().min(1).max(40),
+    enabledExams: z.array(z.string().min(1).max(40)).max(10),
+    examTargets: examTargetsSchema,
+  }),
+  customExams: z.array(v3CustomExamSchema).max(20).default([]),
   attempts: backupAttemptsWithBounds,
   warnings: z.array(z.string().max(500)).max(20).default([]),
 });
@@ -309,7 +349,7 @@ export function buildBackup(
   settings: BackupSettings,
   customExams: CustomExamDef[],
   exportedAt = new Date(),
-): BackupV3 {
+): BackupV4 {
   const ordered = [...attempts].sort(
     (a, b) =>
       a.completedAt.localeCompare(b.completedAt) || a.id.localeCompare(b.id),
@@ -345,16 +385,57 @@ export function parseBackup(input: unknown): ParsedBackup {
         `This backup uses format version ${version}. Update the app before importing it.`,
       );
     try {
-      if (version === 3) {
-        const parsed = backupV3Schema.parse(input);
+      if (version === 4) {
+        const parsed = backupV4Schema.parse(input);
         assertSummary(parsed.summary, parsed.attempts);
         return {
-          version: 3,
+          version: 4,
           legacy: false,
           exportedAt: parsed.exportedAt,
           summary: parsed.summary,
           settings: parsed.settings,
           customExams: parsed.customExams,
+          hasSettings: true,
+          attempts: parsed.attempts,
+          warnings: parsed.warnings,
+        };
+      }
+      if (version === 3) {
+        const parsed = backupV3ImportSchema.parse(input);
+        assertSummary(parsed.summary, parsed.attempts);
+        // Exam-level scope expands to each exam's primary-tier key; the
+        // single-pattern custom exams wrap in one "Main" tier.
+        const primaryById: Record<string, string> = {
+          cgl: "tier2",
+          chsl: "tier2",
+          cpo: "paper1",
+        };
+        return {
+          version: 3,
+          legacy: false,
+          exportedAt: parsed.exportedAt,
+          summary: parsed.summary,
+          settings: {
+            activeExamId: parsed.settings.activeExamId,
+            activeTierId:
+              primaryById[parsed.settings.activeExamId] ?? "main",
+            enabledTiers: parsed.settings.enabledExams.map(
+              (examId) => `${examId}:${primaryById[examId] ?? "main"}`,
+            ),
+            examTargets: parsed.settings.examTargets,
+          },
+          customExams: parsed.customExams.map((exam) => ({
+            id: exam.id,
+            name: exam.name,
+            tiers: [
+              {
+                id: "main",
+                label: "Main",
+                subjects: exam.subjects,
+                marking: exam.marking,
+              },
+            ],
+          })),
           hasSettings: true,
           attempts: parsed.attempts,
           warnings: parsed.warnings,
@@ -371,7 +452,8 @@ export function parseBackup(input: unknown): ParsedBackup {
         // on the same exam after import.
         settings: {
           activeExamId: "cgl",
-          enabledExams: ["cgl"],
+          activeTierId: "tier2",
+          enabledTiers: ["cgl:tier2"],
           examTargets: parsed.settings.targetScore != null
             ? { cgl: parsed.settings.targetScore }
             : {},

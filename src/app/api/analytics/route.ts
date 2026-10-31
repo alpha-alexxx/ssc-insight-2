@@ -2,6 +2,7 @@ import { analyze } from "@/lib/analytics";
 import { dashboardScopeSchema } from "@/lib/domain";
 import { filtersFrom, listAttempts } from "@/lib/repository";
 import { loadExamContext, resolvePrimary } from "@/lib/exam-settings";
+import { resolvePattern } from "@/lib/exams";
 import { patternMaxScore } from "@/lib/exams";
 import { defineRoute } from "@/lib/route-handler";
 
@@ -23,13 +24,22 @@ export const GET = defineRoute({ kind: "read" }, async ({ request, user }) => {
     examId: ctx.activeExamId,
     type: "all",
     subject: "all",
+    // The combined "all" view leaves the tier open; a concrete active tier
+    // scopes the projection (attemptWhere skips the literal "all").
+    tier: filters.tier ?? ctx.activeTierId,
   });
-  // Target percentages key off the active exam's primary tier maximum.
+  // The per-exam target's % is drawn against the ACTIVE tier's maximum
+  // (primary-tier anchor when the combined view is active).
   const primary = resolvePrimary(ctx, ctx.activeExamId);
+  const targetMax =
+    ctx.activeTierId !== "all"
+      ? (resolvePattern(ctx.activeExamId, ctx.activeTierId, ctx.customExams)?.tier ??
+          primary?.tier)
+      : primary?.tier;
   const analytics = analyze(
     attempts,
     scope,
-    primary ? patternMaxScore(primary.tier) : undefined,
+    targetMax ? patternMaxScore(targetMax) : undefined,
   );
   return { data: analytics, cache: { maxAgeSec: 0, swrSec: 5 } };
 });

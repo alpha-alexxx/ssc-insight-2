@@ -7,12 +7,12 @@ import {
 } from "@/lib/exam-settings";
 import {
   BUILT_IN_EXAMS,
-  CUSTOM_TIER_ID,
-  customExamPattern,
+  CUSTOM_FIRST_TIER_ID,
   patternMaxScore,
 } from "@/lib/exams";
 import { markingSchema } from "@/lib/domain";
 import { database } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { defineRoute } from "@/lib/route-handler";
 import { audit } from "@/lib/audit";
 
@@ -24,25 +24,25 @@ const customSubjectSchema = z.object({
   qualifying: z.boolean().default(false),
 });
 
-const customExamInputSchema = z
+const customTierSchema = z
   .object({
-    id: z.string().uuid().optional(),
-    name: z.string().trim().min(1).max(80),
+    id: z.string().max(40).optional(),
+    label: z.string().trim().min(1).max(40),
     subjects: z.array(customSubjectSchema).min(1).max(5),
     marking: markingSchema,
   })
-  .superRefine((exam, ctx) => {
-    const ids = exam.subjects.map((s) => s.subjectId);
+  .superRefine((tier, ctx) => {
+    const ids = tier.subjects.map((s) => s.subjectId);
     if (new Set(ids).size !== ids.length)
       ctx.addIssue({
         code: "custom",
         message: "Each subject can be used only once",
         path: ["subjects"],
       });
-    const meritQuestions = exam.subjects
+    const meritQuestions = tier.subjects
       .filter((s) => !s.qualifying)
       .reduce((sum, s) => sum + s.questions, 0);
-    if (meritQuestions * exam.marking.correct > 100_000)
+    if (meritQuestions * tier.marking.correct > 100_000)
       ctx.addIssue({
         code: "custom",
         message: "Maximum score is too large",
@@ -50,20 +50,73 @@ const customExamInputSchema = z
       });
   });
 
+const customExamInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(80),
+  tiers: z.array(customTierSchema).min(1).max(4),
+});
+
+/** Stable tier ids: the first tier keeps the legacy "main" id so attempts
+ * recorded before multi-tier customs stay valid; later tiers count up. */
+function assignTierIds(
+  tiers: z.infer<typeof customExamInputSchema>["tiers"],
+  existing?: { id: string; label: string }[],
+) {
+  const used = new Set<string>();
+  const out: {
+    id: string;
+    label: string;
+    subjects: Prisma.InputJsonValue;
+    marking: Prisma.InputJsonValue;
+  }[] = [];
+  tiers.forEach((tier, index) => {
+    let id: string;
+    const existingMatch = existing?.find(
+      (t) => t.label.trim().toLowerCase() === tier.label.trim().toLowerCase(),
+    );
+    if (tier.id) {
+      id = tier.id;
+    } else if (existingMatch) {
+      id = existingMatch.id;
+    } else if (index === 0 && (!existing || existing.length === 0)) {
+      id = CUSTOM_FIRST_TIER_ID;
+    } else {
+      let n = index + 1;
+      while (used.has(`t${n}`) || existing?.some((t) => t.id === `t${n}`))
+        n += 1;
+      id = `t${n}`;
+    }
+    if (used.has(id))
+      throw new RequestError(`Duplicate tier id: ${id}`, 400);
+    used.add(id);
+    out.push({
+      id,
+      label: tier.label,
+      subjects: tier.subjects as unknown as Prisma.InputJsonValue,
+      marking: tier.marking as unknown as Prisma.InputJsonValue,
+    });
+  });
+  return out;
+}
+
 /** The full exam surface for the workspace: built-in catalog, this user's
- * custom exams, and the scope settings. */
+ * custom exams (with their tiers), and the tier-level scope settings. */
 export const GET = defineRoute({ kind: "read" }, async ({ user }) => {
   const ctx = await loadExamContext(user.id);
   return {
     data: {
       builtIn: BUILT_IN_EXAMS,
       customExams: ctx.customExams.map((exam) => ({
-        ...exam,
-        tierId: CUSTOM_TIER_ID,
-        maxScore: patternMaxScore(customExamPattern(exam)),
+        id: exam.id,
+        name: exam.name,
+        tiers: exam.tiers.map((tier) => ({
+          ...tier,
+          maxScore: patternMaxScore(tier),
+        })),
       })),
       activeExamId: ctx.activeExamId,
-      enabledExams: ctx.enabledExams,
+      activeTierId: ctx.activeTierId,
+      enabledTiers: ctx.enabledTiers,
       examTargets: ctx.examTargets,
     },
     cache: { maxAgeSec: 5, swrSec: 30 },
@@ -87,12 +140,12 @@ export const POST = defineRoute(
       )
     )
       throw new RequestError("An exam with this name already exists", 400);
+    const tiers = assignTierIds(input.tiers);
     const row = await database().customExam.create({
       data: {
         userId: user.id,
         name: input.name,
-        subjects: input.subjects,
-        marking: input.marking,
+        tiers,
       },
       select: { id: true },
     });
@@ -121,13 +174,16 @@ export const PUT = defineRoute(
       )
     )
       throw new RequestError("An exam with this name already exists", 400);
+    // Renames keep a tier's id stable when the label still matches, so
+    // attempts recorded under the old label keep resolving.
+    const previous = ctx.customExams.find((exam) => exam.id === input.id);
+    const tiers = assignTierIds(
+      input.tiers,
+      previous?.tiers.map((t) => ({ id: t.id, label: t.label })),
+    );
     await database().customExam.update({
       where: { id: input.id },
-      data: {
-        name: input.name,
-        subjects: input.subjects,
-        marking: input.marking,
-      },
+      data: { name: input.name, tiers },
     });
     invalidateSettings(user.id);
     audit("exam.update", user.id, { sid: input.id });
@@ -159,10 +215,13 @@ export const DELETE = defineRoute(
     await database().customExam.delete({ where: { id } });
     const ctx = await loadExamContext(user.id);
     if (ctx.activeExamId === id) {
-      // Scope fell back to a deleted exam — move to CGL.
+      // Scope fell back to a deleted exam — move to CGL Tier 2.
       await saveTrackerSettings(user.id, {
         activeExamId: "cgl",
-        enabledExams: ctx.enabledExams.filter((examId) => examId !== id),
+        activeTierId: "tier2",
+        enabledTiers: ctx.enabledTiers.filter(
+          (key) => !key.startsWith(`${id}:`),
+        ),
         examTargets: Object.fromEntries(
           Object.entries(ctx.examTargets).filter(([examId]) => examId !== id),
         ),

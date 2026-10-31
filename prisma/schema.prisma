@@ -108,14 +108,15 @@ model SubjectResult {
   @@schema("ssc_insight")
 }
 
-// User-defined exams: name + subject slots (canonical SubjectIds) + marking.
-// One implicit tier ("main"). Attempts reference the row id as their examId.
+// User-defined exams: named tiers, each with its own pattern (subject
+// slots from the canonical SubjectIds, question counts, marking scheme).
+// The first tier keeps the id "main" so pre-multi-tier attempts stay valid.
+// Attempts reference the row id as their examId.
 model CustomExam {
   id        String   @id @default(uuid())
   userId    String
   name      String   @db.VarChar(80)
-  subjects  Json
-  marking   Json
+  tiers     Json
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
@@ -123,12 +124,14 @@ model CustomExam {
   @@schema("ssc_insight")
 }
 
-// Per-user workspace scope: which built-in exams are enabled, which exam is
-// active, and one target score per exam. One row per user.
+// Per-user workspace scope, at TIER level: enabled tiers as
+// "examId:tierId" keys, the active exam+tier ("all" = combined view of the
+// exam's enabled tiers), and one target score per exam. One row per user.
 model TrackerSettings {
   userId       String @id
   activeExamId String @default("cgl") @db.VarChar(40)
-  enabledExams Json   @default("[\"cgl\"]")
+  activeTierId String @default("tier2") @db.VarChar(40)
+  enabledTiers Json   @default("[]")
   examTargets  Json   @default("{}")
 
   @@schema("ssc_insight")

@@ -4,10 +4,11 @@ import type { Marking, PatternSection, PatternShape, SubjectId } from "./domain"
  * The exam catalog: every supported exam and the pattern (subjects, question
  * counts, marking scheme, sections) of each of its tiers/papers.
  *
- * One exam is the workspace scope — the user picks their exams in Settings
- * and the header switcher selects the active one. The tier/paper is chosen
- * per attempt and snapshots the pattern onto the saved record, so later
- * catalog corrections never rewrite history.
+ * The workspace scope is TIER-level: the user enables individual tiers
+ * ("cgl:tier1", "cgl:tier2", …) and the switcher activates one, or the
+ * special combined "all" pseudo-tier of an exam. The tier of each attempt is
+ * still chosen per attempt and snapshots the pattern onto the saved record,
+ * so later catalog corrections never rewrite history.
  *
  * Subject slots stay the five canonical SubjectIds across every exam
  * (built-in or custom) — colors, icons, aliases, and the DB enum depend on
@@ -22,7 +23,7 @@ export type PatternSubject = {
 };
 
 export type TierPattern = {
-  /** "tier1" | "tier2" | "paper1" | "paper2" | "main" (custom exams). */
+  /** "tier1" | "tier2" | "paper1" | "paper2" | "main" | custom ids. */
   id: string;
   label: string;
   subjects: readonly PatternSubject[];
@@ -155,22 +156,38 @@ export const BUILT_IN_EXAMS: readonly ExamDef[] = [
   },
 ];
 
-/** A user-defined exam. One implicit tier ("main"); no sections in v1. */
-export type CustomExamDef = {
+/** One user-defined tier of a custom exam: its own full pattern. */
+export type CustomTierDef = {
   id: string;
-  name: string;
+  label: string;
   subjects: readonly PatternSubject[];
   marking: Marking;
 };
 
-export const CUSTOM_TIER_ID = "main";
+/** A user-defined exam with one or more tiers. */
+export type CustomExamDef = {
+  id: string;
+  name: string;
+  tiers: readonly CustomTierDef[];
+};
 
-export function customExamPattern(exam: CustomExamDef): TierPattern {
+/** The first custom tier keeps the legacy id so attempts recorded before
+ * multi-tier customs stay valid. */
+export const CUSTOM_FIRST_TIER_ID = "main";
+/** Combined pseudo-tier: every enabled tier of the active exam at once. */
+export const ALL_TIERS_ID = "all";
+
+export function customExamPattern(
+  exam: CustomExamDef,
+  tierId: string,
+): TierPattern | null {
+  const tier = exam.tiers.find((t) => t.id === tierId);
+  if (!tier) return null;
   return {
-    id: CUSTOM_TIER_ID,
-    label: "Main",
-    subjects: exam.subjects,
-    marking: exam.marking,
+    id: tier.id,
+    label: tier.label,
+    subjects: tier.subjects,
+    marking: tier.marking,
     sections: [],
   };
 }
@@ -205,9 +222,25 @@ export function isValidExamId(examId: string): boolean {
   return isBuiltInExamId(examId) || isCustomExamId(examId);
 }
 
+/** "examId:tierId" — the enablement/identity key of one selectable tier. */
+export function tierKey(examId: string, tierId: string): string {
+  return `${examId}:${tierId}`;
+}
+
+export function parseTierKey(
+  key: string,
+): { examId: string; tierId: string } | null {
+  const sep = key.indexOf(":");
+  if (sep <= 0 || sep === key.length - 1) return null;
+  const examId = key.slice(0, sep);
+  const tierId = key.slice(sep + 1);
+  if (examId.length > 40 || tierId.length > 40) return null;
+  return { examId, tierId };
+}
+
 /**
  * Resolve one exam+tier to its concrete pattern. Built-ins resolve from the
- * catalog; custom exams from the user's stored row (single "main" tier).
+ * catalog; custom exams from the user's stored row (per-tier patterns).
  * Returns null when the pair does not exist — callers turn that into 400.
  */
 export function resolvePattern(
@@ -228,13 +261,15 @@ export function resolvePattern(
     };
   }
   const custom = customExams.find((exam) => exam.id === examId);
-  if (!custom || tierId !== CUSTOM_TIER_ID) return null;
+  if (!custom) return null;
+  const tier = customExamPattern(custom, tierId);
+  if (!tier) return null;
   return {
     examId,
     examName: custom.name,
     exam: null,
-    tier: customExamPattern(custom),
-    isPrimaryTier: true,
+    tier,
+    isPrimaryTier: tier.id === custom.tiers[0]?.id,
   };
 }
 
@@ -260,8 +295,16 @@ export function sectionsForAttempt(examId: string, tierId: string) {
 export function tierLabelFor(examId: string, tierId: string): string {
   return (
     builtInExam(examId)?.tiers.find((t) => t.id === tierId)?.label ??
-    (tierId === CUSTOM_TIER_ID ? "Main" : tierId)
+    customLabelFor(examId, tierId) ??
+    tierId
   );
+}
+
+function customLabelFor(
+  _examId: string,
+  tierId: string,
+): string | null {
+  return tierId === CUSTOM_FIRST_TIER_ID ? "Main" : null;
 }
 
 /** Flatten a resolved exam+tier into the shape the scoring/validation

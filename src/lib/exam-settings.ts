@@ -1,16 +1,19 @@
 import { database } from "./db";
 import type {
   CustomExamDef,
+  CustomTierDef,
   PatternSubject,
   ResolvedPattern,
 } from "./exams";
 import {
-  customExamPattern,
+  ALL_TIERS_ID,
+  CUSTOM_FIRST_TIER_ID,
   patternMaxScore,
   patternShape,
+  parseTierKey,
   resolvePattern,
 } from "./exams";
-import type { Marking, PatternShape } from "./domain";
+import type { PatternShape } from "./domain";
 import { LruCache } from "./cache";
 import { RequestError } from "./api";
 
@@ -19,19 +22,27 @@ import { RequestError } from "./api";
  * plus the user's custom exams. Every route that touches attempts resolves
  * its pattern through here so validation, scoring, and AI prompts all see
  * the same exam+tier truth.
+ *
+ * Scope is tier-level: enabledTiers holds "examId:tierId" keys, and the
+ * active context is one tier — or ALL_TIERS_ID for an exam's combined view.
  */
 
 export type TrackerSettingsShape = {
   activeExamId: string;
-  /** Enabled built-in exam ids; custom exams are always enabled. */
-  enabledExams: string[];
-  /** Target score per exam id, against that exam's primary tier maximum. */
+  /** Tier id of the active exam, or ALL_TIERS_ID for the combined view. */
+  activeTierId: string;
+  /** Enabled selectable tiers as "examId:tierId" keys. */
+  enabledTiers: string[];
+  /** Target score per EXAM id (against its primary tier maximum). */
   examTargets: Record<string, number | null>;
 };
 
 export const DEFAULT_SETTINGS: TrackerSettingsShape = {
   activeExamId: "cgl",
-  enabledExams: ["cgl"],
+  activeTierId: "tier2",
+  // New accounts pick their exams — the workspace stays in an empty state
+  // until the Exams settings panel has something enabled.
+  enabledTiers: [],
   examTargets: {},
 };
 
@@ -42,9 +53,12 @@ const settingsCache = new LruCache<string, TrackerSettingsShape>({
   maxBytes: 256_000,
 });
 
-function parseEnabled(value: unknown): string[] {
+function parseTierKeys(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 40)
+    ? value.filter(
+        (key): key is string =>
+          typeof key === "string" && parseTierKey(key) != null,
+      )
     : [];
 }
 
@@ -65,13 +79,18 @@ export async function getTrackerSettings(
   return settingsCache.getOrLoad(userId, async () => {
     const row = await database().trackerSettings.findUnique({
       where: { userId },
-      select: { activeExamId: true, enabledExams: true, examTargets: true },
+      select: {
+        activeExamId: true,
+        activeTierId: true,
+        enabledTiers: true,
+        examTargets: true,
+      },
     });
     if (!row) return { ...DEFAULT_SETTINGS };
-    const enabled = parseEnabled(row.enabledExams);
     return {
       activeExamId: row.activeExamId || "cgl",
-      enabledExams: enabled.length ? enabled : ["cgl"],
+      activeTierId: row.activeTierId || "tier2",
+      enabledTiers: parseTierKeys(row.enabledTiers),
       examTargets: parseExamTargets(row.examTargets),
     };
   });
@@ -86,19 +105,27 @@ export async function saveTrackerSettings(
     create: {
       userId,
       activeExamId: settings.activeExamId,
-      enabledExams: settings.enabledExams,
+      activeTierId: settings.activeTierId,
+      enabledTiers: settings.enabledTiers,
       examTargets: settings.examTargets,
     },
     update: {
       activeExamId: settings.activeExamId,
-      enabledExams: settings.enabledExams,
+      activeTierId: settings.activeTierId,
+      enabledTiers: settings.enabledTiers,
       examTargets: settings.examTargets,
     },
-    select: { activeExamId: true, enabledExams: true, examTargets: true },
+    select: {
+      activeExamId: true,
+      activeTierId: true,
+      enabledTiers: true,
+      examTargets: true,
+    },
   });
   const saved: TrackerSettingsShape = {
     activeExamId: row.activeExamId,
-    enabledExams: parseEnabled(row.enabledExams),
+    activeTierId: row.activeTierId,
+    enabledTiers: parseTierKeys(row.enabledTiers),
     examTargets: parseExamTargets(row.examTargets),
   };
   // Write-through: refresh the cache immediately so the next read is a hit.
@@ -115,40 +142,54 @@ export function invalidateSettings(userId: string) {
   settingsCache.invalidate(userId);
 }
 
+function toPatternSubject(entry: unknown): PatternSubject | null {
+  if (entry == null || typeof entry !== "object") return null;
+  const e = entry as Record<string, unknown>;
+  if (
+    typeof e.subjectId !== "string" ||
+    typeof e.questions !== "number" ||
+    e.questions < 1
+  )
+    return null;
+  return {
+    subjectId: e.subjectId as PatternSubject["subjectId"],
+    questions: e.questions,
+    qualifying: e.qualifying === true,
+  };
+}
+
 export function toCustomExamDef(row: {
   id: string;
   name: string;
-  subjects: unknown;
-  marking: unknown;
+  tiers: unknown;
 }): CustomExamDef | null {
   if (typeof row.name !== "string" || !row.name.trim()) return null;
-  if (!Array.isArray(row.subjects) || row.subjects.length === 0) return null;
-  if (row.marking == null || typeof row.marking !== "object") return null;
-  const m = row.marking as Record<string, unknown>;
-  if (typeof m.correct !== "number" || typeof m.incorrect !== "number")
-    return null;
-  const subjects: PatternSubject[] = [];
-  for (const entry of row.subjects) {
+  if (!Array.isArray(row.tiers) || row.tiers.length === 0) return null;
+  const tiers: CustomTierDef[] = [];
+  for (const entry of row.tiers) {
     if (entry == null || typeof entry !== "object") return null;
-    const e = entry as Record<string, unknown>;
-    if (
-      typeof e.subjectId !== "string" ||
-      typeof e.questions !== "number" ||
-      e.questions < 1
-    )
+    const t = entry as Record<string, unknown>;
+    if (typeof t.id !== "string" || typeof t.label !== "string") return null;
+    if (!Array.isArray(t.subjects) || t.subjects.length === 0) return null;
+    const marking = t.marking;
+    if (marking == null || typeof marking !== "object") return null;
+    const m = marking as Record<string, unknown>;
+    if (typeof m.correct !== "number" || typeof m.incorrect !== "number")
       return null;
-    subjects.push({
-      subjectId: e.subjectId as PatternSubject["subjectId"],
-      questions: e.questions,
-      qualifying: e.qualifying === true,
+    const subjects: PatternSubject[] = [];
+    for (const raw of t.subjects) {
+      const parsed = toPatternSubject(raw);
+      if (!parsed) return null;
+      subjects.push(parsed);
+    }
+    tiers.push({
+      id: t.id,
+      label: t.label,
+      subjects,
+      marking: { correct: m.correct, incorrect: m.incorrect },
     });
   }
-  return {
-    id: row.id,
-    name: row.name,
-    subjects,
-    marking: { correct: m.correct, incorrect: m.incorrect } satisfies Marking,
-  };
+  return { id: row.id, name: row.name, tiers };
 }
 
 export async function listCustomExams(
@@ -157,7 +198,7 @@ export async function listCustomExams(
   const rows = await database().customExam.findMany({
     where: { userId },
     orderBy: { createdAt: "asc" },
-    select: { id: true, name: true, subjects: true, marking: true },
+    select: { id: true, name: true, tiers: true },
   });
   return rows
     .map(toCustomExamDef)
@@ -177,37 +218,43 @@ export async function loadExamContext(userId: string): Promise<ExamContext> {
   return { ...settings, customExams };
 }
 
-/** An exam's primary-tier pattern: the tier the user is preparing for.
- * Targets and AI context anchor here; per-attempt data carries its own tier. */
+/** An exam's primary-tier pattern: the tier the user is preparing for. */
 export function resolvePrimary(
   ctx: ExamContext,
   examId: string,
 ): ResolvedPattern | null {
   const custom = ctx.customExams.find((exam) => exam.id === examId);
   if (custom)
-    return {
-      examId: custom.id,
-      examName: custom.name,
-      exam: null,
-      tier: customExamPattern(custom),
-      isPrimaryTier: true,
-    };
+    return resolvePattern(
+      examId,
+      custom.tiers[0]?.id ?? CUSTOM_FIRST_TIER_ID,
+      ctx.customExams,
+    );
   const resolved = resolvePattern(examId, "tier2", ctx.customExams);
   if (!resolved?.exam) return null;
   return resolvePattern(examId, resolved.exam.primaryTierId, ctx.customExams);
 }
 
-/** PatternShape of the active exam's primary tier (AI context, targets). */
-export function activePrimaryShape(ctx: ExamContext): PatternShape {
+/** PatternShape of the ACTIVE tier. The combined "all" view anchors on the
+ * exam's primary tier — target math and AI context need one concrete
+ * pattern, while attempt lists stay unfiltered across tiers. */
+export function activeShape(ctx: ExamContext): PatternShape {
+  const tierId =
+    ctx.activeTierId === ALL_TIERS_ID
+      ? (resolvePrimary(ctx, ctx.activeExamId)?.tier.id ?? ctx.activeTierId)
+      : ctx.activeTierId;
   return patternShape(
-    resolvePrimary(ctx, ctx.activeExamId) ??
-      // The stored activeExamId no longer resolves (deleted custom exam):
-      // fall back to CGL Tier 2 so prompts and targets always have a shape.
+    resolvePattern(ctx.activeExamId, tierId, ctx.customExams) ??
+      // Nothing enabled / stale scope: fall back to CGL Tier 2 so prompts
+      // and targets always have a shape.
       resolvePattern("cgl", "tier2", [])!,
   );
 }
 
-/** Target score for an exam against its primary tier maximum. */
+/** Legacy alias kept for existing callers. */
+export const activePrimaryShape = activeShape;
+
+/** Target score for an exam (against its primary tier maximum). */
 export function targetForExam(
   ctx: ExamContext,
   examId: string,
@@ -217,9 +264,20 @@ export function targetForExam(
 }
 
 /**
+ * The tier an attempt write uses when the caller does not state one: the
+ * active tier, or the exam's primary tier when the combined view is active.
+ */
+export function defaultWriteTierId(ctx: ExamContext, examId?: string): string {
+  const effective = examId ?? ctx.activeExamId;
+  if (effective === ctx.activeExamId && ctx.activeTierId !== ALL_TIERS_ID)
+    return ctx.activeTierId;
+  return resolvePrimary(ctx, effective)?.tier.id ?? "tier2";
+}
+
+/**
  * Validate + resolve the exam/tier pair an incoming attempt body claims.
- * The tier defaults to the exam's primary one; an unknown tier id falls back
- * to the primary tier so slightly-stale clients keep working. Throws 400
+ * The tier defaults to the active one; an unknown tier id falls back to the
+ * active/primary tier so slightly-stale clients keep working. Throws 400
  * when the exam does not exist for this user.
  */
 export function requirePattern(
@@ -228,21 +286,34 @@ export function requirePattern(
   tierId?: string,
 ): { resolved: ResolvedPattern; shape: PatternShape; maxScore: number } {
   const effectiveExam = examId ?? ctx.activeExamId;
-  const resolved = resolvePrimary(ctx, effectiveExam);
-  if (!resolved)
-    throw new RequestError("Unknown exam", 400);
-  if (!tierId || tierId === resolved.tier.id)
-    return {
-      resolved,
-      shape: patternShape(resolved),
-      maxScore: patternMaxScore(resolved.tier),
-    };
-  const wanted =
-    resolvePattern(effectiveExam, tierId, ctx.customExams) ??
-    resolved;
+  const fallbackTier = defaultWriteTierId(ctx, effectiveExam);
+  const resolved =
+    (tierId
+      ? resolvePattern(effectiveExam, tierId, ctx.customExams)
+      : null) ??
+    resolvePattern(effectiveExam, fallbackTier, ctx.customExams) ??
+    resolvePrimary(ctx, effectiveExam);
+  if (!resolved) throw new RequestError("Unknown exam or tier", 400);
   return {
-    resolved: wanted,
-    shape: patternShape(wanted),
-    maxScore: patternMaxScore(wanted.tier),
+    resolved,
+    shape: patternShape(resolved),
+    maxScore: patternMaxScore(resolved.tier),
   };
+}
+
+/** True when the tier key resolves for this user (built-in or custom). */
+export function tierKeyResolves(ctx: ExamContext, key: string): boolean {
+  const parsed = parseTierKey(key);
+  if (!parsed) return false;
+  return resolvePattern(parsed.examId, parsed.tierId, ctx.customExams) != null;
+}
+
+/** The "examId:tierId" keys enabled for one exam. */
+export function enabledTierIdsFor(
+  ctx: ExamContext,
+  examId: string,
+): string[] {
+  return ctx.enabledTiers.filter(
+    (key) => parseTierKey(key)?.examId === examId,
+  );
 }

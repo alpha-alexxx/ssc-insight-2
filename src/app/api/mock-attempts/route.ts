@@ -23,8 +23,9 @@ export const GET = defineRoute({ kind: "read" }, async ({ request, user }) => {
   const list = attemptListSchema.parse(
     Object.fromEntries(new URL(request.url).searchParams.entries()),
   );
-  // Attempts are always scoped to the user's active exam — the switcher
-  // decides the scope, filters refine within it.
+  // Attempts are always scoped to the user's active tier — the switcher
+  // decides the scope (the combined "all" view leaves the tier open), and
+  // filters refine within it.
   const ctx = await loadExamContext(user.id);
   const filters: Filters = {
     examId: ctx.activeExamId,
@@ -34,7 +35,8 @@ export const GET = defineRoute({ kind: "read" }, async ({ request, user }) => {
     from: list.from,
     to: list.to,
     search: list.search,
-    tier: list.tier,
+    // attemptWhere skips "all", so the combined view stays unfiltered.
+    tier: list.tier ?? ctx.activeTierId,
   };
   if (list.page != null) {
     const data = await listAttemptsPaged(user.id, filters, {

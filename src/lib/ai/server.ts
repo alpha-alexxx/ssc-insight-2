@@ -2,7 +2,7 @@ import "server-only";
 import { listAttemptsForAi } from "../repository";
 import { buildAiContext } from "./context";
 import {
-  activePrimaryShape,
+  activeShape,
   loadExamContext,
   resolvePrimary,
   targetForExam,
@@ -23,17 +23,21 @@ export type AiBundle = {
  */
 export async function loadAiBundle(userId: string): Promise<AiBundle> {
   const ctx = await loadExamContext(userId);
-  const attempts = await listAttemptsForAi(userId, ctx.activeExamId);
+  // The combined "all" view leaves the tier open; concrete tiers scope both
+  // the attempt list and the prompt's pattern.
+  const tierId =
+    ctx.activeTierId === "all" ? undefined : ctx.activeTierId;
+  const attempts = await listAttemptsForAi(userId, ctx.activeExamId, tierId);
   const primary = resolvePrimary(ctx, ctx.activeExamId);
   const examName = primary?.examName ?? "SSC CGL";
   return {
     context: buildAiContext(
       attempts,
       targetForExam(ctx, ctx.activeExamId),
-      activePrimaryShape(ctx),
+      activeShape(ctx),
       examName,
     ),
-    shape: activePrimaryShape(ctx),
+    shape: activeShape(ctx),
     examName,
   };
 }

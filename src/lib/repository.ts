@@ -243,9 +243,17 @@ export async function listAttemptsPaged(
  * AI context data. Notes are omitted in SQL so private note text is never
  * loaded into server memory or placed in a prompt.
  */
-export async function listAttemptsForAi(userId: string, examId?: string) {
+export async function listAttemptsForAi(
+  userId: string,
+  examId?: string,
+  tierId?: string,
+) {
   const rows = await database().mockAttempt.findMany({
-    where: { userId, ...(examId ? { examId } : {}) },
+    where: {
+      userId,
+      ...(examId ? { examId } : {}),
+      ...(tierId && tierId !== "all" ? { tierId } : {}),
+    },
     include: attemptInclude,
     omit: { notes: true },
     orderBy: [{ completedAt: "desc" }, { id: "asc" }],
@@ -325,14 +333,15 @@ export async function exportBackup(userId: string) {
         tx.customExam.findMany({
           where: { userId },
           orderBy: { createdAt: "asc" },
-          select: { id: true, name: true, subjects: true, marking: true },
+          select: { id: true, name: true, tiers: true },
         }),
       ]);
       return buildBackup(
         rows.map(toAttempt),
         {
           activeExamId: settings.activeExamId,
-          enabledExams: settings.enabledExams,
+          activeTierId: settings.activeTierId,
+          enabledTiers: settings.enabledTiers,
           examTargets: settings.examTargets,
         },
         customExamRows
@@ -395,7 +404,8 @@ export async function importBackup(
           ? null
           : JSON.stringify([
               value.activeExamId,
-              [...value.enabledExams].sort(),
+              value.activeTierId,
+              [...value.enabledTiers].sort(),
               Object.entries(value.examTargets).sort(([a], [b]) =>
                 a.localeCompare(b),
               ),
@@ -501,8 +511,7 @@ export async function importBackup(
               id: exam.id,
               userId,
               name: exam.name,
-              subjects: exam.subjects,
-              marking: exam.marking,
+              tiers: exam.tiers,
             })),
           });
       }
@@ -514,12 +523,14 @@ export async function importBackup(
           create: {
             userId,
             activeExamId: incomingSettings.activeExamId,
-            enabledExams: incomingSettings.enabledExams,
+            activeTierId: incomingSettings.activeTierId,
+            enabledTiers: incomingSettings.enabledTiers,
             examTargets: incomingSettings.examTargets,
           },
           update: {
             activeExamId: incomingSettings.activeExamId,
-            enabledExams: incomingSettings.enabledExams,
+            activeTierId: incomingSettings.activeTierId,
+            enabledTiers: incomingSettings.enabledTiers,
             examTargets: incomingSettings.examTargets,
           },
         });

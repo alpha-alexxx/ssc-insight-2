@@ -87,7 +87,8 @@ const subject = attempt(
 );
 const SETTINGS = {
   activeExamId: "cgl",
-  enabledExams: ["cgl"],
+  activeTierId: "tier2",
+  enabledTiers: ["cgl:tier2"],
   examTargets: { cgl: 320 },
 };
 const backup = buildBackup(
@@ -121,7 +122,7 @@ test("v2 backup includes complete records, target, and metadata but no ownership
 
 test("v2 parse strips provenance identifiers and preserves user fields", () => {
   const parsed = parseBackup(JSON.parse(JSON.stringify(backup)));
-  assert.equal(parsed.version, 3);
+  assert.equal(parsed.version, 4);
   assert.equal(parsed.legacy, false);
   assert.equal(parsed.hasSettings, true);
   assert.equal(parsed.settings?.examTargets.cgl, 320);
@@ -185,11 +186,11 @@ test("legacy v1 backups remain importable without settings", () => {
 
 test("unsupported, malformed, and invalid-record backups fail cleanly", () => {
   assert.throws(
-    () => parseBackup({ ...backup, formatVersion: 4 }),
-    /format version 4/,
+    () => parseBackup({ ...backup, formatVersion: 5 }),
+    /format version 5/,
   );
   assert.throws(
-    () => parseBackup({ format: "other", formatVersion: 3 }),
+    () => parseBackup({ format: "other", formatVersion: 4 }),
     BackupError,
   );
   assert.throws(
@@ -263,6 +264,47 @@ test("target and attempt limits are validated", () => {
   assert.equal(BACKUP_MAX_BYTES, 4 * 1024 * 1024);
 });
 
+test("v3 backups map exam-level scope onto tier keys", () => {
+  const parsed = parseBackup({
+    format: BACKUP_FORMAT,
+    formatVersion: 3,
+    exportedAt: "2026-10-25T10:00:00.000Z",
+    summary: backup.summary,
+    settings: {
+      activeExamId: "cpo",
+      enabledExams: ["cgl", "cpo"],
+      examTargets: { cgl: 320 },
+    },
+    customExams: [
+      {
+        id: "0e3ff340-17b2-42b2-b537-d858eb6fa947",
+        name: "My Exam",
+        subjects: [
+          { subjectId: "quant", questions: 20, qualifying: false },
+        ],
+        marking: { correct: 4, incorrect: 1 },
+      },
+    ],
+    attempts: backup.attempts,
+    warnings: [],
+  });
+  assert.equal(parsed.version, 3);
+  assert.deepEqual(parsed.settings, {
+    activeExamId: "cpo",
+    activeTierId: "paper1",
+    enabledTiers: ["cgl:tier2", "cpo:paper1"],
+    examTargets: { cgl: 320 },
+  });
+  assert.deepEqual(parsed.customExams[0].tiers, [
+    {
+      id: "main",
+      label: "Main",
+      subjects: [{ subjectId: "quant", questions: 20, qualifying: false }],
+      marking: { correct: 4, incorrect: 1 },
+    },
+  ]);
+});
+
 test("parseImportRequest supports new and legacy requests", () => {
   const nested = parseImportRequest({
     backup,
@@ -286,9 +328,9 @@ test("parseImportRequest supports new and legacy requests", () => {
   assert.equal(legacy.options.legacyRequest, true);
   assert.equal(legacy.options.mode, "merge");
   assert.equal(legacy.options.preview, true);
-  const topLevelV3 = parseImportRequest({ ...backup, preview: true });
-  assert.equal(topLevelV3.options.legacyRequest, false);
-  assert.equal(topLevelV3.backup.version, 3);
+  const topLevelV4 = parseImportRequest({ ...backup, preview: true });
+  assert.equal(topLevelV4.options.legacyRequest, false);
+  assert.equal(topLevelV4.backup.version, 4);
   assert.throws(
     () =>
       parseImportRequest({

@@ -131,22 +131,38 @@ export function MockForm({
       attempt?.tierId ??
       defaultTierId(activeExam, knownAttempts, scope.activeExamId),
   );
+  // The form offers the ENABLED tiers of the active exam — the scope the
+  // switcher set. With the combined view active, every enabled tier of the
+  // exam is offered and the default falls to the most-logged one.
   const tierOptions: { id: string; label: string }[] = attempt
     ? []
-    : scope.exams
-      ? (scope.exams.builtIn.find((exam) => exam.id === scope.activeExamId)
-          ?.tiers ?? []).map((tier) => ({ id: tier.id, label: tier.label }))
-      : [];
+    : (() => {
+        if (!scope.exams) return [];
+        const examId = scope.activeExamId;
+        const enabled = new Set(scope.exams.enabledTiers);
+        const tierList =
+          scope.exams.builtIn.find((exam) => exam.id === examId)?.tiers ??
+          scope.exams.customExams.find((exam) => exam.id === examId)?.tiers ??
+          [];
+        return tierList
+          .filter((tier) => enabled.has(`${examId}:${tier.id}`))
+          .map((tier) => ({ id: tier.id, label: tier.label }));
+      })();
 
   // While the exams payload is still loading the raw tierId may not resolve
   // ("main" default for built-ins); normalize to the exam's primary tier so
   // the select, the pattern, and the marks copy always agree.
-  const effectiveTierId =
-    (!attempt &&
-      tierOptions.some((tier) => tier.id === tierId)
-      ? tierId
-      : (activeExam?.primaryTierId ?? tierOptions[0]?.id ?? tierId)) ||
-    tierId;
+  const effectiveTierId = attempt
+    ? tierId
+    : (tierOptions.find(
+        (tier) =>
+          tier.id ===
+          (scope.activeTierId !== "all" ? scope.activeTierId : tierId),
+      )?.id ??
+      tierOptions.find((tier) => tier.id === tierId)?.id ??
+      tierOptions[0]?.id ??
+      activeExam?.primaryTierId ??
+      tierId);
   const shape: PatternShape =
     editShape ??
     scope.resolveShape(
