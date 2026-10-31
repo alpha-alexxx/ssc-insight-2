@@ -9,19 +9,25 @@ import {
   platformSelection,
 } from "../src/lib/mock-entry";
 import {
-  attemptSchema,
+  attemptSchemaFor,
   totals,
   type Attempt,
   type AttemptInput,
 } from "../src/lib/domain";
 import { analyze } from "../src/lib/analytics";
 import { parseReport } from "../src/lib/report-parser";
+import { T2, MARKING } from "./fixtures/exam";
+
+const attemptSchema = attemptSchemaFor(T2);
 
 const input: AttemptInput = {
   name: "Practice",
   platform: "Testbook",
   completedAt: "2026-10-24T00:00:00.000Z",
   type: "full",
+  examId: "cgl",
+  tierId: "tier2",
+  marking: MARKING,
   notes: "",
   source: "manual",
   subjects: [
@@ -30,6 +36,7 @@ const input: AttemptInput = {
       questions: 30,
       correct: 14,
       incorrect: 6,
+      qualifying: false,
       timeSeconds: 1782,
     },
     {
@@ -37,6 +44,7 @@ const input: AttemptInput = {
       questions: 30,
       correct: 25,
       incorrect: 5,
+      qualifying: false,
       timeSeconds: 995,
     },
     {
@@ -44,6 +52,7 @@ const input: AttemptInput = {
       questions: 45,
       correct: 37,
       incorrect: 8,
+      qualifying: false,
       timeSeconds: 2112,
     },
     {
@@ -51,6 +60,7 @@ const input: AttemptInput = {
       questions: 25,
       correct: 14,
       incorrect: 6,
+      qualifying: false,
       timeSeconds: 588,
     },
   ],
@@ -60,6 +70,7 @@ const computer = {
   questions: 20,
   correct: 15,
   incorrect: 3,
+  qualifying: true,
   timeSeconds: 600,
 };
 
@@ -161,7 +172,7 @@ test("paste reports with all main subjects and Computer remain full mocks", () =
         `${names[i]}\n${s.correct * 3 - s.incorrect}\n/${s.questions * 3}\nCorrect\n${s.correct}\nIncorrect\n${s.incorrect}\n0:10:00`,
     )
     .join("\n");
-  const parsed = parseReport(`Your Score\n245\n/390\n${report}`);
+  const parsed = parseReport(T2, `Your Score\n245\n/390\n${report}`);
   assert.equal(parsed.values.type, "full");
   assert.equal(parsed.values.subjects?.length, 5);
   assert.deepEqual(parsed.warnings, []);

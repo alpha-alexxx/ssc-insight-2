@@ -26,6 +26,7 @@ import {
 const lenientFiltersSchema = filtersSchema.extend({
   type: filtersSchema.shape.type.catch(undefined),
   subject: filtersSchema.shape.subject.catch(undefined),
+  tier: filtersSchema.shape.tier.catch(undefined),
   platform: filtersSchema.shape.platform.catch(undefined),
   search: filtersSchema.shape.search.catch(undefined),
   from: filtersSchema.shape.from.catch(undefined),
@@ -111,6 +112,7 @@ export function parseWorkspaceState(search: string): WorkspaceUrlState {
   const filters: Filters = {};
   if (parsed.type) filters.type = parsed.type;
   if (parsed.subject) filters.subject = parsed.subject;
+  if (parsed.tier) filters.tier = parsed.tier;
   if (parsed.platform) filters.platform = parsed.platform;
   if (parsed.search) filters.search = parsed.search;
   if (parsed.from) filters.from = parsed.from;
@@ -138,6 +140,7 @@ export function serializeWorkspaceState(
   if (filters.type && filters.type !== "all") params.set("type", filters.type);
   if (filters.subject && filters.subject !== "all")
     params.set("subject", filters.subject);
+  if (filters.tier && filters.tier !== "all") params.set("tier", filters.tier);
   if (filters.platform && filters.platform !== "all")
     params.set("platform", filters.platform);
   if (filters.search) params.set("search", filters.search);

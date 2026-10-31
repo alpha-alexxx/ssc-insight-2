@@ -8,7 +8,7 @@ import { coachMessages } from "@/lib/ai/prompts";
 import { createAiProvider } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/resolve";
 import { coachInsightSchema, parseModelJson } from "@/lib/ai/schemas";
-import { aiLimits, loadAiContext } from "@/lib/ai/server";
+import { aiLimits, loadAiBundle } from "@/lib/ai/server";
 import {
   releaseSafely,
   reserveAiUsage,
@@ -41,9 +41,9 @@ export async function POST(request: Request) {
       }),
     });
 
-    let context;
+    let bundle;
     try {
-      context = await loadAiContext(userId);
+      bundle = await loadAiBundle(userId);
     } catch (error) {
       await releaseSafely(reservation.id, userId, "CONTEXT_UNAVAILABLE");
       throw error;
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     let result;
     try {
       result = await createAiProvider(config).completeJson({
-        messages: coachMessages(context),
+        messages: coachMessages(bundle.context, bundle.shape, bundle.examName),
         maxOutputTokens: config.maxOutputTokens,
         signal: request.signal,
         parse: (raw) => parseModelJson(raw, coachInsightSchema),
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
         tokensCharged: reservation.reservedTokens,
         providerCalls: 2,
         errorCode: code,
-        contextVersion: context.contextVersion,
+        contextVersion: bundle.context.contextVersion,
       });
       if (error instanceof AiError) throw error;
       console.error("AI coach failed", {
@@ -86,15 +86,15 @@ export async function POST(request: Request) {
       outputTokens: result.usage.outputTokens,
       tokensCharged: result.usage.totalTokens,
       providerCalls: result.providerCalls,
-      contextVersion: context.contextVersion,
+      contextVersion: bundle.context.contextVersion,
     });
 
     return ok({
       insight: result.value,
       meta: {
-        contextVersion: context.contextVersion,
-        dataAsOf: context.dataAsOf,
-        coverage: context.coverage,
+        contextVersion: bundle.context.contextVersion,
+        dataAsOf: bundle.context.dataAsOf,
+        coverage: bundle.context.coverage,
       },
       usage: {
         ...result.usage,

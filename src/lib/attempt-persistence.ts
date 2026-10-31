@@ -4,6 +4,7 @@ import type {
   Attempt,
   AttemptInput,
   Filters,
+  PatternShape,
 } from "./domain";
 
 export const attemptInclude = {
@@ -27,6 +28,7 @@ function mapSubjects(row: {
     questions: s.questions,
     correct: s.correct,
     incorrect: s.incorrect,
+    qualifying: s.qualifying,
     scoreOverride: s.scoreOverride,
     timeSeconds: s.timeSeconds,
   }));
@@ -40,6 +42,12 @@ export function toAttempt(row: StoredAttempt): Attempt {
     platform: row.platform,
     completedAt: row.completedAt.toISOString(),
     type: row.type,
+    examId: row.examId,
+    tierId: row.tierId,
+    marking: {
+      correct: row.markingCorrect,
+      incorrect: row.markingIncorrect,
+    },
     scoreOverride: row.scoreOverride,
     overallTimeSeconds: row.overallTimeSeconds,
     rank: row.rank,
@@ -47,7 +55,7 @@ export function toAttempt(row: StoredAttempt): Attempt {
     percentile: row.percentile,
     notes: row.notes,
     source: row.source,
-    schemaVersion: 1,
+    schemaVersion: row.schemaVersion === 2 ? 2 : 1,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     subjects: mapSubjects(row),
@@ -65,25 +73,42 @@ export function toAnalyticsAttempt(row: StoredAnalyticsAttempt): AnalyticsAttemp
     platform: row.platform,
     completedAt: row.completedAt.toISOString(),
     type: row.type,
+    examId: row.examId,
+    tierId: row.tierId,
+    marking: {
+      correct: row.markingCorrect,
+      incorrect: row.markingIncorrect,
+    },
     scoreOverride: row.scoreOverride,
     overallTimeSeconds: row.overallTimeSeconds,
     rank: row.rank,
     participants: row.participants,
     percentile: row.percentile,
     source: row.source,
-    schemaVersion: 1,
+    schemaVersion: row.schemaVersion === 2 ? 2 : 1,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     subjects: mapSubjects(row),
   };
 }
 
-export function attemptData(input: AttemptInput) {
+/**
+ * Prisma write shape for a validated attempt. When the resolved tier pattern
+ * is given, its truth overrides the client on exam identity, marking, and
+ * per-subject qualifying flags; backup import omits it and trusts the
+ * backup's already-validated snapshot.
+ */
+export function attemptData(input: AttemptInput, pattern?: PatternShape) {
+  const marking = pattern?.marking ?? input.marking;
   return {
     name: input.name,
     platform: input.platform,
     completedAt: new Date(input.completedAt),
     type: input.type,
+    examId: pattern?.examId ?? input.examId,
+    tierId: pattern?.tierId ?? input.tierId,
+    markingCorrect: marking.correct,
+    markingIncorrect: marking.incorrect,
     scoreOverride: input.scoreOverride ?? null,
     overallTimeSeconds: input.overallTimeSeconds ?? null,
     rank: input.rank ?? null,
@@ -91,9 +116,14 @@ export function attemptData(input: AttemptInput) {
     percentile: input.percentile ?? null,
     notes: input.notes,
     source: input.source,
+    schemaVersion: 2,
     subjects: {
       create: input.subjects.map((s, position) => ({
         ...s,
+        qualifying: pattern
+          ? (pattern.subjects.find((p) => p.subjectId === s.subjectId)
+              ?.qualifying ?? false)
+          : s.qualifying,
         scoreOverride: s.scoreOverride ?? null,
         timeSeconds: s.timeSeconds ?? null,
         position,
@@ -104,6 +134,8 @@ export function attemptData(input: AttemptInput) {
 
 export function attemptWhere(filters: Filters): Prisma.MockAttemptWhereInput {
   return {
+    ...(filters.examId ? { examId: filters.examId } : {}),
+    ...(filters.tier && filters.tier !== "all" ? { tierId: filters.tier } : {}),
     ...(filters.type && filters.type !== "all"
       ? { type: filters.type as Attempt["type"] }
       : {}),

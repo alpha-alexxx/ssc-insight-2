@@ -5,6 +5,8 @@ import { Button } from "./ui/button";
 import { Panel } from "./dashboard-panels";
 import { AppearancePanel } from "./appearance-panel";
 import { AiSettingsForm } from "./ai-settings-form";
+import { ExamsSettingsPanel } from "./exams-settings";
+import { useExamScope } from "./exam-context";
 import { cn } from "@/lib/utils";
 import {
   type BackupPreview,
@@ -41,7 +43,7 @@ export type SettingsPanelsProps = {
   onDownloadSafety: () => void;
   onReset: () => void;
   onCommit: () => void;
-  targetChange: boolean;
+  settingsChange: boolean;
   onOpenReplace: () => void;
 };
 
@@ -66,16 +68,24 @@ export function SettingsPanels({
   onDownloadSafety,
   onReset,
   onCommit,
-  targetChange,
+  settingsChange,
   onOpenReplace,
 }: SettingsPanelsProps) {
   const [section, setSection] = useState<
-    "study" | "appearance" | "ai" | "data" | "about"
-  >("study");
+    "exams" | "study" | "appearance" | "ai" | "data" | "about"
+  >("exams");
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [saveError, setSaveError] = useState("");
+  const { activeShape } = useExamScope();
+  // The target is a percentage anchor: validated against the active exam's
+  // primary-tier maximum instead of one global 390.
+  const targetMax = activeShape
+    ? activeShape.subjects
+        .filter((s) => !s.qualifying)
+        .reduce((sum, s) => sum + s.questions, 0) * activeShape.marking.correct
+    : FULL_MOCK_MAX_SCORE;
   const dirty = targetInput !== (target?.toString() ?? "");
   const numeric = targetInput.trim() === "" ? null : Number(targetInput);
   const valid =
@@ -83,7 +93,7 @@ export function SettingsPanels({
     (Number.isFinite(numeric) &&
       numeric != null &&
       numeric >= 0 &&
-      numeric <= FULL_MOCK_MAX_SCORE);
+      numeric <= targetMax);
 
   async function submitTarget(event: React.FormEvent) {
     event.preventDefault();
@@ -99,6 +109,7 @@ export function SettingsPanels({
   }
 
   const sections = [
+    { id: "exams" as const, label: "Exams" },
     { id: "study" as const, label: "Study target" },
     { id: "appearance" as const, label: "Appearance" },
     { id: "ai" as const, label: "AI provider" },
@@ -158,6 +169,12 @@ export function SettingsPanels({
 
       <div className="flex min-w-0 flex-col gap-4">
         <div
+          className={section === "exams" ? "block" : "hidden lg:block"}
+          id="settings-exams"
+        >
+          <ExamsSettingsPanel />
+        </div>
+        <div
           className={section === "study" ? "block" : "hidden lg:block"}
           id="settings-study"
         >
@@ -167,8 +184,8 @@ export function SettingsPanels({
             title="Study target"
             description={
               target == null
-                ? "One target, shown as a percentage on every performance scope."
-                : `Current target: ${n(target)} / ${FULL_MOCK_MAX_SCORE}.`
+                ? "One target per exam, shown as a percentage on every performance scope."
+                : `Current target: ${n(target)} / ${targetMax}.`
             }
           >
             <form
@@ -176,12 +193,12 @@ export function SettingsPanels({
               onSubmit={(event) => void submitTarget(event)}
             >
               <label>
-                Target score (out of {FULL_MOCK_MAX_SCORE})
+                Target score (out of {targetMax})
                 <input
                   type="number"
                   className="no-spin"
                   min={0}
-                  max={FULL_MOCK_MAX_SCORE}
+                  max={targetMax}
                   step="0.01"
                   placeholder="e.g. 320"
                   value={targetInput}
@@ -199,7 +216,7 @@ export function SettingsPanels({
               </p>
               {!valid && (
                 <p role="alert" className="text-[11px] text-danger">
-                  Enter a score between 0 and {FULL_MOCK_MAX_SCORE}, or leave it
+                  Enter a score between 0 and {targetMax}, or leave it
                   empty.
                 </p>
               )}
@@ -302,7 +319,7 @@ export function SettingsPanels({
                   onDownloadSafety={onDownloadSafety}
                   onReset={onReset}
                   onCommit={onCommit}
-                  targetChange={targetChange}
+                  settingsChange={settingsChange}
                   onOpenReplace={onOpenReplace}
                 />
               )}
@@ -365,7 +382,7 @@ function BackupPreviewCard({
   onDownloadSafety,
   onReset,
   onCommit,
-  targetChange,
+  settingsChange,
   onOpenReplace,
 }: {
   preview: BackupPreview;
@@ -379,7 +396,7 @@ function BackupPreviewCard({
   onDownloadSafety: () => void;
   onReset: () => void;
   onCommit: () => void;
-  targetChange: boolean;
+  settingsChange: boolean;
   onOpenReplace: () => void;
 }) {
   return (
@@ -462,7 +479,7 @@ function BackupPreviewCard({
         </div>
       </div>
       <div className="mt-3">
-        {preview.target.available ? (
+        {preview.settings.available ? (
           <label className="check-row items-start text-xs">
             <input
               type="checkbox"
@@ -472,22 +489,13 @@ function BackupPreviewCard({
               onChange={(e) => changeApplyTarget(e.target.checked)}
             />
             <span>
-              {preview.target.incoming == null
-                ? `Clear the current target${
-                    preview.target.current != null
-                      ? ` (${n(preview.target.current)} / 390)`
-                      : ""
-                  } — the backup has no target`
-                : `Apply target from backup: ${
-                    preview.target.current == null
-                      ? "none"
-                      : `${n(preview.target.current)} / 390`
-                  } → ${n(preview.target.incoming)} / 390`}
+              Apply exam scope from backup (active exam, enabled exams, and
+              per-exam targets)
             </span>
           </label>
         ) : (
           <p className="text-[11px] muted">
-            Legacy backup: no target setting to apply.
+            Legacy backup: no exam scope settings to apply.
           </p>
         )}
       </div>
@@ -540,13 +548,13 @@ function BackupPreviewCard({
         {importMode === "merge" ? (
           <Button
             size="sm"
-            disabled={busy || (preview.importable === 0 && !targetChange)}
+            disabled={busy || (preview.importable === 0 && !settingsChange)}
             onClick={onCommit}
           >
             {preview.importable > 0
               ? `Import ${preview.importable} mocks`
-              : targetChange
-                ? "Apply target"
+              : settingsChange
+                ? "Apply settings"
                 : "Nothing to import"}
           </Button>
         ) : (

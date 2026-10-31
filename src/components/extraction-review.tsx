@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import {
   SUBJECTS,
-  subjectIds,
   type AttemptInput,
+  type PatternShape,
   type SubjectId,
 } from "@/lib/domain";
 import {
@@ -120,12 +120,15 @@ function FieldIssues({
 
 export function ExtractionReview({
   draft,
+  shape,
   onChange,
   onUse,
   onBack,
   onDiscard,
 }: {
   draft: ExtractionDraft;
+  /** The tier pattern the extraction targets — validates counts/sections. */
+  shape: PatternShape;
   onChange: (draft: ExtractionDraft) => void;
   onUse: () => void;
   onBack: () => void;
@@ -140,7 +143,7 @@ export function ExtractionReview({
     );
 
   function update(changes: Partial<ExtractionDraft>) {
-    onChange(validateExtractionDraft({ ...draft, ...changes }));
+    onChange(validateExtractionDraft(shape, { ...draft, ...changes }));
   }
 
   function updateSubject(
@@ -283,9 +286,12 @@ export function ExtractionReview({
             variant="outline"
             disabled={draft.subjects.length >= 5}
             onClick={() => {
-              const nextId = subjectIds.find(
-                (id) => !draft.subjects.some((subject) => subject.subjectId === id),
-              );
+              const nextId = shape.subjects
+                .map((s) => s.subjectId)
+                .find(
+                  (id) =>
+                    !draft.subjects.some((subject) => subject.subjectId === id),
+                );
               if (nextId) update({ subjects: [...draft.subjects, blankExtractedSubject(nextId)] });
             }}
           >
@@ -318,8 +324,10 @@ export function ExtractionReview({
                         });
                       }}
                     >
-                      {subjectIds.map((id) => (
-                        <option key={id} value={id}>{SUBJECTS[id].name}</option>
+                      {shape.subjects.map((subject) => (
+                        <option key={subject.subjectId} value={subject.subjectId}>
+                          {SUBJECTS[subject.subjectId].name}
+                        </option>
                       ))}
                     </select>
                   </label>

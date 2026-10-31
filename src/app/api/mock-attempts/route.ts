@@ -1,4 +1,4 @@
-import { attemptListSchema, attemptSchema, type Filters } from "@/lib/domain";
+import { attemptListSchema, attemptSchemaFor, type Filters } from "@/lib/domain";
 import { readBody, RequestError } from "@/lib/api";
 import {
   createAttempt,
@@ -6,6 +6,8 @@ import {
   listAttempts,
   listAttemptsPaged,
 } from "@/lib/repository";
+import { loadExamContext, requirePattern } from "@/lib/exam-settings";
+import { patternMaxScore } from "@/lib/exams";
 import { defineRoute } from "@/lib/route-handler";
 import { audit } from "@/lib/audit";
 
@@ -21,13 +23,18 @@ export const GET = defineRoute({ kind: "read" }, async ({ request, user }) => {
   const list = attemptListSchema.parse(
     Object.fromEntries(new URL(request.url).searchParams.entries()),
   );
+  // Attempts are always scoped to the user's active exam — the switcher
+  // decides the scope, filters refine within it.
+  const ctx = await loadExamContext(user.id);
   const filters: Filters = {
+    examId: ctx.activeExamId,
     type: list.type,
     subject: list.subject,
     platform: list.platform,
     from: list.from,
     to: list.to,
     search: list.search,
+    tier: list.tier,
   };
   if (list.page != null) {
     const data = await listAttemptsPaged(user.id, filters, {
@@ -62,12 +69,27 @@ export const POST = defineRoute(
     },
   },
   async ({ request, user, startedAt }) => {
-    const input = attemptSchema.parse(await readBody(request));
-    const attempt = await createAttempt(user.id, input);
+    const body = await readBody(request);
+    // Resolve the claimed exam/tier to its concrete pattern first, then
+    // validate the body against that pattern (counts, marking, sections).
+    const claim = body as { examId?: unknown; tierId?: unknown };
+    const ctx = await loadExamContext(user.id);
+    const { resolved, shape } = requirePattern(
+      ctx,
+      typeof claim.examId === "string" ? claim.examId : undefined,
+      typeof claim.tierId === "string" ? claim.tierId : undefined,
+    );
+    const input = attemptSchemaFor(shape).parse(body);
+    const attempt = await createAttempt(user.id, input, shape);
     audit("mock.create", user.id, {
       sid: attempt.id,
       ms: Date.now() - startedAt,
-      meta: { type: attempt.type, platform: attempt.platform },
+      meta: {
+        type: attempt.type,
+        platform: attempt.platform,
+        exam: resolved.examId,
+        tier: resolved.tier.id,
+      },
     });
     return { data: attempt, status: 201 };
   },

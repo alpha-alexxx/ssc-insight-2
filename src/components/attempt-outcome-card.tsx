@@ -7,7 +7,14 @@ import {
   formatNumber as n,
 } from "@/lib/domain";
 import { longDate, mockTypeLabel, shortDate } from "@/lib/format";
+import { tierLabelFor } from "@/lib/exams";
 import styles from "./attempt-outcome-card.module.css";
+
+/** Short tier annotation ("Tier 1") — empty for single-tier custom exams. */
+function tierSuffix(examId: string, tierId: string): string {
+  const label = tierLabelFor(examId, tierId);
+  return label === "Main" ? "" : label;
+}
 
 const outcomes = [
   { key: "correct", label: "Correct", percentage: "correctPercentage" },
@@ -229,6 +236,14 @@ export function AttemptRecordCard({
           <p>
             {attempt.platform} <span aria-hidden="true">·</span>{" "}
             {mockTypeLabel(attempt.type)}
+            {tierSuffix(attempt.examId, attempt.tierId) && (
+              <>
+                {" "}
+                <span className="text-[0.625rem] uppercase tracking-wide text-muted">
+                  {tierSuffix(attempt.examId, attempt.tierId)}
+                </span>
+              </>
+            )}
             {attempt.createdAt && attempt.createdAt !== attempt.completedAt && (
               <>
                 <span aria-hidden="true"> · </span>

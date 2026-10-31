@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthControl } from "./auth-control";
+import { ExamSwitcher } from "./exam-switcher";
+import { useExamScope } from "./exam-context";
 import { DuotoneIcon, PlainIcon } from "./icon";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./ui/button";
@@ -316,13 +318,28 @@ export function AppSidebar({
         ))}
       </SidebarContent>
       <SidebarFooter className="border-t border-rule-soft bg-canvas/60">
-        <p className="mx-2 flex items-center gap-1.5 py-2.5 text-[0.625rem] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
-          <PlainIcon name="calendar" size={11} />
-          SSC CGL Tier 2 · dates in IST
-        </p>
+        <ActiveExamFooterNote />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+/** Sidebar footer note: the active exam's name, from the exam scope. */
+function ActiveExamFooterNote() {
+  const scope = useExamScope();
+  const name = scope.exams
+    ? (scope.exams.builtIn.find((exam) => exam.id === scope.activeExamId)
+        ?.name ??
+      scope.exams.customExams.find((exam) => exam.id === scope.activeExamId)
+        ?.name ??
+      "SSC CGL")
+    : "SSC CGL";
+  return (
+    <p className="mx-2 flex items-center gap-1.5 py-2.5 text-[0.625rem] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
+      <PlainIcon name="calendar" size={11} />
+      {name} · dates in IST
+    </p>
   );
 }
 
@@ -423,6 +440,8 @@ export function AppHeader({
             <span className="hidden md:inline">Ask AI</span>
           </Button>
         )}
+
+        <ExamSwitcher onManageExams={openSettings} />
 
         <ThemeToggle className="size-8" />
 

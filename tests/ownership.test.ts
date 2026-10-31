@@ -2,7 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { verifiedUser, SessionError } from "../src/lib/auth/session-policy";
 import { apiError, ok } from "../src/lib/api";
-import { attemptSchema } from "../src/lib/domain";
+import { attemptSchemaFor } from "../src/lib/domain";
+import { T2 } from "./fixtures/exam";
+
+const attemptSchema = attemptSchemaFor(T2);
 
 test("session guard derives identity only from a verified session", async () => {
   const user = { id: "verified-user", email: "private@example.com" };
@@ -59,6 +62,9 @@ test("forged ownership is stripped from manual and backup attempt inputs", () =>
     name: "Practice",
     platform: "Testbook",
     type: "subject",
+    examId: "cgl",
+    tierId: "tier2",
+    marking: { correct: 3, incorrect: 1 },
     completedAt: "2026-10-24T00:00:00.000Z",
     subjects: [
       {

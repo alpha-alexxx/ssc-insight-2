@@ -209,13 +209,14 @@ function ScopeTrend({
   const uid = useId().replace(/:/g, "");
   const { scope, trend } = analytics;
   const rows = trendRows(analytics);
+  const targetMax = analytics.target.fullMockMaxScore;
   const config: ChartConfig = Object.fromEntries(
     trend.series.map((series) => [
       series.id,
       { label: series.label, color: seriesColor(scope, series.id) },
     ]),
   );
-  const target = targetPercentage(targetScore);
+  const target = targetPercentage(targetScore, targetMax);
   const lowerBound = rows.length
     ? Math.min(
         0,
@@ -252,7 +253,7 @@ function ScopeTrend({
           <p className="mt-3 max-w-sm text-[0.6875rem] leading-relaxed text-muted">
             Log one more result to turn this into a trend. This point is{" "}
             {n(point.score)} / {point.maxScore}
-            {target != null ? `; your target is ${n(targetPercentage(target))}%` : ""}.
+            {target != null ? `; your target is ${n(target)}%` : ""}.
           </p>
         </div>
         <ViewDataTable
@@ -417,8 +418,8 @@ function ScopeTrend({
       </p>
       {target != null && (
         <p className="pb-1 text-center text-[0.625rem] muted">
-          Dashed line: your target, {n((target / 100) * FULL_MOCK_MAX_SCORE)} /{" "}
-          {FULL_MOCK_MAX_SCORE} marks
+          Dashed line: your target,{" "}
+          {n((target / 100) * targetMax)} / {targetMax} marks
         </p>
       )}
       <p className="sr-only">
@@ -632,6 +633,7 @@ function ScoreBand({
 }) {
   const { scope, summary, trend } = analytics;
   const points = trend.points;
+  const targetMax = analytics.target.fullMockMaxScore;
   const isFull = scope === "full";
   const latest = points.at(-1) ?? null;
   const previous = points.at(-2) ?? null;
@@ -650,7 +652,7 @@ function ScoreBand({
         points[0]!,
       )
     : null;
-  const targetPercent = targetPercentage(target);
+  const targetPercent = targetPercentage(target, targetMax);
   const targetGap =
     latest && targetPercent != null ? latest.percentage - targetPercent : null;
   const deltaTone = (delta: number | null) =>
@@ -666,7 +668,7 @@ function ScoreBand({
       {n(value)}
       <span className="text-sm font-normal text-muted">
         {" "}
-        / {FULL_MOCK_MAX_SCORE}
+        / {targetMax}
       </span>
     </>
   );
@@ -767,7 +769,7 @@ function ScoreBand({
           </p>
           <p className="metric-hint truncate">
             {isFull
-              ? `target ${n(target)} / ${FULL_MOCK_MAX_SCORE}`
+              ? `target ${n(target)} / ${targetMax}`
               : `target ${n(targetPercent ?? 0)}%`}
           </p>
         </div>
@@ -1338,9 +1340,10 @@ function TargetPanel({
 }) {
   const uid = useId().replace(/:/g, "");
   const snapshots = analytics.target.snapshots;
+  const targetMax = analytics.target.fullMockMaxScore;
   const latest = snapshots.at(-1);
   const previous = snapshots.at(-2);
-  const targetPercent = targetPercentage(target);
+  const targetPercent = targetPercentage(target, targetMax);
   const gap =
     latest && targetPercent != null ? latest.percentage - targetPercent : null;
   const change =
@@ -1362,7 +1365,7 @@ function TargetPanel({
         <div className="min-w-0">
           <p className="metric-label">Your target</p>
           <p className="mt-1 font-serif text-lg font-medium tabular leading-tight tracking-[-0.015em]">
-            {target == null ? "Not set" : `${n(target)} / ${FULL_MOCK_MAX_SCORE}`}
+            {target == null ? "Not set" : `${n(target)} / ${targetMax}`}
           </p>
           <p className="mt-0.5 text-[0.625rem] muted">
             {targetPercent == null

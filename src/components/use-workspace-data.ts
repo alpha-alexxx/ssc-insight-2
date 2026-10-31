@@ -15,7 +15,18 @@ import {
 } from "@/lib/queries/analytics";
 import { allAttemptsQueryOptions, attemptKeys } from "@/lib/queries/attempts";
 import { settingsKeys, settingsQueryOptions } from "@/lib/queries/settings";
-import type { DashboardScope, Filters, PageSize, SortKey } from "@/lib/domain";
+import { useExamScope } from "./exam-context";
+import type {
+  Attempt,
+  DashboardScope,
+  Filters,
+  PageSize,
+  SortKey,
+} from "@/lib/domain";
+
+/** Stable identity while the query is pending. A fresh `?? []` on every
+ * render defeats `memo` on the calendar's grids and the dashboard panels. */
+const EMPTY_ATTEMPTS: Attempt[] = [];
 
 /**
  * Workspace data layer: persisted-record filters, the dashboard scope, the
@@ -42,11 +53,13 @@ export function useWorkspaceData() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<Filters>({});
   const [scope, setScope] = useState<DashboardScope>("full");
-  // The target lives in the query cache (lib/queries/settings.ts) and
-  // changes only through explicit user actions; only the text input is
-  // component state, seeded from the cached settings payload.
+  // The target is per exam (against that exam's primary tier maximum). It
+  // lives in the query cache (lib/queries/settings.ts) and changes only
+  // through explicit user actions; only the text input is component state,
+  // seeded from the cached settings payload for the active exam.
   const { data: settings } = useQuery(settingsQueryOptions);
-  const target = settings?.targetScore ?? null;
+  const { activeExamId } = useExamScope();
+  const target = settings?.examTargets[activeExamId] ?? null;
   const [targetInput, setTargetInput] = useState("");
 
   // Server-paged list state. Each view owns its page; pageSize/sort/dir are
@@ -106,7 +119,7 @@ export function useWorkspaceData() {
   );
   const allAttemptsQuery = useQuery(allAttemptsQueryOptions);
   const analytics = analyticsQuery.data ?? null;
-  const allAttempts = allAttemptsQuery.data ?? [];
+  const allAttempts = allAttemptsQuery.data ?? EMPTY_ATTEMPTS;
   const loading = analyticsQuery.isPending || allAttemptsQuery.isPending;
   const error =
     analyticsQuery.error?.message ?? allAttemptsQuery.error?.message ?? "";
@@ -182,13 +195,13 @@ export function useWorkspaceData() {
     dir,
   ]);
 
-  // Seed the input from the cached settings payload whenever it changes —
-  // on first load and after a backup import applies an incoming target.
+  // Seed the input from the cached settings payload whenever it or the
+  // active exam changes — on first load, after a switch, and after a backup
+  // import applies incoming settings.
   useEffect(() => {
-    if (!settings) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTargetInput(settings.targetScore?.toString() ?? "");
-  }, [settings]);
+    setTargetInput(target?.toString() ?? "");
+  }, [target]);
 
   // Backup import may apply an incoming target: invalidating the settings
   // query refetches it, and the seed effect above updates the input.

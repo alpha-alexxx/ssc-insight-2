@@ -10,5 +10,8 @@ export default defineConfig([
     "next-env.d.ts",
     "src/generated/**",
     ".local/**",
+    // Workspace tooling and content, not app source (also git-ignored).
+    ".agents/**",
+    "videos/**",
   ]),
 ]);

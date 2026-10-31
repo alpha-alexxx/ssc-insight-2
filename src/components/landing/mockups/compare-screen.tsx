@@ -137,7 +137,7 @@ export function CompareScreen() {
     const cells = metrics.map((m) => {
       const subject = m.attempt.subjects.find((s) => s.subjectId === subjectId);
       if (!subject) return null;
-      const stats = subjectStats(subject);
+      const stats = subjectStats(subject, m.attempt.marking);
       return { stats, percentage: stats.percentage };
     });
     const firstCell = cells[0];

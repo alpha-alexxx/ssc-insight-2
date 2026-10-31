@@ -3,22 +3,21 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { PlainIcon } from "./icon";
 import {
-  attemptSchema,
-  MAIN_SUBJECT_IDS,
-  SECTIONS,
+  attemptSchemaFor,
   sectionForSubjects,
-  sectionIds,
   SUBJECTS,
-  subjectIds,
   type Attempt,
   type AttemptInput,
+  type PatternShape,
   type SubjectId,
   type SubjectResult,
-  type SectionId,
   totals,
   formatNumber,
+  formatScore,
   formatTime,
 } from "@/lib/domain";
+import { useExamScope } from "./exam-context";
+import type { ExamDef } from "@/lib/exams";
 import {
   calculatedEntry,
   completionDate,
@@ -38,23 +37,58 @@ import {
   type ExtractionDraft,
 } from "@/lib/ai/extraction";
 import { ExtractionReview } from "./extraction-review";
-const blankSubject = (id: SubjectId): SubjectResult => ({
+const blankSubject = (id: SubjectId, shape: PatternShape): SubjectResult => ({
   subjectId: id,
-  questions: SUBJECTS[id].questions,
+  questions:
+    shape.subjects.find((s) => s.subjectId === id)?.questions ??
+    SUBJECTS[id].questions,
   correct: 0,
   incorrect: 0,
+  qualifying:
+    shape.subjects.find((s) => s.subjectId === id)?.qualifying ?? false,
   timeSeconds: 0,
   scoreOverride: null,
 });
-function fullMockSectionHeading(subjectId: SubjectId) {
-  const sectionId = sectionIds.find(
-    (id) => SECTIONS[id].subjectIds[0] === subjectId,
-  );
-  if (sectionId)
-    return `${SECTIONS[sectionId].name} · ${SECTIONS[sectionId].description} · ${SECTIONS[sectionId].maxScore} marks`;
-  if (subjectId === "computer") return "Computer Knowledge · qualifying · 60 marks";
+function fullMockSectionHeading(subjectId: SubjectId, shape: PatternShape) {
+  const section = shape.sections.find((s) => s.subjectIds[0] === subjectId);
+  if (section) {
+    const maxScore =
+      section.subjectIds.reduce(
+        (sum, id) =>
+          sum +
+          (shape.subjects.find((s) => s.subjectId === id)?.questions ?? 0),
+        0,
+      ) * shape.marking.correct;
+    return `${section.name} · ${section.description} · ${maxScore} marks`;
+  }
+  const pattern = shape.subjects.find((s) => s.subjectId === subjectId);
+  if (pattern?.qualifying)
+    return `${SUBJECTS[subjectId].name} · qualifying · ${pattern.questions * shape.marking.correct} marks`;
   return null;
 }
+/** The default tier for a new attempt: the most-logged tier of this exam,
+ * else the exam's primary tier. */
+function defaultTierId(
+  exam: ExamDef | null,
+  knownAttempts: Attempt[] | undefined,
+  examId: string,
+): string {
+  if (!exam) return "main";
+  const counts = new Map<string, number>();
+  for (const attempt of knownAttempts ?? []) {
+    if (attempt.examId !== examId) continue;
+    counts.set(attempt.tierId, (counts.get(attempt.tierId) ?? 0) + 1);
+  }
+  const [mostLogged] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+  if (mostLogged && exam.tiers.some((t) => t.id === mostLogged))
+    return mostLogged;
+  return exam.primaryTierId;
+}
+/** Merit-bearing (non-qualifying) subject ids of a pattern, in order. */
+function meritSubjectIds(shape: PatternShape): SubjectId[] {
+  return shape.subjects.filter((s) => !s.qualifying).map((s) => s.subjectId);
+}
+
 export function MockForm({
   attempt,
   knownAttempts,
@@ -82,13 +116,73 @@ export function MockForm({
   onClose: () => void;
   onSaved: (returnTo?: string | null) => void | Promise<void>;
 }) {
+  const scope = useExamScope();
+  // Editing locks the exam+tier to the saved attempt; a new attempt uses the
+  // active exam and its default (most-logged, else primary) tier.
+  const editShape = attempt
+    ? scope.resolveShape(attempt.examId, attempt.tierId)
+    : null;
+  const activeExam = scope.exams
+    ? (scope.exams.builtIn.find((exam) => exam.id === scope.activeExamId) ??
+      null)
+    : null;
+  const [tierId, setTierId] = useState(
+    () =>
+      attempt?.tierId ??
+      defaultTierId(activeExam, knownAttempts, scope.activeExamId),
+  );
+  const tierOptions: { id: string; label: string }[] = attempt
+    ? []
+    : scope.exams
+      ? (scope.exams.builtIn.find((exam) => exam.id === scope.activeExamId)
+          ?.tiers ?? []).map((tier) => ({ id: tier.id, label: tier.label }))
+      : [];
+
+  // While the exams payload is still loading the raw tierId may not resolve
+  // ("main" default for built-ins); normalize to the exam's primary tier so
+  // the select, the pattern, and the marks copy always agree.
+  const effectiveTierId =
+    (!attempt &&
+      tierOptions.some((tier) => tier.id === tierId)
+      ? tierId
+      : (activeExam?.primaryTierId ?? tierOptions[0]?.id ?? tierId)) ||
+    tierId;
+  const shape: PatternShape =
+    editShape ??
+    scope.resolveShape(
+      scope.activeExamId,
+      attempt?.tierId ?? effectiveTierId,
+    ) ?? {
+      examId: "cgl",
+      tierId: "tier2",
+      subjects: [
+        { subjectId: "quant", questions: 30, qualifying: false },
+        { subjectId: "reasoning", questions: 30, qualifying: false },
+        { subjectId: "english", questions: 45, qualifying: false },
+        { subjectId: "ga", questions: 25, qualifying: false },
+        { subjectId: "computer", questions: 20, qualifying: true },
+      ],
+      marking: { correct: 3, incorrect: 1 },
+      sections: [],
+    };
+  const examName =
+    (scope.exams
+      ? (scope.exams.builtIn.find(
+          (exam) => exam.id === shape.examId,
+        )?.name ??
+        scope.exams.customExams.find((exam) => exam.id === shape.examId)
+          ?.name)
+      : null) ?? "SSC CGL";
   const [values, setValues] = useState<AttemptInput>(
     attempt ?? {
       name: initialName ?? "",
       platform: "",
       completedAt: "",
       type: "full",
-      subjects: MAIN_SUBJECT_IDS.map((id) => blankSubject(id)),
+      examId: shape.examId,
+      tierId: shape.tierId,
+      marking: shape.marking,
+      subjects: meritSubjectIds(shape).map((id) => blankSubject(id, shape)),
       notes: "",
       source: "manual",
     },
@@ -147,18 +241,6 @@ export function MockForm({
   // the same merge path as a paste import, then tell the shell it is used.
   const prefillDraft = initialDraft;
   const prefillAppliedRef = useRef(false);
-  useEffect(() => {
-    if (!prefillDraft || prefillAppliedRef.current) return;
-    prefillAppliedRef.current = true;
-    applyExtracted({
-      values: prefillDraft.values,
-      warnings: [],
-      date: prefillDraft.date,
-    });
-    onPrefillApplied?.();
-    // Runs once per mount; the deps intentionally mirror the initial state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const set = <K extends keyof AttemptInput>(
     key: K,
     value: AttemptInput[K],
@@ -177,31 +259,50 @@ export function MockForm({
       type,
       subjects: (
         type === "full"
-          ? MAIN_SUBJECT_IDS
+          ? meritSubjectIds(shape)
           : type === "sectional"
-            ? SECTIONS.section1.subjectIds
-            : (["quant"] as const)
+            ? (shape.sections[0]?.subjectIds ?? [])
+            : meritSubjectIds(shape).slice(0, 1)
       ).map(
-        (id) => v.subjects.find((s) => s.subjectId === id) ?? blankSubject(id),
+        (id) => v.subjects.find((s) => s.subjectId === id) ?? blankSubject(id, shape),
+      ),
+    }));
+    setDuplicateReviewed(false);
+  };
+  /** Switch the tier: reset the subject rows to the new pattern. */
+  const chooseTier = (nextTierId: string) => {
+    const nextShape = scope.resolveShape(scope.activeExamId, nextTierId);
+    if (!nextShape) return;
+    setTierId(nextTierId);
+    setValues((v) => ({
+      ...v,
+      examId: nextShape.examId,
+      tierId: nextShape.tierId,
+      marking: nextShape.marking,
+      type: "full",
+      subjects: meritSubjectIds(nextShape).map((id) =>
+        blankSubject(id, nextShape),
       ),
     }));
     setDuplicateReviewed(false);
   };
   const computedValues = calculatedEntry(values);
   const stats = totals(computedValues);
-  const includesComputer =
+  const qualifyingSubject = shape.subjects.find((s) => s.qualifying);
+  const includesQualifying =
     values.type === "full" &&
-    values.subjects.some((s) => s.subjectId === "computer");
-  const computer = includesComputer
-    ? values.subjects.find((s) => s.subjectId === "computer")
-    : undefined;
+    qualifyingSubject != null &&
+    values.subjects.some((s) => s.subjectId === qualifyingSubject.subjectId);
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      const input = attemptSchema.parse({
+      const input = attemptSchemaFor(shape).parse({
         ...computedValues,
+        examId: shape.examId,
+        tierId: shape.tierId,
+        marking: shape.marking,
         completedAt: date ? completionTimestamp(date) : "",
       });
       if (!attempt && !duplicateReviewed) {
@@ -256,31 +357,42 @@ export function MockForm({
       : values.type;
     let subjects = values.subjects;
     if (incomingSubjects?.length) {
-      const section = sectionForSubjects(incomingSubjects);
+      const section = sectionForSubjects(incomingSubjects, shape.sections);
+      const meritIds = meritSubjectIds(shape);
+      const qualifyingIds = shape.subjects
+        .filter((s) => s.qualifying)
+        .map((s) => s.subjectId);
       const ids: SubjectId[] =
         type === "full"
           ? [
-              ...MAIN_SUBJECT_IDS,
-              ...(incomingSubjects.some((s) => s.subjectId === "computer")
-                ? (["computer"] as const)
-                : []),
+              ...meritIds,
+              ...qualifyingIds.filter((id) =>
+                incomingSubjects.some((s) => s.subjectId === id),
+              ),
             ]
           : type === "sectional"
             ? section
-              ? [...SECTIONS[section].subjectIds]
+              ? [...section.subjectIds]
               : incomingSubjects.map((s) => s.subjectId)
             : [incomingSubjects[0].subjectId];
       subjects = ids.map((id) => {
         const base =
-          values.subjects.find((s) => s.subjectId === id) ?? blankSubject(id);
+          values.subjects.find((s) => s.subjectId === id) ??
+          blankSubject(id, shape);
         const found = incomingSubjects.find((s) => s.subjectId === id);
         if (!found) return base;
         return {
           ...base,
           ...found,
           subjectId: id,
+          qualifying:
+            shape.subjects.find((s) => s.subjectId === id)?.qualifying ??
+            false,
           questions:
-            type === "full" ? SUBJECTS[id].questions : found.questions,
+            type === "full"
+              ? (shape.subjects.find((s) => s.subjectId === id)?.questions ??
+                found.questions)
+              : found.questions,
         };
       });
     }
@@ -306,8 +418,21 @@ export function MockForm({
     setDuplicateReviewed(false);
     setError("");
   }
+  // Runs once per mount; the deps intentionally mirror the initial state.
+  useEffect(() => {
+    if (!prefillDraft || prefillAppliedRef.current) return;
+    prefillAppliedRef.current = true;
+    applyExtracted({
+      values: prefillDraft.values,
+      warnings: [],
+      date: prefillDraft.date,
+    });
+    onPrefillApplied?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function importPaste() {
-    applyExtracted(parseReport(paste));
+    applyExtracted(parseReport(shape, paste));
   }
   async function importWithAi() {
     setAiBusy(true);
@@ -316,7 +441,11 @@ export function MockForm({
     try {
       const result = await api<ExtractResponse>("/api/ai/extract", {
         method: "POST",
-        body: JSON.stringify({ text: paste }),
+        body: JSON.stringify({
+          text: paste,
+          examId: shape.examId,
+          tierId: shape.tierId,
+        }),
       });
       setAiDraft(result.draft);
       setAiReviewing(true);
@@ -331,7 +460,7 @@ export function MockForm({
   function applyAiDraft() {
     if (!aiDraft) return;
     try {
-      const reviewed = extractionToAttempt(aiDraft, values.notes);
+      const reviewed = extractionToAttempt(shape, aiDraft, values.notes);
       setValues(reviewed.values);
       setDate(reviewed.date);
       setPlatformChoice(platformSelection(reviewed.values.platform));
@@ -413,6 +542,7 @@ export function MockForm({
           {aiDraft && aiReviewing ? (
             <ExtractionReview
               draft={aiDraft}
+              shape={shape}
               onChange={setAiDraft}
               onUse={applyAiDraft}
               onBack={() => setAiReviewing(false)}
@@ -548,7 +678,7 @@ export function MockForm({
                 <input
                   required
                   maxLength={150}
-                  placeholder="e.g. SSC CGL Tier 2 — Mock 12"
+                  placeholder={`e.g. ${examName} — Mock 12`}
                   value={values.name}
                   onChange={(e) => set("name", e.target.value)}
                 />
@@ -603,6 +733,21 @@ export function MockForm({
                   onChange={(e) => setDate(e.target.value)}
                 />
               </label>
+              {!attempt && tierOptions.length > 1 && (
+                <label>
+                  Tier / paper
+                  <select
+                    value={effectiveTierId}
+                    onChange={(e) => chooseTier(e.target.value)}
+                  >
+                    {tierOptions.map((tier) => (
+                      <option key={tier.id} value={tier.id}>
+                        {tier.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label>
                 Mock type
                 <select
@@ -611,9 +756,21 @@ export function MockForm({
                     chooseType(e.target.value as AttemptInput["type"])
                   }
                 >
-                  <option value="full">Full mock · 390 marks</option>
+                  <option value="full">
+                    Full mock ·{" "}
+                    {meritSubjectIds(shape).reduce(
+                      (sum, id) =>
+                        sum +
+                        (shape.subjects.find((s) => s.subjectId === id)
+                          ?.questions ?? 0),
+                      0,
+                    ) * shape.marking.correct}{" "}
+                    marks
+                  </option>
                   <option value="subject">Subject mock</option>
-                  <option value="sectional">Sectional mock</option>
+                  {shape.sections.length > 0 && (
+                    <option value="sectional">Sectional mock</option>
+                  )}
                 </select>
               </label>
               {values.type === "subject" && (
@@ -623,13 +780,13 @@ export function MockForm({
                     value={values.subjects[0]?.subjectId}
                     onChange={(e) =>
                       set("subjects", [
-                        blankSubject(e.target.value as SubjectId),
+                        blankSubject(e.target.value as SubjectId, shape),
                       ])
                     }
                   >
-                    {subjectIds.map((id) => (
-                      <option key={id} value={id}>
-                        {SUBJECTS[id].name}
+                    {shape.subjects.map((s) => (
+                      <option key={s.subjectId} value={s.subjectId}>
+                        {SUBJECTS[s.subjectId].name}
                       </option>
                     ))}
                   </select>
@@ -639,48 +796,77 @@ export function MockForm({
                 <label>
                   Section
                   <select
-                    value={sectionForSubjects(values.subjects) ?? "section1"}
-                    onChange={(e) =>
+                    value={
+                      sectionForSubjects(values.subjects, shape.sections)
+                        ?.id ?? shape.sections[0]?.id
+                    }
+                    onChange={(e) => {
+                      const section = shape.sections.find(
+                        (s) => s.id === e.target.value,
+                      );
+                      if (!section) return;
                       set(
                         "subjects",
-                        SECTIONS[e.target.value as SectionId].subjectIds.map(
-                          (id) => blankSubject(id),
+                        section.subjectIds.map((id) =>
+                          blankSubject(id, shape),
                         ),
-                      )
-                    }
+                      );
+                    }}
                   >
-                    {sectionIds.map((id) => (
-                      <option key={id} value={id}>
-                        {SECTIONS[id].name} · {SECTIONS[id].description} ·{" "}
-                        {SECTIONS[id].maxScore} marks
+                    {shape.sections.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.name} · {section.description} ·{" "}
+                        {section.subjectIds.reduce(
+                          (sum, id) =>
+                            sum +
+                            (shape.subjects.find((s) => s.subjectId === id)
+                              ?.questions ?? 0),
+                          0,
+                        ) * shape.marking.correct}{" "}
+                        marks
                       </option>
                     ))}
                   </select>
                 </label>
               )}
             </div>
-            {values.type === "full" && (
+            {values.type === "full" && qualifyingSubject && (
               <div className="mt-5 border-t border-rule-soft pt-4">
                 <label className="!flex flex-row items-center gap-3 text-sm text-ink">
                   <input
                     type="checkbox"
-                    checked={includesComputer}
+                    checked={includesQualifying}
                     onChange={(e) =>
                       set(
                         "subjects",
                         e.target.checked
-                          ? [...values.subjects, blankSubject("computer")]
+                          ? [
+                              ...values.subjects,
+                              blankSubject(qualifyingSubject.subjectId, shape),
+                            ]
                           : values.subjects.filter(
-                              (s) => s.subjectId !== "computer",
+                              (s) =>
+                                s.subjectId !== qualifyingSubject.subjectId,
                             ),
                       )
                     }
                   />
-                  Include Computer Knowledge
+                  Include {SUBJECTS[qualifyingSubject.subjectId].name}
                 </label>
                 <p className="text-xs muted mt-2">
-                  Computer is scored separately from the main 390 marks. Its
-                  time is included in overall time.
+                  {SUBJECTS[qualifyingSubject.subjectId].short} is scored
+                  separately from the main{" "}
+                  {formatNumber(
+                    meritSubjectIds(shape).reduce(
+                      (sum, id) =>
+                        sum +
+                        (shape.subjects.find((s) => s.subjectId === id)
+                          ?.questions ?? 0),
+                      0,
+                    ) * shape.marking.correct,
+                    0,
+                  )}{" "}
+                  marks. Its time is included in overall time.
                 </p>
               </div>
             )}
@@ -689,14 +875,18 @@ export function MockForm({
             <div className="flex flex-wrap items-baseline justify-between gap-2 mb-6">
               <h2 className="panel-title">Subject results</h2>
               <p className="text-xs muted">
-                +3 correct · −1 incorrect · 0 unattempted
+                +{shape.marking.correct} correct ·{" "}
+                {shape.marking.incorrect > 0
+                  ? `−${shape.marking.incorrect} incorrect`
+                  : "no penalty"}{" "}
+                · 0 unattempted
               </p>
             </div>
             <div className="space-y-7">
               {values.subjects.map((s, i) => {
                 const sectionHeading =
                   values.type === "full"
-                    ? fullMockSectionHeading(s.subjectId)
+                    ? fullMockSectionHeading(s.subjectId, shape)
                     : null;
                 return (
                 <div key={s.subjectId}>
@@ -855,13 +1045,26 @@ export function MockForm({
                 {stats.attempted} attempted · {formatNumber(stats.accuracy, 2)}
                 {stats.accuracy == null ? "" : "%"} accuracy · {formatTime(computedValues.overallTimeSeconds)} total
               </p>
-              {computer && (
-                <p className="text-xs muted mt-2">
-                  Computer:{" "}
-                  {formatNumber(computer.correct * 3 - computer.incorrect)} / 60
-                  · tracked separately
-                </p>
-              )}
+              {includesQualifying && qualifyingSubject &&
+                (() => {
+                  const row = values.subjects.find(
+                    (s) => s.subjectId === qualifyingSubject.subjectId,
+                  );
+                  if (!row) return null;
+                  return (
+                    <p className="text-xs muted mt-2">
+                      {SUBJECTS[qualifyingSubject.subjectId].short}:{" "}
+                      {formatScore(
+                        row.scoreOverride ??
+                          row.correct * shape.marking.correct -
+                            row.incorrect * shape.marking.incorrect,
+                      )}{" "}
+                      /{" "}
+                      {row.questions * shape.marking.correct} · tracked
+                      separately
+                    </p>
+                  );
+                })()}
             </div>
             <div className="action-row gap-3 sm:w-auto">
               <Button type="button" variant="outline" onClick={onClose}>

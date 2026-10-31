@@ -59,6 +59,14 @@ model MockAttempt {
   platform           String          @db.VarChar(80)
   completedAt        DateTime        @db.Timestamptz(3)
   type               MockType
+  // Which exam and tier/paper this attempt belongs to ("cgl"/"chsl"/"cpo"
+  // or a CustomExam id; tier "tier1"/"tier2"/"paper1"/"paper2"/"main").
+  examId             String          @default("cgl") @db.VarChar(40)
+  tierId             String          @default("tier2") @db.VarChar(40)
+  // Marking scheme snapshot of the tier pattern at entry time — the record
+  // stays self-contained if the catalog or a custom exam changes later.
+  markingCorrect     Float           @default(3)
+  markingIncorrect   Float           @default(1)
   scoreOverride      Float?
   overallTimeSeconds Int?
   rank               Int?
@@ -66,7 +74,7 @@ model MockAttempt {
   percentile         Float?
   notes              String          @default("") @db.VarChar(5000)
   source             ImportSource    @default(manual)
-  schemaVersion      Int             @default(1)
+  schemaVersion      Int             @default(2)
   createdAt          DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
   subjects           SubjectResult[]
@@ -74,6 +82,7 @@ model MockAttempt {
   @@index([userId, completedAt])
   @@index([userId, platform, completedAt])
   @@index([userId, type, completedAt])
+  @@index([userId, examId, completedAt])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "MockAttempt_name_trgm_idx")
   @@index([notes(ops: raw("gin_trgm_ops"))], type: Gin, map: "MockAttempt_notes_trgm_idx")
   @@schema("ssc_insight")
@@ -86,6 +95,9 @@ model SubjectResult {
   questions     Int
   correct       Int
   incorrect     Int
+  // Qualifying subjects are excluded from a full mock's merit total
+  // (e.g. Computer Knowledge in CGL Tier 2).
+  qualifying    Boolean @default(false)
   scoreOverride Float?
   timeSeconds   Int?
   attempt       MockAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
@@ -96,9 +108,28 @@ model SubjectResult {
   @@schema("ssc_insight")
 }
 
+// User-defined exams: name + subject slots (canonical SubjectIds) + marking.
+// One implicit tier ("main"). Attempts reference the row id as their examId.
+model CustomExam {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String   @db.VarChar(80)
+  subjects  Json
+  marking   Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@schema("ssc_insight")
+}
+
+// Per-user workspace scope: which built-in exams are enabled, which exam is
+// active, and one target score per exam. One row per user.
 model TrackerSettings {
-  userId      String @id
-  targetScore Float?
+  userId       String @id
+  activeExamId String @default("cgl") @db.VarChar(40)
+  enabledExams Json   @default("[\"cgl\"]")
+  examTargets  Json   @default("{}")
 
   @@schema("ssc_insight")
 }

@@ -184,8 +184,16 @@ export const HistoryPanel = memo(function HistoryPanel({
             icon="target"
             tile="bg-positive-soft text-positive"
             label="Average score"
-            value={stats.avgScore != null ? n(Math.round(stats.avgScore)) : "—"}
-            suffix={stats.avgScore != null ? "/ 390" : undefined}
+            value={
+              stats.avgScore != null
+                ? n(Math.round(stats.avgScore * 100) / 100)
+                : "—"
+            }
+            suffix={
+              stats.avgScore != null
+                ? `/ ${stats.avgScoreMax ?? "\u22ef"}`
+                : undefined
+            }
             delta={
               stats.avgScorePct != null
                 ? { text: `${n(stats.avgScorePct)}%`, good: true }

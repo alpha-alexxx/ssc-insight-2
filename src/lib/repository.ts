@@ -4,11 +4,19 @@ import type { Prisma } from "@/generated/prisma/client";
 import {
   type AttemptInput,
   type Filters,
+  type PatternShape,
   filtersSchema,
   type PagedAttempts,
   type PageSize,
   type SortKey,
 } from "./domain";
+import type { CustomExamDef } from "./exams";
+import {
+  getTrackerSettings,
+  invalidateSettings,
+  toCustomExamDef,
+  type TrackerSettingsShape,
+} from "./exam-settings";
 import {
   attemptComparator,
   buildAttemptStats,
@@ -32,7 +40,6 @@ import {
   type ParsedBackup,
 } from "./backup";
 import { RequestError } from "./api";
-import { LruCache } from "./cache";
 
 /**
  * Hard server-side cap on a single unpaged listAttempts response. Protects
@@ -44,13 +51,7 @@ import { LruCache } from "./cache";
  */
 export const LIST_ATTEMPTS_MAX = 500;
 
-/** Per-user settings cache. TrackerSettings is one row per user, read on every
- * page load, written only when the user changes their target. 60s TTL with
- * write-through invalidation. Saves one DB roundtrip per dashboard load. */
-const settingsCache = new LruCache<string, { targetScore: number | null }>({
-  ttlMs: 60_000,
-  maxBytes: 256_000,
-});
+
 
 export async function listAttempts(userId: string, filters: Filters = {}) {
   const rows = await database().mockAttempt.findMany({
@@ -89,6 +90,10 @@ const sortRowSelect = {
   percentile: true,
   scoreOverride: true,
   overallTimeSeconds: true,
+  examId: true,
+  tierId: true,
+  markingCorrect: true,
+  markingIncorrect: true,
   subjects: {
     orderBy: { position: "asc" as const },
     select: {
@@ -96,6 +101,7 @@ const sortRowSelect = {
       questions: true,
       correct: true,
       incorrect: true,
+      qualifying: true,
       scoreOverride: true,
       timeSeconds: true,
     },
@@ -114,11 +120,16 @@ function toSortRow(row: SortRowDb): AttemptSortRow {
     percentile: row.percentile,
     scoreOverride: row.scoreOverride,
     overallTimeSeconds: row.overallTimeSeconds,
+    marking: {
+      correct: row.markingCorrect,
+      incorrect: row.markingIncorrect,
+    },
     subjects: row.subjects.map((s) => ({
       subjectId: s.subjectId,
       questions: s.questions,
       correct: s.correct,
       incorrect: s.incorrect,
+      qualifying: s.qualifying,
       scoreOverride: s.scoreOverride,
       timeSeconds: s.timeSeconds,
     })),
@@ -232,9 +243,9 @@ export async function listAttemptsPaged(
  * AI context data. Notes are omitted in SQL so private note text is never
  * loaded into server memory or placed in a prompt.
  */
-export async function listAttemptsForAi(userId: string) {
+export async function listAttemptsForAi(userId: string, examId?: string) {
   const rows = await database().mockAttempt.findMany({
-    where: { userId },
+    where: { userId, ...(examId ? { examId } : {}) },
     include: attemptInclude,
     omit: { notes: true },
     orderBy: [{ completedAt: "desc" }, { id: "asc" }],
@@ -251,10 +262,14 @@ export async function getAttempt(userId: string, id: string) {
   return toAttempt(row);
 }
 
-export async function createAttempt(userId: string, input: AttemptInput) {
+export async function createAttempt(
+  userId: string,
+  input: AttemptInput,
+  pattern?: PatternShape,
+) {
   const attempt = toAttempt(
     await database().mockAttempt.create({
-      data: { id: randomUUID(), ...attemptData(input), userId },
+      data: { id: randomUUID(), ...attemptData(input, pattern), userId },
       include: attemptInclude,
     }),
   );
@@ -267,8 +282,9 @@ export async function updateAttempt(
   userId: string,
   id: string,
   input: AttemptInput,
+  pattern?: PatternShape,
 ) {
-  const data = attemptData(input);
+  const data = attemptData(input, pattern);
   return toAttempt(
     await database().mockAttempt.update({
       where: { id, userId },
@@ -286,50 +302,42 @@ export async function deleteAttempt(userId: string, id: string) {
   return { id };
 }
 
-export async function getSettings(userId: string) {
-  return settingsCache.getOrLoad(userId, async () => {
-    const row = await database().trackerSettings.findUnique({
-      where: { userId },
-      select: { targetScore: true },
-    });
-    return { targetScore: row?.targetScore ?? null };
-  });
-}
-
-export async function saveSettings(userId: string, targetScore: number | null) {
-  const row = await database().trackerSettings.upsert({
-    where: { userId },
-    create: { userId, targetScore },
-    update: { targetScore },
-    select: { targetScore: true },
-  });
-  // Write-through: refresh the cache immediately so the next read is a hit.
-  settingsCache.set(userId, { targetScore: row.targetScore });
-  return { targetScore: row.targetScore };
-}
-
-/**
- * Drop the cached settings row for a user. Call this whenever a code path
- * writes TrackerSettings outside saveSettings() (e.g. backup import).
- */
-export function invalidateSettings(userId: string) {
-  settingsCache.invalidate(userId);
-}
+// Settings live in exam-settings.ts since the backup import path also
+// re-exports invalidation from here for existing importers.
+export {
+  getTrackerSettings as getSettings,
+  saveTrackerSettings as saveSettings,
+  invalidateSettings,
+  loadExamContext,
+  type TrackerSettingsShape,
+} from "./exam-settings";
 
 export async function exportBackup(userId: string) {
   return database().$transaction(
     async (tx) => {
-      const [rows, settings] = await Promise.all([
+      const [rows, settings, customExamRows] = await Promise.all([
         tx.mockAttempt.findMany({
           where: { userId },
           include: attemptInclude,
           orderBy: [{ completedAt: "asc" }, { id: "asc" }],
         }),
-        tx.trackerSettings.findUnique({ where: { userId } }),
+        getTrackerSettings(userId),
+        tx.customExam.findMany({
+          where: { userId },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, name: true, subjects: true, marking: true },
+        }),
       ]);
       return buildBackup(
         rows.map(toAttempt),
-        settings?.targetScore ?? null,
+        {
+          activeExamId: settings.activeExamId,
+          enabledExams: settings.enabledExams,
+          examTargets: settings.examTargets,
+        },
+        customExamRows
+          .map(toCustomExamDef)
+          .filter((exam): exam is CustomExamDef => exam != null),
       );
     },
     { isolationLevel: "RepeatableRead" },
@@ -339,9 +347,9 @@ export async function exportBackup(userId: string) {
 function importFingerprint(input: {
   userId: string;
   existing: string[];
-  currentTarget: number | null;
+  currentSettings: string | null;
   incoming: string[];
-  target: number | null;
+  settings: string | null;
   mode: ImportOptions["mode"];
   applyTarget: boolean;
 }) {
@@ -350,9 +358,9 @@ function importFingerprint(input: {
       JSON.stringify([
         input.userId,
         [...input.existing].sort(),
-        input.currentTarget,
+        input.currentSettings,
         [...input.incoming].sort(),
-        input.target,
+        input.settings,
         input.mode,
         input.applyTarget,
       ]),
@@ -372,35 +380,44 @@ export async function importBackup(
 ): Promise<BackupPreview | ImportResult> {
   return database().$transaction(
     async (tx) => {
-      const [existingRows, settings] = await Promise.all([
+      const [existingRows, currentSettings] = await Promise.all([
         tx.mockAttempt.findMany({
           where: { userId },
           include: attemptInclude,
         }),
-        tx.trackerSettings.findUnique({ where: { userId } }),
+        getTrackerSettings(userId),
       ]);
       const existing = existingRows.map(toAttempt);
-      const currentTarget = settings?.targetScore ?? null;
       const plan = planImport(existing, backup.attempts, options.mode);
+      const incomingSettings = backup.hasSettings ? backup.settings : null;
+      const settingsKey = (value: TrackerSettingsShape | null) =>
+        value == null
+          ? null
+          : JSON.stringify([
+              value.activeExamId,
+              [...value.enabledExams].sort(),
+              Object.entries(value.examTargets).sort(([a], [b]) =>
+                a.localeCompare(b),
+              ),
+            ]);
       const fingerprint = importFingerprint({
         userId,
         existing: existing.map((attempt) => attemptFingerprint(attempt)),
-        currentTarget,
+        currentSettings: settingsKey(currentSettings),
         incoming: backup.attempts.map((attempt) => attemptFingerprint(attempt)),
-        target: backup.hasSettings ? backup.targetScore : null,
+        settings: incomingSettings ? settingsKey(incomingSettings) : null,
         mode: options.mode,
         applyTarget: options.applyTarget,
       });
-      const targetAvailable = backup.hasSettings;
-      const targetApplied = targetAvailable && options.applyTarget;
-      const targetChanged =
-        targetApplied && currentTarget !== backup.targetScore;
-      const target = {
-        available: targetAvailable,
-        applied: targetApplied,
-        current: currentTarget,
-        incoming: targetAvailable ? backup.targetScore : null,
-        changed: targetChanged,
+      const settingsAvailable = backup.hasSettings;
+      const settingsApplied = settingsAvailable && options.applyTarget;
+      const settingsChanged =
+        settingsApplied &&
+        settingsKey(currentSettings) !== settingsKey(incomingSettings);
+      const settingsPreview = {
+        available: settingsAvailable,
+        applied: settingsApplied,
+        changed: settingsChanged,
       };
       if (options.preview)
         return {
@@ -418,7 +435,7 @@ export async function importBackup(
           conflicts: plan.conflicts,
           existingTargetCount: existing.length,
           willDelete: options.mode === "replace" ? existing.length : 0,
-          target,
+          settings: settingsPreview,
           samples: {
             skippedDuplicates: plan.skippedSamples,
             conflicts: plan.conflictSamples,
@@ -469,16 +486,45 @@ export async function importBackup(
         });
       }
 
-      let targetScore = currentTarget;
-      let appliedTarget = false;
-      if (targetApplied) {
-        const row = await tx.trackerSettings.upsert({
-          where: { userId },
-          create: { userId, targetScore: backup.targetScore },
-          update: { targetScore: backup.targetScore },
+      // Custom exams ride along with v3 backups; rows the account already
+      // has (same id) are left untouched so re-imports stay idempotent.
+      if (backup.customExams.length) {
+        const existingIds = await tx.customExam.findMany({
+          where: { userId, id: { in: backup.customExams.map((e) => e.id) } },
+          select: { id: true },
         });
-        targetScore = row.targetScore;
-        appliedTarget = true;
+        const have = new Set(existingIds.map((row) => row.id));
+        const missing = backup.customExams.filter((exam) => !have.has(exam.id));
+        if (missing.length)
+          await tx.customExam.createMany({
+            data: missing.map((exam) => ({
+              id: exam.id,
+              userId,
+              name: exam.name,
+              subjects: exam.subjects,
+              marking: exam.marking,
+            })),
+          });
+      }
+
+      let appliedSettings = false;
+      if (settingsApplied && incomingSettings) {
+        await tx.trackerSettings.upsert({
+          where: { userId },
+          create: {
+            userId,
+            activeExamId: incomingSettings.activeExamId,
+            enabledExams: incomingSettings.enabledExams,
+            examTargets: incomingSettings.examTargets,
+          },
+          update: {
+            activeExamId: incomingSettings.activeExamId,
+            enabledExams: incomingSettings.enabledExams,
+            examTargets: incomingSettings.examTargets,
+          },
+        });
+        invalidateSettings(userId);
+        appliedSettings = true;
       }
 
       return {
@@ -487,7 +533,7 @@ export async function importBackup(
         skipped: plan.skippedDuplicates,
         conflicts: plan.conflicts,
         deleted,
-        target: { applied: appliedTarget, targetScore },
+        settings: { applied: appliedSettings },
       } satisfies ImportResult;
     },
     {

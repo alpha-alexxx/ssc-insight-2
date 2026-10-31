@@ -1,12 +1,11 @@
 import { z } from "zod";
 import {
-  attemptSchema,
-  MAIN_SUBJECT_IDS,
-  SECTIONS,
   SUBJECTS,
+  attemptSchemaFor,
   sectionForSubjects,
   subjectIds,
   type AttemptInput,
+  type PatternShape,
   type SubjectId,
 } from "../domain";
 import { completionTimestamp } from "../mock-entry";
@@ -183,13 +182,19 @@ function exactInteger(
   return value;
 }
 
-function inferType(subjects: readonly { subjectId: SubjectId }[]) {
+function inferType(
+  subjects: readonly { subjectId: SubjectId }[],
+  shape: PatternShape,
+) {
   const ids = new Set(subjects.map((subject) => subject.subjectId));
+  const meritIds = shape.subjects.filter((s) => !s.qualifying).map((s) => s.subjectId);
+  const knownIds = shape.subjects.map((s) => s.subjectId);
   const hasFullLayout =
-    MAIN_SUBJECT_IDS.every((id) => ids.has(id)) &&
-    [...ids].every((id) => MAIN_SUBJECT_IDS.includes(id as never) || id === "computer");
+    meritIds.every((id) => ids.has(id)) &&
+    [...ids].every((id) => knownIds.includes(id));
   if (hasFullLayout) return "full" as const;
-  if (sectionForSubjects(subjects)) return "sectional" as const;
+  if (shape.sections.length && sectionForSubjects(subjects, shape.sections))
+    return "sectional" as const;
   if (subjects.length === 1) return "subject" as const;
   return null;
 }
@@ -219,6 +224,7 @@ function deriveCounts(
   subject: ExtractedSubjectDraft,
   path: string,
   issues: ExtractionIssue[],
+  marking: { correct: number; incorrect: number },
 ) {
   let attempted = subject.reported.attempted;
   if (
@@ -233,6 +239,9 @@ function deriveCounts(
   let incorrect = subject.incorrect;
   const score = subject.reported.score;
   const derived = new Set(subject.derivedFields);
+  // Back-solve counts from the reported score against the tier's marking
+  // scheme: score = correct*Mc - incorrect*Mi, attempted = correct + incorrect.
+  const span = marking.correct + marking.incorrect;
 
   if (attempted != null) {
     if (correct != null && incorrect == null) {
@@ -242,17 +251,19 @@ function deriveCounts(
       correct = attempted - incorrect;
       derived.add("correct");
     } else if (correct == null && incorrect == null && score != null) {
-      correct = (score + attempted) / 4;
+      correct = (score + attempted * marking.incorrect) / span;
       incorrect = attempted - correct;
       derived.add("correct");
       derived.add("incorrect");
     }
   } else if (score != null) {
     if (correct != null && incorrect == null) {
-      incorrect = correct * 3 - score;
-      derived.add("incorrect");
+      // score = correct*Mc - incorrect*Mi; with Mi = 0 any wrong count fits.
+      incorrect =
+        marking.incorrect > 0 ? (correct * marking.correct - score) / marking.incorrect : null;
+      if (incorrect != null) derived.add("incorrect");
     } else if (incorrect != null && correct == null) {
-      correct = (score + incorrect) / 3;
+      correct = (score + incorrect * marking.incorrect) / marking.correct;
       derived.add("correct");
     }
   }
@@ -276,7 +287,7 @@ function deriveCounts(
   return { ...subject, correct, incorrect, derivedFields: [...derived] };
 }
 
-function localIssues(draft: Omit<ExtractionDraft, "issues">) {
+function localIssues(draft: Omit<ExtractionDraft, "issues">, shape: PatternShape) {
   const issues: ExtractionIssue[] = [];
   if (!draft.name?.trim())
     issues.push(issue("MISSING_NAME", "Enter the mock name.", "name"));
@@ -450,7 +461,9 @@ function localIssues(draft: Omit<ExtractionDraft, "issues">) {
       subject.correct != null &&
       subject.incorrect != null &&
       subject.reported.score != null &&
-      subject.correct * 3 - subject.incorrect !== subject.reported.score
+      subject.correct * shape.marking.correct -
+        subject.incorrect * shape.marking.incorrect !==
+        subject.reported.score
     )
       issues.push(
         issue(
@@ -473,26 +486,32 @@ function localIssues(draft: Omit<ExtractionDraft, "issues">) {
 
   if (draft.type === "full") {
     const ids = draft.subjects.map((subject) => subject.subjectId);
+    const meritIds = shape.subjects
+      .filter((s) => !s.qualifying)
+      .map((s) => s.subjectId);
+    const knownIds = shape.subjects.map((s) => s.subjectId);
     if (
-      MAIN_SUBJECT_IDS.some((id) => !ids.includes(id)) ||
-      ids.some((id) => id !== "computer" && !MAIN_SUBJECT_IDS.includes(id as never))
+      meritIds.some((id) => !ids.includes(id)) ||
+      ids.some((id) => !knownIds.includes(id))
     )
       issues.push(
         issue(
           "INVALID_FULL_LAYOUT",
-          "A full mock needs Quant, Reasoning, English, and General Awareness.",
+          `A full mock needs ${meritIds.map((id) => SUBJECTS[id].short).join(", ")}.`,
           "subjects",
         ),
       );
     draft.subjects.forEach((subject, index) => {
+      const pattern = shape.subjects.find((s) => s.subjectId === subject.subjectId);
       if (
+        pattern != null &&
         subject.questions != null &&
-        subject.questions !== SUBJECTS[subject.subjectId].questions
+        subject.questions !== pattern.questions
       )
         issues.push(
           issue(
             "INVALID_FULL_QUESTIONS",
-            `${SUBJECTS[subject.subjectId].short}: a full mock requires ${SUBJECTS[subject.subjectId].questions} questions.`,
+            `${SUBJECTS[subject.subjectId].short}: a full mock requires ${pattern.questions} questions.`,
             `subjects.${index}.questions`,
           ),
         );
@@ -506,11 +525,18 @@ function localIssues(draft: Omit<ExtractionDraft, "issues">) {
         "subjects",
       ),
     );
-  if (draft.type === "sectional" && !sectionForSubjects(draft.subjects))
+  if (
+    draft.type === "sectional" &&
+    (!shape.sections.length || !sectionForSubjects(draft.subjects, shape.sections))
+  )
     issues.push(
       issue(
         "INVALID_SECTION_LAYOUT",
-        "A sectional mock must be Quant + Reasoning or English + General Awareness.",
+        shape.sections.length
+          ? `A sectional mock must be one of: ${shape.sections
+              .map((section) => section.subjectIds.map((id) => SUBJECTS[id].short).join(" + "))
+              .join(", or ")}.`
+          : "This exam tier does not have sectional mocks.",
         "subjects",
       ),
     );
@@ -556,16 +582,20 @@ function localIssues(draft: Omit<ExtractionDraft, "issues">) {
   return issues;
 }
 
-export function validateExtractionDraft(draft: ExtractionDraft): ExtractionDraft {
-  return { ...draft, issues: localIssues(draft) };
+export function validateExtractionDraft(
+  shape: PatternShape,
+  draft: ExtractionDraft,
+): ExtractionDraft {
+  return { ...draft, issues: localIssues(draft, shape) };
 }
 
-export function parseExtraction(raw: string): ExtractionDraft {
-  return normaliseExtraction(parseModelJson(raw, z.unknown()));
+export function parseExtraction(shape: PatternShape, raw: string): ExtractionDraft {
+  return normaliseExtraction(shape, parseModelJson(raw, z.unknown()));
 }
 
-/** Convert untrusted model JSON into an editable, explicitly incomplete draft. */
-export function normaliseExtraction(raw: unknown): ExtractionDraft {
+/** Convert untrusted model JSON into an editable, explicitly incomplete draft.
+ * Shape first so a caller can never silently validate against the wrong exam. */
+export function normaliseExtraction(shape: PatternShape, raw: unknown): ExtractionDraft {
   const parsed = extractionModelSchema.parse(raw);
   const inputIssues: ExtractionIssue[] = [];
   const duplicateIds = new Set<SubjectId>();
@@ -609,24 +639,28 @@ export function normaliseExtraction(raw: unknown): ExtractionDraft {
     };
   });
 
-  const type = parsed.type ?? inferType(subjects);
+  const type = parsed.type ?? inferType(subjects, shape);
   const ids = new Set(subjects.map((subject) => subject.subjectId));
   const validFullLayout =
-    type === "full" && MAIN_SUBJECT_IDS.every((id) => ids.has(id));
+    type === "full" &&
+    shape.subjects
+      .filter((s) => !s.qualifying)
+      .every((s) => ids.has(s.subjectId));
   if (validFullLayout) {
-    subjects = subjects.map((subject) =>
-      subject.questions == null
+    subjects = subjects.map((subject) => {
+      const pattern = shape.subjects.find((s) => s.subjectId === subject.subjectId);
+      return pattern != null && subject.questions == null
         ? {
             ...subject,
-            questions: SUBJECTS[subject.subjectId].questions,
+            questions: pattern.questions,
             derivedFields: [...subject.derivedFields, "questions"],
           }
-        : subject,
-    );
+        : subject;
+    });
   }
   subjects = subjects.map(deriveQuestions);
   subjects = subjects.map((subject, index) =>
-    deriveCounts(subject, `subjects.${index}`, inputIssues),
+    deriveCounts(subject, `subjects.${index}`, inputIssues, shape.marking),
   );
 
   const date = normaliseDate(parsed.date);
@@ -679,30 +713,37 @@ export function normaliseExtraction(raw: unknown): ExtractionDraft {
   );
   return {
     ...base,
-    issues: [...inputIssues, ...duplicates, ...localIssues(base)],
+    issues: [...inputIssues, ...duplicates, ...localIssues(base, shape)],
   };
 }
 
 export function extractionToAttempt(
+  shape: PatternShape,
   draft: ExtractionDraft,
   notes: string,
 ): { values: AttemptInput; date: string; warnings: string[] } {
-  const reviewed = validateExtractionDraft(draft);
+  const reviewed = validateExtractionDraft(shape, draft);
   if (reviewed.issues.some((entry) => entry.severity === "blocker"))
     throw new Error("Resolve the highlighted extraction fields before continuing.");
   if (!reviewed.name || !reviewed.platform || !reviewed.date || !reviewed.type)
     throw new Error("Complete the required mock details before continuing.");
 
-  const values = attemptSchema.parse({
+  const values = attemptSchemaFor(shape).parse({
     name: reviewed.name,
     platform: reviewed.platform,
     completedAt: completionTimestamp(reviewed.date),
     type: reviewed.type,
+    examId: shape.examId,
+    tierId: shape.tierId,
+    marking: shape.marking,
     subjects: reviewed.subjects.map((subject) => ({
       subjectId: subject.subjectId,
       questions: subject.questions,
       correct: subject.correct,
       incorrect: subject.incorrect,
+      qualifying:
+        shape.subjects.find((s) => s.subjectId === subject.subjectId)
+          ?.qualifying ?? false,
       timeSeconds: subject.timeSeconds,
       scoreOverride: null,
     })),
@@ -744,4 +785,3 @@ export function blankExtractedSubject(subjectId: SubjectId): ExtractedSubjectDra
 }
 
 export const extractionSubjectIds = subjectIds;
-export const extractionSections = SECTIONS;

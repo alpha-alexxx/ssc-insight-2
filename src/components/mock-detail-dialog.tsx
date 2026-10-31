@@ -113,7 +113,7 @@ export function MockDetailDialog({
                   </thead>
                   <tbody>
                     {detail.subjects.map((s) => {
-                      const t = subjectStats(s);
+                      const t = subjectStats(s, detail.marking);
                       return (
                         <tr key={s.subjectId}>
                           <td>{SUBJECTS[s.subjectId].short}</td>

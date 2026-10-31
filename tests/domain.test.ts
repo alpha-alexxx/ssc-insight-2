@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  attemptSchema,
+  attemptSchemaFor,
   formatTime,
   totals,
   subjectStats,
@@ -12,11 +12,17 @@ import {
 } from "../src/lib/domain";
 import { analyze, filterAttempts } from "../src/lib/analytics";
 import { parseReport } from "../src/lib/report-parser";
+import { T2, MARKING } from "./fixtures/exam";
+
+const attemptSchema = attemptSchemaFor(T2);
 const input: AttemptInput = {
   name: "Mock 1",
   platform: "Testbook",
   completedAt: "2026-10-24T06:00:00.000Z",
   type: "full",
+  examId: "cgl",
+  tierId: "tier2",
+  marking: MARKING,
   notes: "",
   source: "manual",
   subjects: [
@@ -25,6 +31,7 @@ const input: AttemptInput = {
       questions: 30,
       correct: 14,
       incorrect: 6,
+      qualifying: false,
       timeSeconds: 1782,
     },
     {
@@ -32,6 +39,7 @@ const input: AttemptInput = {
       questions: 30,
       correct: 25,
       incorrect: 5,
+      qualifying: false,
       timeSeconds: 995,
     },
     {
@@ -39,6 +47,7 @@ const input: AttemptInput = {
       questions: 45,
       correct: 37,
       incorrect: 8,
+      qualifying: false,
       timeSeconds: 2112,
     },
     {
@@ -46,6 +55,7 @@ const input: AttemptInput = {
       questions: 25,
       correct: 14,
       incorrect: 6,
+      qualifying: false,
       timeSeconds: 588,
     },
   ],
@@ -88,10 +98,11 @@ test("zero attempts, negative scores, missing times and overrides", () => {
     questions: 10,
     correct: 0,
     incorrect: 0,
+    qualifying: false,
   };
-  assert.equal(subjectStats(s).accuracy, null);
-  assert.equal(subjectStats({ ...s, incorrect: 3 }).score, -3);
-  assert.equal(subjectStats({ ...s, scoreOverride: 12.5 }).score, 12.5);
+  assert.equal(subjectStats(s, MARKING).accuracy, null);
+  assert.equal(subjectStats({ ...s, incorrect: 3 }, MARKING).score, -3);
+  assert.equal(subjectStats({ ...s, scoreOverride: 12.5 }, MARKING).score, 12.5);
   assert.equal(
     totals({ ...input, subjects: [s], type: "subject" }).timeSeconds,
     null,
@@ -135,7 +146,13 @@ test("computer is excluded from full scoring and weighted accuracy is correct", 
       ...input,
       type: "subject",
       subjects: [
-        { subjectId: "computer", questions: 20, correct: 20, incorrect: 0 },
+        {
+          subjectId: "computer",
+          questions: 20,
+          correct: 20,
+          incorrect: 0,
+          qualifying: true,
+        },
       ],
     },
     "2",
@@ -204,7 +221,7 @@ const block = (
   `${name}\n${score}.00\n/${q * 3}\n${attempted}\n/${q}\nof total Qs\n${((correct / attempted) * 100).toFixed(2)}%\naccuracy\n${correct}\n/${q}\n${((correct / attempted) * 100).toFixed(2)}% accuracy\n${incorrect}\n/${q}\n${((incorrect / attempted) * 100).toFixed(2)}% of attempted\n${q - attempted}\n/${q}\nskipped\n${time}\nhh:mm:ss\n`;
 test("paste parser reads supplied platform layout", () => {
   const report = `Question Stats\nYour Score\n245\n/390\nRank\n436\n/1,267\nPercentile\n65.59%\nCorrect\n90\nIncorrect\n25\nUnattempted\n15\nAccuracy\n78.26\nSectional Summary\n${block("Quantitative Aptitude", 36, 30, 20, 14, 6, "0:29:42")}${block("General Intelligence and Reasoning", 70, 30, 30, 25, 5, "0:16:35")}${block("English Comprehension", 103, 45, 45, 37, 8, "0:35:12")}${block("General Awareness", 36, 25, 20, 14, 6, "0:09:48")}Overall\n245.00\n/390\n1:31:17\nhh:mm:ss`;
-  const result = parseReport(report);
+  const result = parseReport(T2, report);
   assert.equal(result.values.subjects?.length, 4);
   assert.equal(result.values.scoreOverride, 245);
   assert.equal(result.values.rank, 436);
@@ -215,8 +232,9 @@ test("paste parser reads supplied platform layout", () => {
   assert.deepEqual(result.warnings, []);
 });
 test("unsupported and inconsistent reports require review", () => {
-  assert.ok(parseReport("random text").warnings.length);
+  assert.ok(parseReport(T2, "random text").warnings.length);
   const p = parseReport(
+    T2,
     `Your Score\n100\n${block("Quantitative Aptitude", 36, 30, 20, 14, 6, "0:29:42")}`,
   );
   assert.ok(p.warnings.some((w) => w.includes("total differs")));

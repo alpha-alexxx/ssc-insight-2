@@ -5,12 +5,18 @@ import {
   attemptWhere,
   toAttempt,
 } from "../src/lib/attempt-persistence";
-import { attemptSchema, totals } from "../src/lib/domain";
+import { attemptSchemaFor, totals } from "../src/lib/domain";
+import { T2 } from "./fixtures/exam";
+
+const attemptSchema = attemptSchemaFor(T2);
 
 const input = attemptSchema.parse({
   name: "Imported legacy result",
   platform: "Testbook",
   type: "subject",
+  examId: "cgl",
+  tierId: "tier2",
+  marking: { correct: 3, incorrect: 1 },
   completedAt: "2026-10-23T18:30:00.000Z",
   notes: "Keep overrides",
   source: "paste",
@@ -59,13 +65,20 @@ test("Prisma mapping round-trips dates, nullable metrics, legacy overrides and s
 test("missing optional values normalize to null without inventing measurements", () => {
   const parsed = attemptSchema.parse({
     ...input,
+    type: "subject",
     scoreOverride: undefined,
     overallTimeSeconds: undefined,
     rank: undefined,
     participants: undefined,
     percentile: undefined,
     subjects: [
-      { subjectId: "computer", questions: 20, correct: 0, incorrect: 0 },
+      {
+        subjectId: "computer",
+        questions: 20,
+        correct: 0,
+        incorrect: 0,
+        qualifying: true,
+      },
     ],
   });
   const data = attemptData(parsed);
@@ -81,8 +94,8 @@ test("subject array order is persisted independently from subject identifiers", 
     ...input,
     type: "sectional",
     subjects: [
-      { subjectId: "ga", questions: 25, correct: 10, incorrect: 2 },
-      { subjectId: "english", questions: 45, correct: 20, incorrect: 4 },
+      { subjectId: "ga", questions: 25, correct: 10, incorrect: 2, qualifying: false },
+      { subjectId: "english", questions: 45, correct: 20, incorrect: 4, qualifying: false },
     ],
   });
   assert.deepEqual(

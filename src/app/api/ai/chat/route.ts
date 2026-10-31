@@ -9,7 +9,7 @@ import {
 } from "@/lib/ai/quota";
 import { createAiProvider } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/resolve";
-import { aiLimits, loadAiContext } from "@/lib/ai/server";
+import { aiLimits, loadAiBundle } from "@/lib/ai/server";
 import {
   releaseSafely,
   reserveAiUsage,
@@ -84,16 +84,22 @@ export async function POST(request: Request) {
       }),
     });
 
-    let context;
+    let bundle;
     try {
-      context = await loadAiContext(userId);
+      bundle = await loadAiBundle(userId);
     } catch (error) {
       await releaseSafely(reservation.id, userId, "CONTEXT_UNAVAILABLE");
       throw error;
     }
 
     const provider = createAiProvider(config);
-    const messages = chatMessages(context, body.messages, body.context);
+    const messages = chatMessages(
+      bundle.context,
+      body.messages,
+      body.context,
+      bundle.shape,
+      bundle.examName,
+    );
     const abort = new AbortController();
     const signal = AbortSignal.any([request.signal, abort.signal]);
     let settled = false;
@@ -125,7 +131,7 @@ export async function POST(request: Request) {
             : reservation.reservedTokens,
         providerCalls: result?.providerCalls ?? 1,
         errorCode: errorCode ?? null,
-        contextVersion: context.contextVersion,
+        contextVersion: bundle.context.contextVersion,
       });
     };
 
@@ -135,7 +141,7 @@ export async function POST(request: Request) {
           controller.enqueue(encodeNdjson(event));
         };
         try {
-          send({ type: "start", contextVersion: context.contextVersion });
+          send({ type: "start", contextVersion: bundle.context.contextVersion });
           const result = await provider.stream({
             messages,
             maxOutputTokens: config.maxOutputTokens,

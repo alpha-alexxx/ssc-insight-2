@@ -47,6 +47,9 @@ export const MAIN_SUBJECT_IDS = [
   "english",
   "ga",
 ] as const satisfies readonly SubjectId[];
+/** Legacy single-exam constant: the CGL Tier 2 merit total. Everything
+ * exam-aware takes its max from the tier pattern (src/lib/exams.ts) instead;
+ * this remains for the plan module, landing, and backup back-compat. */
 export const FULL_MOCK_MAX_SCORE = 390;
 export const dashboardScopeSchema = z.enum([
   "full",
@@ -55,129 +58,210 @@ export const dashboardScopeSchema = z.enum([
   "all",
 ]);
 export type DashboardScope = z.infer<typeof dashboardScopeSchema>;
-export const SECTIONS = {
-  section1: {
-    name: "Section I",
-    description: "Quant + Reasoning",
-    subjectIds: ["quant", "reasoning"],
-    maxScore: 180,
-  },
-  section2: {
-    name: "Section II",
-    description: "English + General Awareness",
-    subjectIds: ["english", "ga"],
-    maxScore: 210,
-  },
-} as const satisfies Record<
-  string,
-  {
-    name: string;
-    description: string;
-    subjectIds: readonly SubjectId[];
-    maxScore: number;
-  }
->;
-export type SectionId = keyof typeof SECTIONS;
-export const sectionIds = Object.keys(SECTIONS) as SectionId[];
+
+/** Marking scheme of one tier: marks per correct answer and the penalty per
+ * incorrect one. The penalty may be fractional (CPO −0.25), so scores can be. */
+export type Marking = { correct: number; incorrect: number };
+export const markingSchema = z
+  .object({
+    correct: z.number().positive().max(100),
+    incorrect: z.number().min(0).max(100),
+  })
+  .strict();
+
+/** Canonical section ids (chart colors and legacy data key off them). */
+export type SectionId = "section1" | "section2";
+export const sectionIds = ["section1", "section2"] as const;
+/** A section split of one tier pattern. */
+export type PatternSection = {
+  id: SectionId;
+  name: string;
+  description: string;
+  subjectIds: readonly SubjectId[];
+};
+
+/** The subjects of one tier, with their per-subject question counts and
+ * qualifying flags. */
+export type PatternSubjects = readonly {
+  subjectId: SubjectId;
+  questions: number;
+  qualifying: boolean;
+}[];
+
+/** The slice of a resolved tier pattern (src/lib/exams.ts) that the scoring
+ * and validation layer consumes. */
+export type PatternShape = {
+  examId: string;
+  tierId: string;
+  subjects: PatternSubjects;
+  marking: Marking;
+  sections: readonly PatternSection[];
+};
+
 export function sectionForSubjects(
   subjects: readonly { subjectId: SubjectId }[],
-): SectionId | null {
+  sections: readonly PatternSection[],
+): PatternSection | null {
   const ids = new Set(subjects.map((subject) => subject.subjectId));
   return (
-    sectionIds.find(
-      (sectionId) =>
-        ids.size === SECTIONS[sectionId].subjectIds.length &&
-        SECTIONS[sectionId].subjectIds.every((subjectId) => ids.has(subjectId)),
+    sections.find(
+      (section) =>
+        ids.size === section.subjectIds.length &&
+        section.subjectIds.every((subjectId) => ids.has(subjectId)),
     ) ?? null
   );
 }
 const optionalNumber = z.number().finite().nullable().optional();
-export const subjectSchema = z
-  .object({
-    subjectId: z.enum(["quant", "reasoning", "english", "ga", "computer"]),
-    questions: z.number().int().min(1).max(500),
-    correct: z.number().int().min(0),
-    incorrect: z.number().int().min(0),
-    scoreOverride: optionalNumber,
-    timeSeconds: z.number().int().min(0).max(86400).nullable().optional(),
-  })
-  .refine(
-    (s) => s.correct + s.incorrect <= s.questions,
-    "Attempted questions cannot exceed total questions",
-  )
-  .refine(
-    (s) =>
-      s.scoreOverride == null ||
-      (s.scoreOverride >= -s.questions && s.scoreOverride <= s.questions * 3),
-    "Score must fit the question count",
-  );
-export const attemptSchema = z
-  .object({
-    name: z.string().trim().min(1).max(150),
-    platform: z.string().trim().min(1).max(80),
-    completedAt: z.iso.datetime(),
-    type: z.enum(["full", "subject", "sectional"]),
-    subjects: z.array(subjectSchema).min(1).max(5),
-    scoreOverride: optionalNumber,
-    overallTimeSeconds: z
-      .number()
-      .int()
-      .min(0)
-      .max(86400)
-      .nullable()
-      .optional(),
-    rank: z.number().int().min(1).nullable().optional(),
-    participants: z.number().int().min(1).nullable().optional(),
-    percentile: z.number().min(0).max(100).nullable().optional(),
-    notes: z.string().max(5000).default(""),
-    source: z.enum(["manual", "paste", "backup"]).default("manual"),
-  })
-  .superRefine((a, ctx) => {
-    const ids = a.subjects.map((s) => s.subjectId);
-    const mainIds = ids.filter((id) => id !== "computer");
-    const fail = (message: string) =>
-      ctx.addIssue({ code: "custom", message, path: ["subjects"] });
-    if (new Set(ids).size !== ids.length)
-      fail("Each subject can appear only once");
-    if (
-      a.type === "full" &&
-      (mainIds.length !== MAIN_SUBJECT_IDS.length ||
-        MAIN_SUBJECT_IDS.some((id) => !ids.includes(id)) ||
-        a.subjects.some((s) => s.questions !== SUBJECTS[s.subjectId].questions))
+export function subjectSchemaFor(marking: Marking) {
+  return z
+    .object({
+      subjectId: z.enum(["quant", "reasoning", "english", "ga", "computer"]),
+      questions: z.number().int().min(1).max(500),
+      correct: z.number().int().min(0),
+      incorrect: z.number().int().min(0),
+      qualifying: z.boolean().default(false),
+      scoreOverride: optionalNumber,
+      timeSeconds: z.number().int().min(0).max(86400).nullable().optional(),
+    })
+    .refine(
+      (s) => s.correct + s.incorrect <= s.questions,
+      "Attempted questions cannot exceed total questions",
     )
-      fail(
-        "Full mocks require the four main subjects and standard question counts",
-      );
-    if (a.type === "subject" && ids.length !== 1)
-      fail("Subject mocks require one subject");
-    if (a.type === "sectional" && sectionForSubjects(a.subjects) == null)
-      fail("Select Quant + Reasoning or English + General Awareness");
-    if (a.rank && a.participants && a.rank > a.participants)
-      ctx.addIssue({
-        code: "custom",
-        message: "Rank cannot exceed participant count",
-        path: ["rank"],
-      });
-    const q = a.subjects
-      .filter((s) => a.type !== "full" || s.subjectId !== "computer")
-      .reduce((sum, s) => sum + s.questions, 0);
-    if (
-      a.scoreOverride != null &&
-      (a.scoreOverride < -q || a.scoreOverride > q * 3)
-    )
-      ctx.addIssue({
-        code: "custom",
-        message: "Overall score is outside the possible range",
-        path: ["scoreOverride"],
-      });
-  });
-export type SubjectResult = z.infer<typeof subjectSchema>;
-export type AttemptInput = z.infer<typeof attemptSchema>;
+    .refine(
+      (s) =>
+        s.scoreOverride == null ||
+        (s.scoreOverride >=
+          -s.questions * marking.incorrect &&
+          s.scoreOverride <= s.questions * marking.correct),
+      "Score must fit the question count",
+    );
+}
+export type SubjectResult = z.infer<ReturnType<typeof subjectSchemaFor>>;
+
+/** Shape of a validated attempt input — identical for every exam pattern.
+ * Mirrors the zod output of attemptSchemaFor: optional keys may be absent. */
+export type AttemptInput = {
+  name: string;
+  platform: string;
+  completedAt: string;
+  type: "full" | "subject" | "sectional";
+  subjects: SubjectResult[];
+  marking: Marking;
+  examId: string;
+  tierId: string;
+  scoreOverride?: number | null;
+  overallTimeSeconds?: number | null;
+  rank?: number | null;
+  participants?: number | null;
+  percentile?: number | null;
+  notes: string;
+  source: "manual" | "paste" | "backup";
+};
+
+/**
+ * Attempt validation for one resolved tier pattern. Full mocks require every
+ * merit-bearing (non-qualifying) pattern subject at its standard count;
+ * qualifying subjects may be added and must match their count too. Sectional
+ * mocks only exist for patterns that define sections.
+ */
+export function attemptSchemaFor(pattern: PatternShape) {
+  const subjectRow = subjectSchemaFor(pattern.marking);
+  return z
+    .object({
+      name: z.string().trim().min(1).max(150),
+      platform: z.string().trim().min(1).max(80),
+      completedAt: z.iso.datetime(),
+      type: z.enum(["full", "subject", "sectional"]),
+      examId: z.string().min(1).max(40),
+      tierId: z.string().min(1).max(40),
+      marking: markingSchema,
+      subjects: z.array(subjectRow).min(1).max(5),
+      scoreOverride: optionalNumber,
+      overallTimeSeconds: z
+        .number()
+        .int()
+        .min(0)
+        .max(86400)
+        .nullable()
+        .optional(),
+      rank: z.number().int().min(1).nullable().optional(),
+      participants: z.number().int().min(1).nullable().optional(),
+      percentile: z.number().min(0).max(100).nullable().optional(),
+      notes: z.string().max(5000).default(""),
+      source: z.enum(["manual", "paste", "backup"]).default("manual"),
+    })
+    .superRefine((a, ctx) => {
+      const ids = a.subjects.map((s) => s.subjectId);
+      const fail = (message: string) =>
+        ctx.addIssue({ code: "custom", message, path: ["subjects"] });
+      if (a.examId !== pattern.examId || a.tierId !== pattern.tierId)
+        ctx.addIssue({
+          code: "custom",
+          message: "Attempt does not match the selected exam tier",
+          path: ["examId"],
+        });
+      if (
+        a.marking.correct !== pattern.marking.correct ||
+        a.marking.incorrect !== pattern.marking.incorrect
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "Marking scheme does not match the selected exam tier",
+          path: ["marking"],
+        });
+      if (new Set(ids).size !== ids.length)
+        fail("Each subject can appear only once");
+      if (a.type === "full") {
+        const merit = pattern.subjects.filter((s) => !s.qualifying);
+        const ok = merit.every((p) => {
+          const row = a.subjects.find((s) => s.subjectId === p.subjectId);
+          return row != null && row.questions === p.questions;
+        });
+        const qualifyingOk = a.subjects.every((s) => {
+          const p = pattern.subjects.find((q) => q.subjectId === s.subjectId);
+          return p != null && (!p.qualifying || s.questions === p.questions);
+        });
+        if (!ok || !qualifyingOk)
+          fail(
+            "Full mocks require the tier's subjects at their standard question counts",
+          );
+      }
+      if (a.type === "subject" && ids.length !== 1)
+        fail("Subject mocks require one subject");
+      if (a.type === "sectional") {
+        if (!pattern.sections.length)
+          fail("This exam tier does not have sectional tests");
+        else if (sectionForSubjects(a.subjects, pattern.sections) == null)
+          fail("Select the subjects of one section");
+      }
+      if (a.rank && a.participants && a.rank > a.participants)
+        ctx.addIssue({
+          code: "custom",
+          message: "Rank cannot exceed participant count",
+          path: ["rank"],
+        });
+      const scoringSubjects =
+        a.type === "full"
+          ? a.subjects.filter((s) => !s.qualifying)
+          : a.subjects;
+      const q = scoringSubjects.reduce((sum, s) => sum + s.questions, 0);
+      if (
+        a.scoreOverride != null &&
+        (a.scoreOverride < -q * pattern.marking.incorrect ||
+          a.scoreOverride > q * pattern.marking.correct)
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "Overall score is outside the possible range",
+          path: ["scoreOverride"],
+        });
+    });
+}
 export type Attempt = AttemptInput & {
   id: string;
   createdAt: string;
   updatedAt: string;
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
 };
 // Analytics must never require notes. The AI context fetches attempts with
 // Prisma's `omit` so note text never enters server memory in the first place.
@@ -189,11 +273,14 @@ export type Filters = {
   from?: string;
   to?: string;
   search?: string;
+  tier?: string;
+  /** Set server-side from the user's active exam; never user input. */
+  examId?: string;
 };
 /**
  * Validation for the persisted-record filter params, shared by the analytics
  * API (strict parse → 400) and the workspace URL mirror (lenient parse →
- * malformed params fall back to defaults). Keep in sync with filterAttempts().
+ * malformed params drop individually). Keep in sync with filterAttempts().
  */
 export const filtersSchema = z.object({
   type: z.enum(["all", "full", "subject", "sectional"]).optional(),
@@ -204,6 +291,7 @@ export const filtersSchema = z.object({
   search: z.string().max(150).optional(),
   from: z.iso.date().or(z.literal("")).optional(),
   to: z.iso.date().or(z.literal("")).optional(),
+  tier: z.string().max(40).optional(),
 });
 
 /** Server-paged list columns, in table order. Score/accuracy/time are
@@ -244,6 +332,9 @@ export const attemptListSchema = filtersSchema.extend({
 export type AttemptStats = {
   totalMocks: number;
   avgScore: number | null;
+  /** The common paper maximum behind avgScore, when the filtered set spans
+   * one tier only; null when tiers are mixed (use avgScorePct instead). */
+  avgScoreMax: number | null;
   avgScorePct: number | null;
   avgAccuracy: number | null;
   accuracyDelta: number | null;
@@ -262,35 +353,42 @@ export type PagedAttempts = {
   pageCount: number;
   stats?: AttemptStats;
 };
-export function subjectStats(s: SubjectResult) {
+export function subjectStats(s: SubjectResult, marking: Marking) {
   const attempted = s.correct + s.incorrect;
-  const score = s.scoreOverride ?? s.correct * 3 - s.incorrect;
+  const score =
+    s.scoreOverride ??
+    s.correct * marking.correct - s.incorrect * marking.incorrect;
   return {
     ...s,
     attempted,
     unattempted: s.questions - attempted,
     score,
-    maxScore: s.questions * 3,
-    percentage: (score / (s.questions * 3)) * 100,
+    maxScore: s.questions * marking.correct,
+    percentage: (score / (s.questions * marking.correct)) * 100,
     accuracy: attempted ? (s.correct / attempted) * 100 : null,
   };
 }
 /** Accepts any attempt-shaped object carrying the scoring inputs — full
  * Attempt records as well as the minimal projections the repository sorts
- * server-side. Only these four fields feed the math. */
+ * server-side. Marking comes from the attempt's snapshotted tier pattern;
+ * qualifying subjects are excluded from a full mock's merit total. */
 export function totals(
   a: Pick<
     AttemptInput,
-    "type" | "subjects" | "scoreOverride" | "overallTimeSeconds"
+    | "type"
+    | "subjects"
+    | "scoreOverride"
+    | "overallTimeSeconds"
+    | "marking"
   >,
 ) {
   const scoringSubjects =
     a.type === "full"
-      ? a.subjects.filter((s) => s.subjectId !== "computer")
+      ? a.subjects.filter((s) => !s.qualifying)
       : a.subjects;
   const sums = scoringSubjects.reduce(
     (acc, s) => {
-      const t = subjectStats(s);
+      const t = subjectStats(s, a.marking);
       return {
         correct: acc.correct + s.correct,
         incorrect: acc.incorrect + s.incorrect,
@@ -306,11 +404,11 @@ export function totals(
   return {
     ...sums,
     score,
-    maxScore: sums.questions * 3,
+    maxScore: sums.questions * a.marking.correct,
     attempted,
     unattempted: sums.questions - attempted,
     accuracy: attempted ? (sums.correct / attempted) * 100 : null,
-    percentage: (score / (sums.questions * 3)) * 100,
+    percentage: (score / (sums.questions * a.marking.correct)) * 100,
     timeSeconds:
       a.overallTimeSeconds ??
       (a.subjects.every((s) => s.timeSeconds != null)
@@ -322,6 +420,11 @@ export function formatNumber(n: number | null | undefined, digits = 1) {
   return n == null
     ? "—"
     : n.toLocaleString("en-IN", { maximumFractionDigits: digits });
+}
+/** Scores can be fractional under −0.25/−0.50 penalties; show up to two
+ * decimals and drop trailing zeros (142.75 stays, 130 stays "130"). */
+export function formatScore(n: number | null | undefined) {
+  return formatNumber(n, 2);
 }
 export function formatTime(seconds: number | null | undefined) {
   if (seconds == null) return "—";
@@ -342,5 +445,5 @@ export function parseTime(value: string) {
   return parts.reduce((a, n) => a * 60 + n, 0);
 }
 export function duplicateKey(a: AttemptInput) {
-  return `${a.name.trim().toLowerCase()}|${a.platform.trim().toLowerCase()}|${a.completedAt}|${a.type}`;
+  return `${a.examId}|${a.tierId}|${a.name.trim().toLowerCase()}|${a.platform.trim().toLowerCase()}|${a.completedAt}|${a.type}`;
 }

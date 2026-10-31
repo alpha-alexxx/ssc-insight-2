@@ -8,16 +8,20 @@ import {
   targetPercentage,
 } from "../src/lib/analytics";
 import {
-  attemptSchema,
+  attemptSchemaFor,
   type Attempt,
   type SubjectResult,
 } from "../src/lib/domain";
+import { T2, MARKING } from "./fixtures/exam";
+
+const attemptSchema = attemptSchemaFor(T2);
 
 const quant: SubjectResult = {
   subjectId: "quant",
   questions: 30,
   correct: 14,
   incorrect: 6,
+  qualifying: false,
   timeSeconds: 1800,
 };
 const reasoning: SubjectResult = {
@@ -25,6 +29,7 @@ const reasoning: SubjectResult = {
   questions: 30,
   correct: 25,
   incorrect: 5,
+  qualifying: false,
   timeSeconds: 1200,
 };
 const english: SubjectResult = {
@@ -32,6 +37,7 @@ const english: SubjectResult = {
   questions: 45,
   correct: 37,
   incorrect: 8,
+  qualifying: false,
   timeSeconds: 2100,
 };
 const ga: SubjectResult = {
@@ -39,6 +45,7 @@ const ga: SubjectResult = {
   questions: 25,
   correct: 14,
   incorrect: 6,
+  qualifying: false,
   timeSeconds: 600,
 };
 function attempt(
@@ -54,6 +61,9 @@ function attempt(
     platform: "Testbook",
     completedAt: date,
     type,
+    examId: "cgl",
+    tierId: "tier2",
+    marking: MARKING,
     subjects,
     notes: "",
     source: "manual",
@@ -287,14 +297,14 @@ test("radial percentiles average only genuine saved attempts", () => {
   const subjectA = attempt(
     "subject-a",
     "subject",
-    [{ subjectId: "quant", questions: 15, correct: 10, incorrect: 2 }],
+    [{ subjectId: "quant", questions: 15, correct: 10, incorrect: 2, qualifying: false }],
     "2026-10-16T00:00:00.000Z",
     { percentile: 60 },
   );
   const subjectB = attempt(
     "subject-b",
     "subject",
-    [{ subjectId: "quant", questions: 15, correct: 12, incorrect: 1 }],
+    [{ subjectId: "quant", questions: 15, correct: 12, incorrect: 1, qualifying: false }],
     "2026-10-17T00:00:00.000Z",
     { percentile: 80 },
   );
@@ -389,7 +399,7 @@ test("negative subject scores stay in summaries while radar geometry can clamp",
   const negative = attempt(
     "negative",
     "subject",
-    [{ subjectId: "quant", questions: 10, correct: 0, incorrect: 5 }],
+    [{ subjectId: "quant", questions: 10, correct: 0, incorrect: 5, qualifying: false }],
     "2026-10-13T00:00:00.000Z",
   );
   const stats = analyze([negative], "subject");
@@ -409,12 +419,13 @@ test("negative subject scores stay in summaries while radar geometry can clamp",
 });
 
 test("target helpers use one out-of-390 goal for every scope", () => {
-  assert.equal(targetPercentage(300), (300 / 390) * 100);
-  assert.equal(targetPercentage(null), null);
-  assert.equal(targetPercentage(0), 0);
-  assert.equal(targetPercentage(390), 100);
-  assert.equal(targetMarks(300, 180), (300 / 390) * 180);
-  assert.equal(targetMarks(null, 180), null);
+  assert.equal(targetPercentage(300, 390), (300 / 390) * 100);
+  assert.equal(targetPercentage(null, 390), null);
+  assert.equal(targetPercentage(0, 390), 0);
+  assert.equal(targetPercentage(390, 390), 100);
+  // A different paper size: 300 of 390 placed onto a 180-mark chart.
+  assert.equal(targetMarks(300, 390, 180), (300 / 390) * 180);
+  assert.equal(targetMarks(null, 390, 180), null);
 });
 
 test("target trend averages dated scope snapshots", () => {

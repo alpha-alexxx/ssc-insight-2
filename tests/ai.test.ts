@@ -40,6 +40,7 @@ import {
 } from "../src/lib/ai/ndjson";
 import type { AnalyticsAttempt, SubjectResult } from "../src/lib/domain";
 import { aiExtractionFixtures } from "./fixtures/ai-extraction";
+import { T2 } from "./fixtures/exam";
 
 const config: AiConfig = {
   baseUrl: "https://ai.example.com/v1",
@@ -58,6 +59,7 @@ const subjects: SubjectResult[] = [
     questions: 30,
     correct: 22,
     incorrect: 4,
+    qualifying: false,
     timeSeconds: 1_500,
   },
   {
@@ -65,6 +67,7 @@ const subjects: SubjectResult[] = [
     questions: 30,
     correct: 26,
     incorrect: 2,
+    qualifying: false,
     timeSeconds: 1_200,
   },
   {
@@ -72,6 +75,7 @@ const subjects: SubjectResult[] = [
     questions: 45,
     correct: 34,
     incorrect: 8,
+    qualifying: false,
     timeSeconds: 1_800,
   },
   {
@@ -79,6 +83,7 @@ const subjects: SubjectResult[] = [
     questions: 25,
     correct: 16,
     incorrect: 6,
+    qualifying: false,
     timeSeconds: 600,
   },
 ];
@@ -96,6 +101,9 @@ function fullAttempt(
     platform: "Testbook",
     completedAt: date,
     type: "full",
+    examId: "cgl",
+    tierId: "tier2",
+    marking: T2.marking,
     scoreOverride: null,
     overallTimeSeconds: null,
     rank: index + 1,
@@ -181,7 +189,7 @@ test("report sanitizing preserves score data and extraction prompt contract", ()
   assert.equal(report.text.includes("‮"), false);
   assert.equal(report.suspicious, true);
 
-  const messages = extractionMessages(report);
+  const messages = extractionMessages(report, T2);
   assert.equal(messages.length, 2);
   const prompt = messages[0].content;
   assert.match(prompt, /Associate a value using BOTH its subject row\/block and its column\/label/);
@@ -204,14 +212,14 @@ test("report sanitizing preserves score data and extraction prompt contract", ()
 test("varied report fixtures normalize to exact review drafts", () => {
   for (const fixture of aiExtractionFixtures) {
     const report = sanitizeReport(fixture.raw);
-    const userMessage = extractionMessages(report)[1].content;
+    const userMessage = extractionMessages(report, T2)[1].content;
     assert.equal(
       userMessage.includes(report.text),
       true,
       `${fixture.name}: sanitized report reaches the prompt`,
     );
 
-    const draft = normaliseExtraction(fixture.model);
+    const draft = normaliseExtraction(T2, fixture.model);
     assert.equal(draft.type, fixture.expected.type, `${fixture.name}: type`);
     if ("rank" in fixture.expected)
       assert.equal(draft.rank, fixture.expected.rank, `${fixture.name}: rank`);
@@ -254,7 +262,7 @@ test("varied report fixtures normalize to exact review drafts", () => {
     });
   }
 
-  const supplied = normaliseExtraction(aiExtractionFixtures[0].model);
+  const supplied = normaliseExtraction(T2, aiExtractionFixtures[0].model);
   assert.equal(new Set(supplied.subjects.map((subject) => subject.subjectId)).size, 4);
   assert.equal(
     supplied.subjects.every(
@@ -324,7 +332,7 @@ test("IST day keys and reset time use Asia/Kolkata", () => {
 
 test("context is whitelisted, bounded, and never includes names or notes", () => {
   const attempts = Array.from({ length: 25 }, (_, index) => fullAttempt(index));
-  const context = buildAiContext(attempts, 320);
+  const context = buildAiContext(attempts, 320, T2);
   const serialized = JSON.stringify(context);
 
   assert.ok(serialized.length <= 36_000);
@@ -358,7 +366,7 @@ test("context is whitelisted, bounded, and never includes names or notes", () =>
     "timeSeconds",
   ]);
 
-  const unchanged = buildAiContext(attempts, 320);
+  const unchanged = buildAiContext(attempts, 320, T2);
   assert.equal(unchanged.contextVersion, context.contextVersion);
   const changed = buildAiContext(
     attempts.map((attempt, index) =>
@@ -374,10 +382,11 @@ test("context is whitelisted, bounded, and never includes names or notes", () =>
         : attempt,
     ),
     320,
+    T2,
   );
   assert.notEqual(changed.contextVersion, context.contextVersion);
 
-  const empty = buildAiContext([], null);
+  const empty = buildAiContext([], null, T2);
   assert.equal(empty.dataAsOf, null);
   assert.equal(empty.coverage.totalAttempts, 0);
   assert.equal(empty.recentFullMocks.length, 0);
@@ -406,7 +415,7 @@ test("model JSON extraction strips fences and takes one balanced object", () => 
 });
 
 test("extraction parses provider JSON text into an editable draft", () => {
-  const draft = parseExtraction(`Result:\n\`\`\`json
+  const draft = parseExtraction(T2, `Result:\n\`\`\`json
   {
     "name": "Mock 7",
     "platform": "Testbook",
@@ -432,7 +441,7 @@ test("extraction parses provider JSON text into an editable draft", () => {
 });
 
 test("extraction converts only exact reported subject times", () => {
-  const draft = normaliseExtraction({
+  const draft = normaliseExtraction(T2, {
     type: "sectional",
     subjects: [
       {
@@ -454,7 +463,7 @@ test("extraction converts only exact reported subject times", () => {
   assert.equal(draft.subjects[0].timeSeconds, 1_269);
   assert.equal(draft.subjects[1].timeSeconds, 1_055);
 
-  const invalid = normaliseExtraction({
+  const invalid = normaliseExtraction(T2, {
     type: "subject",
     subjects: [
       {
@@ -474,7 +483,7 @@ test("extraction converts only exact reported subject times", () => {
 });
 
 test("reported total mismatches warn without blocking reviewed counts", () => {
-  const draft = normaliseExtraction({
+  const draft = normaliseExtraction(T2, {
     name: "Quant Mock 4",
     platform: "Testbook",
     date: "2026-10-25",
@@ -502,11 +511,11 @@ test("reported total mismatches warn without blocking reviewed counts", () => {
     mismatchIssues.every((entry) => entry.severity === "warning"),
     true,
   );
-  assert.doesNotThrow(() => extractionToAttempt(draft, ""));
+  assert.doesNotThrow(() => extractionToAttempt(T2, draft, ""));
 });
 
 test("extraction normalises full mocks without accepting forbidden fields", () => {
-  const draft = normaliseExtraction({
+  const draft = normaliseExtraction(T2, {
     name: "SSC CGL Tier 2 — Mock 12",
     platform: "Testbook",
     date: "05/10/2026",
@@ -545,7 +554,7 @@ test("extraction normalises full mocks without accepting forbidden fields", () =
 });
 
 test("extraction preserves missing values and rejects invalid numbers", () => {
-  const draft = normaliseExtraction({
+  const draft = normaliseExtraction(T2, {
     type: "full",
     subjects: [
       { subjectId: "quant", questions: 30, correct: 20.5, incorrect: 0 },
@@ -579,7 +588,7 @@ test("extraction preserves missing values and rejects invalid numbers", () => {
 });
 
 test("extraction infers layouts without inventing custom question counts", () => {
-  const subjectDraft = normaliseExtraction({
+  const subjectDraft = normaliseExtraction(T2, {
     subjects: [{ subjectId: "english", correct: 20, incorrect: 5 }],
     type: null,
   });
@@ -590,7 +599,7 @@ test("extraction infers layouts without inventing custom question counts", () =>
     true,
   );
 
-  const sectionalDraft = normaliseExtraction({
+  const sectionalDraft = normaliseExtraction(T2, {
     type: "sectional",
     subjects: [
       { subjectId: "quant", questions: 25, correct: 20, incorrect: 5 },
@@ -599,7 +608,7 @@ test("extraction infers layouts without inventing custom question counts", () =>
   });
   assert.equal(sectionalDraft.type, "sectional");
 
-  const invalid = normaliseExtraction({
+  const invalid = normaliseExtraction(T2, {
     type: "sectional",
     subjects: [
       { subjectId: "quant", questions: 25, correct: 20, incorrect: 5 },
@@ -613,7 +622,7 @@ test("extraction infers layouts without inventing custom question counts", () =>
 });
 
 test("extraction derives exact SSC counts and blocks contradictions", () => {
-  const exact = normaliseExtraction({
+  const exact = normaliseExtraction(T2, {
     name: "Subject test",
     platform: "Testbook",
     date: "2026-10-05",
@@ -634,7 +643,7 @@ test("extraction derives exact SSC counts and blocks contradictions", () => {
   assert.equal(exact.subjects[0].incorrect, 1);
   assert.deepEqual(exact.subjects[0].derivedFields, ["correct", "incorrect"]);
 
-  const impossible = normaliseExtraction({
+  const impossible = normaliseExtraction(T2, {
     type: "subject",
     subjects: [
       { subjectId: "quant", questions: 25, score: 61, attempted: 22 },
@@ -861,7 +870,7 @@ test("AI errors keep specific statuses and cannot become database 503s", async (
 });
 
 test("reviewed extraction converts to a complete paste attempt", () => {
-  const draft = normaliseExtraction({
+  const draft = normaliseExtraction(T2, {
     name: "Quant test",
     platform: "Testbook",
     date: "2026-10-05",
@@ -881,7 +890,7 @@ test("reviewed extraction converts to a complete paste attempt", () => {
     warnings: [],
     confidence: "high",
   });
-  const converted = extractionToAttempt(draft, "keep this note");
+  const converted = extractionToAttempt(T2, draft, "keep this note");
   assert.equal(converted.values.source, "paste");
   assert.equal(converted.values.notes, "keep this note");
   assert.equal(converted.values.subjects.length, 1);
@@ -907,7 +916,7 @@ test("extraction draft type is exported for client contracts", () => {
 });
 
 test("chat screen context is orientation-only and stays inside a data block", () => {
-  const context = buildAiContext([], null);
+  const context = buildAiContext([], null, T2);
   const messages = chatMessages(
     context,
     [{ role: "user", content: "What should I do next?" }],
@@ -931,7 +940,7 @@ test("chat screen context is orientation-only and stays inside a data block", ()
 });
 
 test("chat without screen context does not emit the screen block", () => {
-  const context = buildAiContext([], null);
+  const context = buildAiContext([], null, T2);
   const messages = chatMessages(context, [
     { role: "user", content: "Summarise my progress." },
   ]);
@@ -939,7 +948,7 @@ test("chat without screen context does not emit the screen block", () => {
 });
 
 test("chat prompt keeps the task-suggestion contract inside the read-only rules", () => {
-  const context = buildAiContext([], null);
+  const context = buildAiContext([], null, T2);
   const messages = chatMessages(context, [
     { role: "user", content: "Add a task to revise geometry." },
   ]);

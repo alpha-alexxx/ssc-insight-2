@@ -2,6 +2,7 @@ import {
   SUBJECTS,
   subjectIds,
   type AttemptInput,
+  type PatternShape,
   type SubjectId,
   type SubjectResult,
   parseTime,
@@ -24,7 +25,10 @@ function numberAfter(text: string, label: string) {
   );
   return m ? Number(m[1].replaceAll(",", "")) : undefined;
 }
-export function parseReport(raw: string): {
+export function parseReport(
+  shape: PatternShape,
+  raw: string,
+): {
   values: Partial<AttemptInput>;
   warnings: string[];
 } {
@@ -65,13 +69,19 @@ export function parseReport(raw: string): {
       correct = nums[5];
       incorrect = nums[8];
     }
+    // Infer the question count from the reported maximum against this
+    // tier's marking scheme; fall back to the pattern's standard count.
+    const patternQuestions = shape.subjects.find(
+      (s) => s.subjectId === section.id,
+    )?.questions;
     const questions =
-      maximum && maximum % 3 === 0
-        ? maximum / 3
-        : SUBJECTS[section.id].questions;
+      maximum && maximum % shape.marking.correct === 0
+        ? maximum / shape.marking.correct
+        : patternQuestions;
     if (
       correct == null ||
       incorrect == null ||
+      questions == null ||
       correct + incorrect > questions
     ) {
       warnings.push(
@@ -85,12 +95,18 @@ export function parseReport(raw: string): {
       questions,
       correct,
       incorrect,
+      qualifying:
+        shape.subjects.find((p) => p.subjectId === section.id)?.qualifying ??
+        false,
       scoreOverride: score,
       timeSeconds: time ? parseTime(time[0]) : null,
     };
-    if (score !== correct * 3 - incorrect)
+    if (
+      score !==
+      correct * shape.marking.correct - incorrect * shape.marking.incorrect
+    )
       warnings.push(
-        `${SUBJECTS[section.id].short}: reported score differs from +3/−1 scoring. Review the question counts; form scores are calculated automatically.`,
+        `${SUBJECTS[section.id].short}: reported score differs from +${shape.marking.correct}/−${shape.marking.incorrect} scoring. Review the question counts; form scores are calculated automatically.`,
       );
     subjects.push(s);
   }
@@ -103,14 +119,15 @@ export function parseReport(raw: string): {
   const overallBlock = text.split(/\bOverall\b/i)[1];
   const overallTime = overallBlock?.match(/\b\d{1,2}:\d{2}:\d{2}\b/);
   const ids = subjects.map((s) => s.subjectId);
-  const isFull = ids.filter((id) => id !== "computer").length === 4;
+  const meritIds = shape.subjects.filter((s) => !s.qualifying).map((s) => s.subjectId);
+  const isFull = meritIds.length > 1 && meritIds.every((id) => ids.includes(id));
   const scoringSubjects = isFull
-    ? subjects.filter((s) => s.subjectId !== "computer")
+    ? subjects.filter((s) => !s.qualifying)
     : subjects;
   if (
     reportedScore != null &&
     subjects.length &&
-    scoringSubjects.reduce((n, s) => n + subjectStats(s).score, 0) !==
+    scoringSubjects.reduce((n, s) => n + subjectStats(s, shape.marking).score, 0) !==
       reportedScore
   )
     warnings.push(
@@ -120,7 +137,19 @@ export function parseReport(raw: string): {
     warnings.push(
       "No supported subject results found. Use the manual form to complete this result.",
     );
-  const type = isFull ? "full" : ids.length === 2 ? "sectional" : "subject";
+  const sectionalMatch =
+    shape.sections.length > 0 && ids.length === 2
+      ? shape.sections.some(
+          (section) =>
+            section.subjectIds.length === ids.length &&
+            section.subjectIds.every((id) => ids.includes(id)),
+        )
+      : false;
+  const type = isFull
+    ? ("full" as const)
+    : sectionalMatch
+      ? ("sectional" as const)
+      : ("subject" as const);
   const name = text.match(/(?:^|\n)Mock Name\s*:\s*([^\n]+)/i)?.[1]?.trim();
   const platform = text
     .match(/(?:^|\n)(?:Mock )?Platform\s*:\s*([^\n]+)/i)?.[1]

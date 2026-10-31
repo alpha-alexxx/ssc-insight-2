@@ -19,6 +19,7 @@ const quant: SubjectResult = {
   questions: 30,
   correct: 14,
   incorrect: 6,
+  qualifying: false,
   timeSeconds: 1800,
 };
 const reasoning: SubjectResult = {
@@ -26,6 +27,7 @@ const reasoning: SubjectResult = {
   questions: 30,
   correct: 25,
   incorrect: 5,
+  qualifying: false,
   timeSeconds: 1200,
 };
 const english: SubjectResult = {
@@ -33,6 +35,7 @@ const english: SubjectResult = {
   questions: 45,
   correct: 37,
   incorrect: 8,
+  qualifying: false,
   timeSeconds: 2100,
 };
 const ga: SubjectResult = {
@@ -40,6 +43,7 @@ const ga: SubjectResult = {
   questions: 25,
   correct: 14,
   incorrect: 6,
+  qualifying: false,
   timeSeconds: 600,
 };
 function attempt(
@@ -55,6 +59,9 @@ function attempt(
     platform: "Testbook",
     completedAt: date,
     type,
+    examId: "cgl",
+    tierId: "tier2",
+    marking: { correct: 3, incorrect: 1 },
     subjects,
     notes: "",
     source: "manual",
@@ -78,9 +85,15 @@ const subject = attempt(
   "2026-10-09T00:00:00.000Z",
   { source: "paste" },
 );
+const SETTINGS = {
+  activeExamId: "cgl",
+  enabledExams: ["cgl"],
+  examTargets: { cgl: 320 },
+};
 const backup = buildBackup(
   [subject, full],
-  320,
+  SETTINGS,
+  [],
   new Date("2026-10-25T10:00:00.000Z"),
 );
 
@@ -94,7 +107,7 @@ test("v2 backup includes complete records, target, and metadata but no ownership
     firstCompletedAt: "2026-10-05T00:00:00.000Z",
     lastCompletedAt: "2026-10-09T00:00:00.000Z",
   });
-  assert.equal(backup.settings.targetScore, 320);
+  assert.equal(backup.settings.examTargets.cgl, 320);
   assert.deepEqual(backup.warnings, []);
   assert.deepEqual(
     backup.attempts.map((row) => row.id),
@@ -108,10 +121,10 @@ test("v2 backup includes complete records, target, and metadata but no ownership
 
 test("v2 parse strips provenance identifiers and preserves user fields", () => {
   const parsed = parseBackup(JSON.parse(JSON.stringify(backup)));
-  assert.equal(parsed.version, 2);
+  assert.equal(parsed.version, 3);
   assert.equal(parsed.legacy, false);
   assert.equal(parsed.hasSettings, true);
-  assert.equal(parsed.targetScore, 320);
+  assert.equal(parsed.settings?.examTargets.cgl, 320);
   assert.equal(parsed.attempts.length, 2);
   assert.equal(parsed.attempts[0].source, "manual");
   assert.equal(parsed.attempts[1].source, "paste");
@@ -161,7 +174,7 @@ test("legacy v1 backups remain importable without settings", () => {
   assert.equal(parsed.version, 1);
   assert.equal(parsed.legacy, true);
   assert.equal(parsed.hasSettings, false);
-  assert.equal(parsed.targetScore, null);
+  assert.equal(parsed.settings, null);
   assert.equal(parsed.summary, null);
   assert.equal(parsed.attempts.length, 2);
   assert.equal(
@@ -172,11 +185,11 @@ test("legacy v1 backups remain importable without settings", () => {
 
 test("unsupported, malformed, and invalid-record backups fail cleanly", () => {
   assert.throws(
-    () => parseBackup({ ...backup, formatVersion: 3 }),
-    /format version 3/,
+    () => parseBackup({ ...backup, formatVersion: 4 }),
+    /format version 4/,
   );
   assert.throws(
-    () => parseBackup({ format: "other", formatVersion: 2 }),
+    () => parseBackup({ format: "other", formatVersion: 3 }),
     BackupError,
   );
   assert.throws(
@@ -204,10 +217,30 @@ test("unsupported, malformed, and invalid-record backups fail cleanly", () => {
 });
 
 test("target and attempt limits are validated", () => {
-  assert.equal(parseBackup({ ...backup, settings: { targetScore: 0 } }).targetScore, 0);
-  assert.equal(parseBackup({ ...backup, settings: { targetScore: 390 } }).targetScore, 390);
+  // Pre-multi-exam (v2) targets map onto the CGL entry of the per-exam map.
+  assert.equal(
+    parseBackup({
+      ...backup,
+      formatVersion: 2,
+      settings: { targetScore: 0 },
+    }).settings?.examTargets.cgl,
+    0,
+  );
+  assert.equal(
+    parseBackup({
+      ...backup,
+      formatVersion: 2,
+      settings: { targetScore: 390 },
+    }).settings?.examTargets.cgl,
+    390,
+  );
   assert.throws(
-    () => parseBackup({ ...backup, settings: { targetScore: 391 } }),
+    () =>
+      parseBackup({
+        ...backup,
+        formatVersion: 2,
+        settings: { targetScore: 391 },
+      }),
     BackupError,
   );
   const tooMany = Array.from({ length: BACKUP_MAX_ATTEMPTS + 1 }, () =>
@@ -253,9 +286,9 @@ test("parseImportRequest supports new and legacy requests", () => {
   assert.equal(legacy.options.legacyRequest, true);
   assert.equal(legacy.options.mode, "merge");
   assert.equal(legacy.options.preview, true);
-  const topLevelV2 = parseImportRequest({ ...backup, preview: true });
-  assert.equal(topLevelV2.options.legacyRequest, false);
-  assert.equal(topLevelV2.backup.version, 2);
+  const topLevelV3 = parseImportRequest({ ...backup, preview: true });
+  assert.equal(topLevelV3.options.legacyRequest, false);
+  assert.equal(topLevelV3.backup.version, 3);
   assert.throws(
     () =>
       parseImportRequest({
@@ -291,6 +324,9 @@ test("fingerprints ignore provenance and normalize content", () => {
     createdAt: "2026-10-09T00:00:00.000Z",
     updatedAt: "2026-10-09T00:00:00.000Z",
     schemaVersion: 1 as const,
+    examId: "cgl",
+    tierId: "tier2",
+    marking: { correct: 3, incorrect: 1 },
   };
   const baseFingerprint = attemptFingerprint(base);
 

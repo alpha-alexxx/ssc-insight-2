@@ -110,8 +110,9 @@ export function useBackupImport({
         setSafetyDownloaded(false);
         const first = await runPreview(parsed, "merge", false);
         if (first) {
-          const recommended =
-            first.target.incoming != null && first.target.current == null;
+          // Recommend applying when the backup carries settings the
+          // account does not have yet (first migration onto the account).
+          const recommended = first.settings.available && first.settings.changed;
           setApplyTarget(recommended);
           if (recommended) await runPreview(parsed, "merge", true);
         }
@@ -195,18 +196,14 @@ export function useBackupImport({
         if (result.conflicts) parts.push(`${result.conflicts} conflicts added`);
         if (result.deleted)
           parts.push(`${result.deleted} existing mocks removed`);
-        if (result.target.applied)
-          parts.push(
-            result.target.targetScore == null
-              ? "target cleared"
-              : `target set to ${n(result.target.targetScore)} / 390`,
-          );
+        if (result.settings.applied)
+          parts.push("exam scope and targets applied");
         toast.success(
           "Backup imported",
           parts.length ? parts.join(" · ") : undefined,
         );
         resetImport();
-        if (result.target.applied) onTargetApplied();
+        if (result.settings.applied) onTargetApplied();
         await refresh();
       } catch (e) {
         const message =

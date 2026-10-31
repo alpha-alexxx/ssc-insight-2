@@ -3,17 +3,17 @@ import {
   type Attempt,
   type DashboardScope,
   type Filters,
+  type PatternSection,
   type SectionId,
   type SubjectId,
   FULL_MOCK_MAX_SCORE,
-  SECTIONS,
   SUBJECTS,
-  sectionForSubjects,
   sectionIds,
   subjectIds,
   subjectStats,
   totals,
 } from "./domain";
+import { sectionsForAttempt } from "./exams";
 const average = (values: number[]) =>
   values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
@@ -29,6 +29,7 @@ export function filterAttempts(attempts: AnalyticsAttempt[], f: Filters) {
         f.subject === "all" ||
         a.subjects.some((s) => s.subjectId === f.subject)) &&
       (!f.platform || f.platform === "all" || a.platform === f.platform) &&
+      (!f.tier || f.tier === "all" || a.tierId === f.tier) &&
       (!f.from ||
         new Date(a.completedAt).getTime() >=
           new Date(`${f.from}T00:00:00+05:30`).getTime()) &&
@@ -166,20 +167,22 @@ function parentPoint(
 }
 function derivedSectionPoint(
   attempt: AnalyticsAttempt,
+  sections: readonly PatternSection[],
   sectionId: SectionId,
 ): PerformancePoint | null {
-  const section = SECTIONS[sectionId];
+  const section = sections.find((s) => s.id === sectionId);
+  if (!section) return null;
   const children = attempt.subjects.filter((subject) =>
-    (section.subjectIds as readonly SubjectId[]).includes(subject.subjectId),
+    section.subjectIds.includes(subject.subjectId),
   );
   if (children.length !== section.subjectIds.length) return null;
-  const stats = children.map(subjectStats);
+  const stats = children.map((s) => subjectStats(s, attempt.marking));
   const correct = sum(stats.map((s) => s.correct));
   const incorrect = sum(stats.map((s) => s.incorrect));
   const questions = sum(stats.map((s) => s.questions));
   const score = sum(stats.map((s) => s.score));
   const attempted = correct + incorrect;
-  const maxScore = questions * 3;
+  const maxScore = questions * attempt.marking.correct;
   return {
     key: `${attempt.id}:${sectionId}`,
     sourceAttemptId: attempt.id,
@@ -210,16 +213,28 @@ function derivedSectionPoint(
   };
 }
 function explicitSectionPoint(attempt: AnalyticsAttempt): PerformancePoint | null {
-  const sectionId =
-    sectionForSubjects(attempt.subjects) ??
-    (attempt.subjects.some((s) => s.subjectId === "quant")
-      ? "section1"
-      : "section2");
-  return parentPoint(attempt, sectionId, sectionId, SECTIONS[sectionId].name);
+  const sections = sectionsForAttempt(attempt.examId, attempt.tierId);
+  const section = sectionForAttemptSubjects(attempt, sections);
+  return section
+    ? parentPoint(attempt, section.id, section.id, section.name)
+    : null;
+}
+function sectionForAttemptSubjects(
+  attempt: AnalyticsAttempt,
+  sections: readonly PatternSection[],
+): PatternSection | null {
+  const ids = new Set(attempt.subjects.map((s) => s.subjectId));
+  return (
+    sections.find(
+      (section) =>
+        ids.size === section.subjectIds.length &&
+        section.subjectIds.every((subjectId) => ids.has(subjectId)),
+    ) ?? null
+  );
 }
 function subjectPoints(attempt: AnalyticsAttempt): PerformancePoint[] {
   return attempt.subjects.map((subject) => {
-    const stats = subjectStats(subject);
+    const stats = subjectStats(subject, attempt.marking);
     return {
       key: `${attempt.id}:${subject.subjectId}`,
       sourceAttemptId: attempt.id,
@@ -269,8 +284,9 @@ export function projectPerformance(
           return point ? [point] : [];
         }
         if (attempt.type === "full") {
+          const sections = sectionsForAttempt(attempt.examId, attempt.tierId);
           return sectionIds
-            .map((sectionId) => derivedSectionPoint(attempt, sectionId))
+            .map((sectionId) => derivedSectionPoint(attempt, sections, sectionId))
             .filter((point): point is PerformancePoint => point != null);
         }
         return [];
@@ -405,14 +421,22 @@ export function buildWhereYouStand(
 ): WhereYouStandRow[] {
   return subjectIds.map((subjectId) => {
     const rows = attempts.flatMap((attempt) =>
-      attempt.subjects.filter((subject) => subject.subjectId === subjectId),
+      attempt.subjects
+        .filter((subject) => subject.subjectId === subjectId)
+        .map((subject) => ({ attempt, subject })),
     );
-    const correct = sum(rows.map((row) => row.correct));
-    const attempted = sum(rows.map((row) => row.correct + row.incorrect));
+    const correct = sum(rows.map(({ subject: row }) => row.correct));
+    const attempted = sum(
+      rows.map(({ subject: row }) => row.correct + row.incorrect),
+    );
     return {
       subjectId,
       label: SUBJECTS[subjectId].short,
-      averagePercentage: average(rows.map((row) => subjectStats(row).percentage)),
+      averagePercentage: average(
+        rows.map(({ attempt, subject: row }) =>
+          subjectStats(row, attempt.marking).percentage,
+        ),
+      ),
       weightedAccuracy: attempted ? (correct / attempted) * 100 : null,
       resultCount: rows.length,
     };
@@ -422,7 +446,6 @@ function deepDiveFor(
   attempts: AnalyticsAttempt[],
   scope: Exclude<DashboardScope, "subject">,
 ): DeepDiveSubject[] {
-  const includeComputer = scope !== "sectional";
   const rows = attempts.flatMap((attempt) => {
     const isFull = attempt.type === "full";
     const include =
@@ -431,8 +454,13 @@ function deepDiveFor(
       (scope === "sectional" &&
         (attempt.type === "sectional" || isFull));
     if (!include) return [];
+    // Sectional scope reads merit-bearing subjects only; qualifying papers
+    // (CGL Tier 2 Computer) never appear there.
     return attempt.subjects
-      .filter((subject) => includeComputer || subject.subjectId !== "computer")
+      .filter(
+        (subject) =>
+          scope !== "sectional" || !subject.qualifying,
+      )
       .map((subject) => ({ attempt, subject }));
   });
   return subjectIds.flatMap((subjectId) => {
@@ -440,9 +468,10 @@ function deepDiveFor(
       (row) => row.subject.subjectId === subjectId,
     );
     if (!matching.length) return [];
-    const stats = matching.map((row) => ({
+    const stats = matching.map(({ attempt, subject: row }) => ({
       row,
-      stats: subjectStats(row.subject),
+      attempt,
+      stats: subjectStats(row, attempt.marking),
     }));
     const correct = sum(stats.map(({ stats: s }) => s.correct));
     const attempted = sum(stats.map(({ stats: s }) => s.attempted));
@@ -450,7 +479,7 @@ function deepDiveFor(
       {
         id: subjectId,
         name: SUBJECTS[subjectId].short,
-        qualifying: subjectId === "computer",
+        qualifying: matching.some((row) => row.subject.qualifying),
         count: stats.length,
         percentage: average(stats.map(({ stats: s }) => s.percentage)),
         accuracy: attempted ? (correct / attempted) * 100 : null,
@@ -459,12 +488,12 @@ function deepDiveFor(
             .filter(({ stats: s }) => s.timeSeconds != null)
             .map(({ stats: s }) => s.timeSeconds!),
         ),
-        trend: stats.map(({ row, stats: s }) => ({
-          key: `${row.attempt.id}:${subjectId}`,
-          date: row.attempt.completedAt,
-          name: row.attempt.name,
-          sourceAttemptId: row.attempt.id,
-          sourceType: row.attempt.type,
+        trend: stats.map(({ attempt, stats: s }) => ({
+          key: `${attempt.id}:${subjectId}`,
+          date: attempt.completedAt,
+          name: attempt.name,
+          sourceAttemptId: attempt.id,
+          sourceType: attempt.type,
           score: s.score,
           maxScore: s.maxScore,
           percentage: s.percentage,
@@ -493,7 +522,13 @@ function targetSnapshots(points: PerformancePoint[]): TargetSnapshot[] {
       pointCount: rows.length,
     }));
 }
-export function analyze(allAttempts: AnalyticsAttempt[], scope: DashboardScope = "all") {
+export function analyze(
+  allAttempts: AnalyticsAttempt[],
+  scope: DashboardScope = "all",
+  /** Max of the pattern the target score is set against; the active exam's
+   * primary tier. Defaults to the legacy CGL Tier 2 total. */
+  targetMaxScore: number = FULL_MOCK_MAX_SCORE,
+) {
   const points = projectPerformance(allAttempts, scope);
   const sourceAttemptIds = [...new Set(points.map((p) => p.sourceAttemptId))];
   const correct = sum(points.map((p) => p.correct));
@@ -528,7 +563,7 @@ export function analyze(allAttempts: AnalyticsAttempt[], scope: DashboardScope =
     },
     target: {
       snapshots,
-      fullMockMaxScore: FULL_MOCK_MAX_SCORE,
+      fullMockMaxScore: targetMaxScore,
     },
     radial: stacksFor(scope, points),
     whereYouStand: buildWhereYouStand(allAttempts),
@@ -537,12 +572,16 @@ export function analyze(allAttempts: AnalyticsAttempt[], scope: DashboardScope =
 }
 export type Analytics = ReturnType<typeof analyze>;
 
-export function targetPercentage(targetScore: number | null) {
+export function targetPercentage(targetScore: number | null, maxScore: number) {
   return targetScore == null
     ? null
-    : (targetScore / FULL_MOCK_MAX_SCORE) * 100;
+    : (targetScore / maxScore) * 100;
 }
-export function targetMarks(targetScore: number | null, maxScore: number) {
-  const percentage = targetPercentage(targetScore);
-  return percentage == null ? null : (percentage / 100) * maxScore;
+export function targetMarks(
+  targetScore: number | null,
+  patternMaxScore: number,
+  displayMaxScore: number,
+) {
+  const percentage = targetPercentage(targetScore, patternMaxScore);
+  return percentage == null ? null : (percentage / 100) * displayMaxScore;
 }

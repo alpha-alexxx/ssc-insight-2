@@ -2,12 +2,17 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 
 /**
- * Settings domain: the tracker's per-user settings (currently the target
- * score). One resource, one key; the mutation writes the fresh value into
- * the cache, so reads never need background refetching.
+ * Settings domain: the workspace scope — active exam, enabled exams, and
+ * one target score per exam (against that exam's primary tier maximum).
+ * One resource, one key; the mutation writes the fresh value into the
+ * cache, so reads never need background refetching.
  */
 
-export type TrackerSettings = { targetScore: number | null };
+export type TrackerSettings = {
+  activeExamId: string;
+  enabledExams: string[];
+  examTargets: Record<string, number | null>;
+};
 
 export const settingsKeys = {
   all: ["settings"] as const,
@@ -20,9 +25,9 @@ export const settingsQueryOptions = queryOptions({
   queryFn: ({ signal }) => api<TrackerSettings>("/api/settings", { signal }),
 });
 
-export async function updateSettingsRequest(targetScore: number | null) {
+export async function updateSettingsRequest(settings: TrackerSettings) {
   return api<TrackerSettings>("/api/settings", {
     method: "PUT",
-    body: JSON.stringify({ targetScore }),
+    body: JSON.stringify(settings),
   });
 }

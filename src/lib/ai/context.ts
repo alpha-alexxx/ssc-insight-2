@@ -1,14 +1,12 @@
 import { createHash } from "node:crypto";
 import {
-  FULL_MOCK_MAX_SCORE,
-  SECTIONS,
   SUBJECTS,
-  sectionIds,
   subjectStats,
   totals,
   type AnalyticsAttempt,
-  type SubjectId,
+  type PatternShape,
 } from "../domain";
+import { patternMaxScore } from "../exams";
 import { analyze } from "../analytics";
 import { dayKey } from "./tokens";
 
@@ -29,10 +27,10 @@ function average(values: number[]) {
 
 function subjectProfile(attempt: AnalyticsAttempt) {
   return attempt.subjects.map((subject) => {
-    const stats = subjectStats(subject);
+    const stats = subjectStats(subject, attempt.marking);
     return {
       subject: subject.subjectId,
-      qualifying: subject.subjectId === "computer",
+      qualifying: subject.qualifying,
       questions: stats.questions,
       correct: stats.correct,
       incorrect: stats.incorrect,
@@ -49,7 +47,7 @@ function recentFullMock(attempt: AnalyticsAttempt) {
     date: dayKey(new Date(attempt.completedAt)),
     platform: attempt.platform,
     score: round(result.score, 2),
-    maxScore: FULL_MOCK_MAX_SCORE,
+    maxScore: result.maxScore,
     percentage: round(result.percentage),
     accuracy: round(result.accuracy),
     rank: attempt.rank ?? null,
@@ -94,34 +92,45 @@ function fullMockProfile(fullMocks: AnalyticsAttempt[]) {
   };
 }
 
-function sectionProfile(attempts: AnalyticsAttempt[]) {
-  const rows = attempts.flatMap((attempt) => attempt.subjects);
-  return sectionIds.map((sectionId) => {
-    const section = SECTIONS[sectionId];
-    const matching = rows.filter((subject) =>
-      (section.subjectIds as readonly SubjectId[]).includes(subject.subjectId),
+function sectionProfile(
+  attempts: AnalyticsAttempt[],
+  pattern: PatternShape,
+) {
+  // Sections are tier-specific data (only CGL Tier 2 defines them today);
+  // aggregate only attempts of that tier so mixed-tier totals never mix.
+  const tierAttempts = attempts.filter(
+    (attempt) =>
+      attempt.examId === pattern.examId && attempt.tierId === pattern.tierId,
+  );
+  const rows = tierAttempts.flatMap((attempt) =>
+    attempt.subjects.map((subject) => ({ attempt, subject })),
+  );
+  return pattern.sections.map((section) => {
+    const matching = rows.filter(({ subject }) =>
+      section.subjectIds.includes(subject.subjectId),
     );
-    const correct = matching.reduce((sum, subject) => sum + subject.correct, 0);
+    const correct = matching.reduce((sum, { subject }) => sum + subject.correct, 0);
     const incorrect = matching.reduce(
-      (sum, subject) => sum + subject.incorrect,
+      (sum, { subject }) => sum + subject.incorrect,
       0,
     );
     const questions = matching.reduce(
-      (sum, subject) => sum + subject.questions,
+      (sum, { subject }) => sum + subject.questions,
       0,
     );
     const score = matching.reduce(
-      (sum, subject) => sum + subjectStats(subject).score,
+      (sum, { attempt, subject }) =>
+        sum + subjectStats(subject, attempt.marking).score,
       0,
     );
     return {
-      section: sectionId,
+      section: section.id,
       label: `${section.name} · ${section.description}`,
       results: matching.length,
       questions,
       score: round(score, 2),
-      maxScore: questions * 3,
-      percentage: questions ? round((score / (questions * 3)) * 100) : null,
+      maxScore: questions * pattern.marking.correct,
+      percentage: questions ? round((score / (questions * pattern.marking.correct)) * 100) : null,
       accuracy:
         correct + incorrect
           ? round((correct / (correct + incorrect)) * 100)
@@ -134,18 +143,26 @@ function payload(
   attempts: AnalyticsAttempt[],
   targetScore: number | null,
   recentFullMocks: ReturnType<typeof recentFullMock>[],
+  pattern: PatternShape,
+  examName: string,
 ) {
-  const analytics = analyze(attempts, "all");
+  const analytics = analyze(attempts, "all", patternMaxScore(pattern));
   const fullMocks = attempts.filter((attempt) => attempt.type === "full");
   const latest = recentFullMocks[0] ?? null;
+  const targetMaxScore = patternMaxScore(pattern);
   const targetPercentage =
-    targetScore != null ? (targetScore / FULL_MOCK_MAX_SCORE) * 100 : null;
+    targetScore != null ? (targetScore / targetMaxScore) * 100 : null;
   const dates = attempts
     .map((attempt) => attempt.completedAt)
     .sort((a, b) => b.localeCompare(a));
 
   return {
     dataAsOf: dates[0] ?? null,
+    exam: {
+      id: pattern.examId,
+      name: examName,
+      tierId: pattern.tierId,
+    },
     coverage: {
       totalAttempts: attempts.length,
       fullMocks: fullMocks.length,
@@ -159,7 +176,7 @@ function payload(
     target: {
       score: targetScore,
       percentage: round(targetPercentage),
-      fullMockMaxScore: FULL_MOCK_MAX_SCORE,
+      fullMockMaxScore: targetMaxScore,
       latestFullMockPercentage: latest?.percentage ?? null,
       gapToTarget:
         latest?.percentage != null && targetPercentage != null
@@ -185,25 +202,29 @@ function payload(
       weightedAccuracy: round(row.weightedAccuracy),
       resultCount: row.resultCount,
     })),
-    sections: sectionProfile(attempts),
+    sections: sectionProfile(attempts, pattern),
     recentFullMocks,
   };
 }
 
 /**
  * Compact, whitelisted context for the coach and chat. Names, IDs, notes,
- * source, and bookkeeping timestamps are deliberately absent.
+ * source, and bookkeeping timestamps are deliberately absent. The pattern is
+ * the active exam's primary tier — target math and section aggregates key
+ * off it, while per-attempt scoring uses each attempt's own marking.
  */
 export function buildAiContext(
   attempts: AnalyticsAttempt[],
   targetScore: number | null,
+  pattern: PatternShape,
+  examName = "SSC CGL",
 ) {
   const fullMocks = attempts
     .filter((attempt) => attempt.type === "full")
     .sort((a, b) => b.completedAt.localeCompare(a.completedAt))
     .slice(0, RECENT_FULL_MOCK_LIMIT);
   const recent = fullMocks.map(recentFullMock);
-  let context = payload(attempts, targetScore, recent);
+  let context = payload(attempts, targetScore, recent, pattern, examName);
   while (
     context.recentFullMocks.length > 0 &&
     JSON.stringify(context).length > MAX_CONTEXT_CHARS
@@ -212,6 +233,8 @@ export function buildAiContext(
       attempts,
       targetScore,
       context.recentFullMocks.slice(0, -1),
+      pattern,
+      examName,
     );
   }
   const serialized = JSON.stringify(context);

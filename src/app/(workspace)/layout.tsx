@@ -37,13 +37,13 @@ export default async function WorkspaceLayout({
     (await cookies()).get("sidebar_state")?.value !== "false";
   return (
     <PrivateWorkspace key={user.id} userId={user.id}>
-      <WorkspaceShell
-        defaultSidebarOpen={defaultSidebarOpen}
-        authEnabled={process.env.GOOGLE_AUTH_ENABLED === "true"}
-        userEmail={user.email ?? ""}
-        userName={user.name ?? ""}
-        userImage={user.image ?? ""}
-      />
+        <WorkspaceShell
+          defaultSidebarOpen={defaultSidebarOpen}
+          authEnabled={process.env.GOOGLE_AUTH_ENABLED === "true"}
+          userEmail={user.email ?? ""}
+          userName={user.name ?? ""}
+          userImage={user.image ?? ""}
+        />
     </PrivateWorkspace>
   );
 }

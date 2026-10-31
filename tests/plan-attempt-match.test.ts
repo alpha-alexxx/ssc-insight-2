@@ -4,7 +4,7 @@ import {
   fillFromAttempt,
   matchAttemptForTask,
   namesMatch,
-} from "../src/components/plan/day/attempt-match";
+} from "../src/lib/plan/attempt-match";
 import type { Attempt } from "../src/lib/domain";
 
 function attempt(overrides: Partial<Attempt> & { name: string }): Attempt {
@@ -12,12 +12,16 @@ function attempt(overrides: Partial<Attempt> & { name: string }): Attempt {
     id: "a1",
     platform: "Test platform",
     type: "sectional",
+    examId: "cgl",
+    tierId: "tier2",
+    marking: { correct: 3, incorrect: 1 },
     subjects: [
       {
         subjectId: "quant",
         questions: 25,
         correct: 18,
         incorrect: 4,
+        qualifying: false,
       },
     ],
     completedAt: "2026-11-13T10:30:00+05:30",

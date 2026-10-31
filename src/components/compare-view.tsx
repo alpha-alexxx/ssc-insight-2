@@ -542,7 +542,7 @@ export const CompareView = memo(function CompareView({
                     </td>
                     {compared.map((a) => {
                       const s = a.subjects.find((s) => s.subjectId === id);
-                      const stats = s ? subjectStats(s) : null;
+                      const stats = s ? subjectStats(s, a.marking) : null;
                       const pct =
                         stats && stats.maxScore
                           ? (stats.score / stats.maxScore) * 100
@@ -586,10 +586,10 @@ export const CompareView = memo(function CompareView({
                             a.subjects.find((s) => s.subjectId === id) ?? null,
                         );
                         const first = statsList[0]
-                          ? subjectStats(statsList[0])
+                          ? subjectStats(statsList[0], compared[0]!.marking)
                           : null;
                         const second = statsList[1]
-                          ? subjectStats(statsList[1])
+                          ? subjectStats(statsList[1], compared[1]!.marking)
                           : null;
                         if (
                           !twoWay ||

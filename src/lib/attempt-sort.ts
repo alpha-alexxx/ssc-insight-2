@@ -22,6 +22,7 @@ export type AttemptSortRow = Pick<
   | "percentile"
   | "scoreOverride"
   | "overallTimeSeconds"
+  | "marking"
   | "subjects"
 >;
 
@@ -101,9 +102,14 @@ export function buildAttemptStats(rows: AttemptSortRow[]): AttemptStats {
     current.length && earlier.length && timeOf(earlier)
       ? (timeOf(current)! - timeOf(earlier)!) / timeOf(earlier)!
       : null;
+  // A "/ max" suffix is only honest when every row shares one paper size;
+  // mixed tiers fall back to the percentage metric in the UI.
+  const maxScores = new Set(rows.map((r) => totals(r).maxScore));
+  const uniformMax = maxScores.size === 1 ? [...maxScores][0] ?? null : null;
   return {
     totalMocks: rows.length,
     avgScore,
+    avgScoreMax: uniformMax,
     avgScorePct: avgPct,
     avgAccuracy,
     accuracyDelta,

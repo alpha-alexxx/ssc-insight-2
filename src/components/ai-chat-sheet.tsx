@@ -34,6 +34,7 @@ import {
 import { TodoAiComposer } from "./tasks/ai-composer";
 import { AiSettingsForm } from "./ai-settings-form";
 import { ExtractionReview } from "./extraction-review";
+import { useExamScope } from "./exam-context";
 import { parseReport } from "@/lib/report-parser";
 import {
   MAX_EXTRACT_CHARS,
@@ -923,6 +924,22 @@ function LogMockTab({
   onAiConfigured?: (credential: AiCredentialSummary | null) => void;
   onLogMock: (draft: LogMockPayload) => void;
 }) {
+  const { activeShape } = useExamScope();
+  // The tab opens only inside the workspace; the exam scope resolves in the
+  // same tick the shell renders. Keep the JSX type-safe while it loads.
+  const shape = activeShape ?? {
+    examId: "cgl",
+    tierId: "tier2",
+    subjects: [
+      { subjectId: "quant", questions: 30, qualifying: false },
+      { subjectId: "reasoning", questions: 30, qualifying: false },
+      { subjectId: "english", questions: 45, qualifying: false },
+      { subjectId: "ga", questions: 25, qualifying: false },
+      { subjectId: "computer", questions: 20, qualifying: true },
+    ],
+    marking: { correct: 3, incorrect: 1 },
+    sections: [],
+  };
   const [paste, setPaste] = useState("");
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
   const [reviewing, setReviewing] = useState(false);
@@ -973,7 +990,7 @@ function LogMockTab({
   const importStandard = () => {
     setError("");
     try {
-      const parsed = parseReport(paste);
+      const parsed = parseReport(shape, paste);
       // Hand the deterministic result straight to the real form: /add
       // applies it through applyExtracted exactly like a manual paste import.
       onLogMock({
@@ -990,7 +1007,7 @@ function LogMockTab({
   const useReviewed = () => {
     if (!draft) return;
     try {
-      const reviewed = extractionToAttempt(draft, "");
+      const reviewed = extractionToAttempt(shape, draft, "");
       onLogMock(reviewed);
     } catch (cause) {
       setError(
@@ -1006,6 +1023,7 @@ function LogMockTab({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
         <ExtractionReview
           draft={draft}
+          shape={shape}
           onChange={setDraft}
           onUse={useReviewed}
           onBack={() => setReviewing(false)}

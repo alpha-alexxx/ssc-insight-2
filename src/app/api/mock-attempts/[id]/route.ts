@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { attemptSchema } from "@/lib/domain";
+import { attemptSchemaFor } from "@/lib/domain";
 import { readBody, RequestError } from "@/lib/api";
 import { deleteAttempt, getAttempt, updateAttempt } from "@/lib/repository";
+import { loadExamContext, requirePattern } from "@/lib/exam-settings";
 import { defineRoute } from "@/lib/route-handler";
 import { audit } from "@/lib/audit";
 
@@ -28,8 +29,16 @@ export const PUT = defineRoute<{ id: string }>(
   },
   async ({ request, params, user, startedAt }) => {
     const id = idSchema.parse(params.id);
-    const input = attemptSchema.parse(await readBody(request));
-    const attempt = await updateAttempt(user.id, id, input);
+    const body = await readBody(request);
+    const claim = body as { examId?: unknown; tierId?: unknown };
+    const ctx = await loadExamContext(user.id);
+    const { shape } = requirePattern(
+      ctx,
+      typeof claim.examId === "string" ? claim.examId : undefined,
+      typeof claim.tierId === "string" ? claim.tierId : undefined,
+    );
+    const input = attemptSchemaFor(shape).parse(body);
+    const attempt = await updateAttempt(user.id, id, input, shape);
     audit("mock.update", user.id, {
       sid: id,
       ms: Date.now() - startedAt,

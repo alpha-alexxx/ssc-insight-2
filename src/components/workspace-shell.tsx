@@ -50,7 +50,8 @@ import { useThemePrefs, viewTransition } from "./theme-style-provider";
 import { useUiStore, type AiChatTab } from "@/stores/ui-store";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
-import { settingsKeys, updateSettingsRequest } from "@/lib/queries/settings";
+import { type TrackerSettings, settingsKeys, updateSettingsRequest } from "@/lib/queries/settings";
+import { ExamScopeProvider, useExamScope } from "./exam-context";
 import {
   attemptKeys,
   deleteAttemptRequest,
@@ -66,6 +67,7 @@ import {
 } from "@/lib/domain";
 import { formatNumber as n } from "@/lib/domain";
 import { longDate, shortDate, isIsoDate } from "@/lib/format";
+import { safeWorkspaceReturnTo } from "@/lib/filters-url";
 import { cn } from "@/lib/utils";
 import { istTodayIso } from "@/lib/plan/view-model";
 import type { AiScreenContext, AiView } from "@/lib/ai/client-types";
@@ -128,6 +130,7 @@ export function WorkspaceShell({
   // unmounting the shell (logout) drops the cache with it.
   return (
     <QueryProvider>
+      <ExamScopeProvider>
       <ToastProvider>
         <WorkspaceShellInner
           authEnabled={authEnabled}
@@ -137,6 +140,7 @@ export function WorkspaceShell({
           userImage={userImage}
         />
       </ToastProvider>
+      </ExamScopeProvider>
     </QueryProvider>
   );
 }
@@ -284,15 +288,19 @@ function WorkspaceShellInner({
   const openSearch = useCallback(() => setSearchOpen(true), [setSearchOpen]);
   /**
    * Planner → Add Mock. The actual attempt date is prefilled, but remains
-   * editable in the form. The return target is a real plan-day route.
+   * editable in the form.
+   *
+   * The return target defaults to the plan-day route, but a caller that knows
+   * a better origin (the calendar) passes its own address, so saving lands the
+   * user back where they started. `safeWorkspaceReturnTo` re-validates it.
    */
   const addMockForDate = useCallback(
-    (date: string, task?: PlanTaskView) => {
+    (date: string, task?: PlanTaskView, returnTo?: string) => {
       setEditing(undefined);
       setPlannerDate(date);
       const params = new URLSearchParams({
         date,
-        returnTo: `/plan/${date}`,
+        returnTo: safeWorkspaceReturnTo(returnTo ?? null) ?? `/plan/${date}`,
       });
       if (task) params.set("name", task.name);
       router.push(`/add?${params.toString()}`);
@@ -403,9 +411,20 @@ function WorkspaceShellInner({
     setBusy(true);
     try {
       const value = targetInput.trim() ? Number(targetInput) : null;
-      // Write-through: the PUT response is the fresh settings payload, so
-      // the cache updates without a refetch (lib/queries/settings.ts).
-      const fresh = await updateSettingsRequest(value);
+      // The target is per exam: merge into the existing examTargets map and
+      // PUT the full scope shape. Write-through: the PUT response is the
+      // fresh settings payload, so the cache updates without a refetch.
+      const current = queryClient.getQueryData<TrackerSettings>(
+        settingsKeys.current(),
+      );
+      const fresh = await updateSettingsRequest({
+        activeExamId: current?.activeExamId ?? "cgl",
+        enabledExams: current?.enabledExams ?? ["cgl"],
+        examTargets: {
+          ...(current?.examTargets ?? {}),
+          [current?.activeExamId ?? "cgl"]: value,
+        },
+      });
       queryClient.setQueryData(settingsKeys.current(), fresh);
       toast.success("Target updated");
       return true;
@@ -694,7 +713,7 @@ function WorkspaceShellInner({
                             <span aria-hidden="true">·</span>
                             <span className="inline-flex items-center gap-1.5">
                               <PlainIcon name="file" size={12} />
-                              SSC CGL Tier 2
+                              <ActiveExamName />
                             </span>
                             {planApi.plan ? (
                               <>
@@ -856,12 +875,11 @@ function WorkspaceShellInner({
                         }
                         onReset={backup.resetImport}
                         onCommit={() => void backup.commitImport(false)}
-                        targetChange={
+                        settingsChange={
                           backup.preview != null &&
                           backup.applyTarget &&
-                          backup.preview.target.available &&
-                          backup.preview.target.current !==
-                            backup.preview.target.incoming
+                          backup.preview.settings.available &&
+                          backup.preview.settings.changed
                         }
                         onOpenReplace={() => backup.setReplaceOpen(true)}
                       />
@@ -950,8 +968,9 @@ function WorkspaceShellInner({
                     <footer className="flex flex-wrap justify-between gap-2 pt-6 text-[0.625rem] text-muted">
                       <p>Built for progress, one mock at a time.</p>
                       <p>
-                        SSC CGL Tier 2 <span className="mx-2">·</span> All dates
-                        in India Standard Time
+                        <ActiveExamName />{" "}
+                        <span className="mx-2">·</span> All dates in India
+                        Standard Time
                       </p>
                     </footer>
                   </>
@@ -1003,12 +1022,12 @@ function WorkspaceShellInner({
                     mocks from the backup.
                   </p>
                   <p className="text-xs muted">
-                    Target:{" "}
-                    {backup.applyTarget && backup.preview.target.available
-                      ? backup.preview.target.incoming == null
-                        ? "clear the current target"
-                        : `set target to ${n(backup.preview.target.incoming)} / 390`
-                      : "keep the current target"}
+                    Settings:{" "}
+                    {backup.applyTarget && backup.preview.settings.available
+                      ? backup.preview.settings.changed
+                        ? "apply the backup's exam scope and targets"
+                        : "same as the current scope"
+                      : "keep the current exam scope and targets"}
                     .{" "}
                     {backup.safetyDownloaded
                       ? "A safety backup was downloaded."
@@ -1070,7 +1089,7 @@ function WorkspaceShellInner({
   );
 }
 
-/** Scope tabs + platform/subject/date filters, shared by the three views. */
+/** Scope tabs + platform/subject/tier/date filters, shared by the views. */
 function ScopeFilters({
   view,
   scope,
@@ -1089,6 +1108,11 @@ function ScopeFilters({
   changeFilter: (key: keyof Filters, value: string) => void;
   platforms: string[];
 }) {
+  const scope_ = useExamScope();
+  const activeExam = scope_.exams
+    ? scope_.exams.builtIn.find((exam) => exam.id === scope_.activeExamId)
+    : null;
+  const tiers = activeExam?.tiers ?? [];
   return (
     <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
       {/* The four scope options share one row from sm up; on phones they
@@ -1165,6 +1189,21 @@ function ScopeFilters({
             ))}
           </select>
         )}
+        {tiers.length > 1 && view !== "dashboard" && (
+          <select
+            aria-label="Filter by tier"
+            className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[11.5rem]"
+            value={filters.tier ?? "all"}
+            onChange={(e) => changeFilter("tier", e.target.value)}
+          >
+            <option value="all">All tiers</option>
+            {tiers.map((tier) => (
+              <option key={tier.id} value={tier.id}>
+                {tier.label}
+              </option>
+            ))}
+          </select>
+        )}
         <div
           className={cn(
             "min-w-0 [&>button]:w-full sm:[&>button]:w-auto",
@@ -1179,5 +1218,17 @@ function ScopeFilters({
         </div>
       </div>
     </div>
+  );
+}
+
+/** The active exam's display name, from the workspace exam scope. */
+function ActiveExamName() {
+  const scope = useExamScope();
+  if (!scope.exams) return "SSC CGL";
+  return (
+    scope.exams.builtIn.find((exam) => exam.id === scope.activeExamId)?.name ??
+    scope.exams.customExams.find((exam) => exam.id === scope.activeExamId)
+      ?.name ??
+    "SSC CGL"
   );
 }

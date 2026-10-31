@@ -164,6 +164,8 @@ function buildAttempt(
       questions: ROW_COUNTS[subjectId as SubjectId],
       correct,
       incorrect,
+      // The samples are CGL Tier 2 rows: Computer Knowledge is qualifying.
+      qualifying: subjectId === "computer",
       timeSeconds: Math.round(minutes * 60),
     }),
   );
@@ -174,6 +176,9 @@ function buildAttempt(
     platform: row.platform,
     completedAt,
     type,
+    examId: "cgl",
+    tierId: "tier2",
+    marking: { correct: 3, incorrect: 1 },
     subjects,
     percentile: row.percentile ?? null,
     rank: row.rank ?? null,

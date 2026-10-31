@@ -242,6 +242,9 @@ export function PlanDayView({
           <div className="min-w-0">
             <h1 className="text-[2rem] font-semibold leading-none tracking-[-0.03em] text-ink sm:text-[44px]">
               Day {current.day}
+              <span className="ml-2 align-middle rounded-pill border border-rule-soft px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-muted">
+                CGL plan
+              </span>
             </h1>
             <p
               className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent"

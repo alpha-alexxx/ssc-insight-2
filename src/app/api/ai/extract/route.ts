@@ -11,6 +11,7 @@ import { reservationTokens } from "@/lib/ai/quota";
 import { createAiProvider } from "@/lib/ai/provider";
 import { resolveAiConfig } from "@/lib/ai/resolve";
 import { aiLimits } from "@/lib/ai/server";
+import { loadExamContext, requirePattern } from "@/lib/exam-settings";
 import {
   reserveAiUsage,
   settleSafely,
@@ -20,7 +21,12 @@ import { requireUser } from "@/lib/auth/require-user";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const bodySchema = z.object({ text: z.string().min(1) });
+const bodySchema = z.object({
+  text: z.string().min(1),
+  // The exam/tier the add form is scoped to; defaults to the active exam.
+  examId: z.string().min(1).max(40).optional(),
+  tierId: z.string().min(1).max(40).optional(),
+});
 
 export async function POST(request: Request) {
   try {
@@ -39,7 +45,18 @@ export async function POST(request: Request) {
       );
 
     const report = sanitizeReport(body.text);
-    const messages = extractionMessages(report);
+    const examCtx = await loadExamContext(userId);
+    const claim = body as { examId?: string; tierId?: string };
+    const { shape, resolved: pattern } = requirePattern(
+      examCtx,
+      claim.examId,
+      claim.tierId,
+    );
+    const messages = extractionMessages(
+      report,
+      shape,
+      pattern.examName,
+    );
     const reservation = await reserveAiUsage(userId, {
       feature: "extract",
       model: config.model,
@@ -57,7 +74,7 @@ export async function POST(request: Request) {
         messages,
         maxOutputTokens: config.maxOutputTokens,
         signal: request.signal,
-        parse: parseExtraction,
+        parse: (raw: string) => parseExtraction(shape, raw),
       });
     } catch (error) {
       const code = error instanceof AiError ? error.code : "AI_PROVIDER_ERROR";

@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { attemptSchema, totals, FULL_MOCK_MAX_SCORE } from "../src/lib/domain";
+import { attemptSchemaFor, totals, FULL_MOCK_MAX_SCORE } from "../src/lib/domain";
+import { T2 } from "./fixtures/exam";
+
+const attemptSchema = attemptSchemaFor(T2);
 import { analyze } from "../src/lib/analytics";
 import {
   LANDING_ATTEMPTS,
