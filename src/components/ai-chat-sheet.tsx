@@ -20,6 +20,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api-client";
 import { useOverlayViewport, useOverlayFocus } from "./use-overlay-viewport";
 import { Button } from "./ui/button";
 import { PlainIcon } from "./icon";
@@ -933,10 +934,9 @@ function LogMockTab({
   // Re-check AI availability when the tab opens (cheap status call).
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/ai/status", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body) => {
-        if (!cancelled && body?.data) setAiEnabled(Boolean(body.data.enabled));
+    void api<{ enabled: boolean }>("/api/ai/status")
+      .then((status) => {
+        if (!cancelled) setAiEnabled(Boolean(status.enabled));
       })
       .catch(() => undefined)
       .finally(() => {
@@ -952,21 +952,12 @@ function LogMockTab({
     setError("");
     setDraft(null);
     try {
-      const response = await fetch("/api/ai/extract", {
+      const result = await api<{ draft?: ExtractionDraft }>("/api/ai/extract", {
         method: "POST",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: paste }),
       });
-      const body = (await response.json().catch(() => null)) as {
-        data?: { draft?: ExtractionDraft };
-        error?: { message?: string };
-      } | null;
-      if (!response.ok || !body?.data?.draft)
-        throw new Error(
-          body?.error?.message ?? "Could not arrange this report.",
-        );
-      setDraft(body.data.draft);
+      if (!result.draft) throw new Error("Could not arrange this report.");
+      setDraft(result.draft);
       setReviewing(true);
     } catch (cause) {
       setError(

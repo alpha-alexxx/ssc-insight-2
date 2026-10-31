@@ -1,7 +1,9 @@
 "use client";
 import { chatBaseForSend } from "@/lib/ai/chat-history";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import { aiKeys, aiStatusQueryOptions } from "@/lib/queries/ai";
 import { NdjsonDecoder, parseChatEvent } from "@/lib/ai/ndjson";
 import type {
   AiScreenContext,
@@ -69,7 +71,13 @@ function insightToChatText(insight: CoachInsight, meta: CoachMeta | null) {
  * Everything here fails soft — AI must never block the tracker.
  */
 export function useAiWorkspace() {
-  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const queryClient = useQueryClient();
+  // Availability status is the only cacheable AI resource; it lives in the
+  // query cache (lib/queries/ai.ts). A status failure must never block the
+  // dashboard — the query error simply keeps aiStatus null, which every
+  // consumer already treats as "AI disabled".
+  const aiStatusQuery = useQuery(aiStatusQueryOptions);
+  const aiStatus = aiStatusQuery.data ?? null;
   const [coachInsight, setCoachInsight] = useState<CoachInsight | null>(null);
   const [coachMeta, setCoachMeta] = useState<CoachMeta | null>(null);
   const [coachBusy, setCoachBusy] = useState(false);
@@ -80,17 +88,11 @@ export function useAiWorkspace() {
   const [chatError, setChatError] = useState("");
   const chatAbort = useRef<AbortController | null>(null);
 
+  // Revalidates after quota-consuming actions (coach/chat completion) — the
+  // quota ledger may have moved.
   const refreshAiStatus = useCallback(async () => {
-    try {
-      setAiStatus(await api<AiStatus>("/api/ai/status"));
-    } catch {
-      // AI is optional; a status failure must never block the dashboard.
-    }
-  }, []);
-  useEffect(() => {
-    const timer = setTimeout(() => void refreshAiStatus(), 0);
-    return () => clearTimeout(timer);
-  }, [refreshAiStatus]);
+    await queryClient.invalidateQueries({ queryKey: aiKeys.status() });
+  }, [queryClient]);
   useEffect(
     () => () => {
       chatAbort.current?.abort();

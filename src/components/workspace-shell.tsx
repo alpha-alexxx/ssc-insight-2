@@ -39,6 +39,8 @@ import {
 import { useWorkspaceData } from "./use-workspace-data";
 import { usePlanData } from "./use-plan-data";
 import { MyTasksView } from "./tasks/my-tasks-view";
+import { useInvalidateTodos } from "./use-todos-data";
+import { planKeys } from "@/lib/queries/plan";
 import { CalendarView } from "./plan/calendar-view";
 import { PlanDayView } from "./plan/plan-day-view";
 import { SettingsPanels } from "./settings-panels";
@@ -409,9 +411,22 @@ function WorkspaceShellInner({
     }
   }, [queryClient, targetInput, toast]);
 
+  // A backup import (merge or replace) can change every data domain at
+  // once — mocks, plan progress, personal tasks — so the commit revalidates
+  // all of them; settings revalidate via onTargetApplied when the import
+  // applied a target.
+  const invalidateTodos = useInvalidateTodos();
+  const refreshAfterImport = useCallback(async () => {
+    await Promise.all([
+      refreshAfterMutation(),
+      queryClient.invalidateQueries({ queryKey: planKeys.all }),
+      invalidateTodos(),
+    ]);
+  }, [invalidateTodos, queryClient, refreshAfterMutation]);
+
   const backup = useBackupImport({
     download,
-    refresh: refreshAfterMutation,
+    refresh: refreshAfterImport,
     onTargetApplied: reloadSettings,
     setBusy,
     fileRef,
