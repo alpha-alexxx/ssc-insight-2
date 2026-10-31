@@ -40,9 +40,12 @@ type UiState = {
   plannerDate: string;
   setPlannerDate: (date: string) => void;
 
-  /** Monotonic counter bumped to ask My Tasks to focus its quick-add bar. */
+  /** Monotonic counter bumped to ask My Tasks to focus its quick-add bar.
+   * Consumers track consumption so a remount never re-fires an old request. */
   quickAddNonce: number;
+  consumedQuickAddNonce: number;
   requestQuickAdd: () => void;
+  consumeQuickAdd: () => void;
 };
 
 export const useUiStore = create<UiState>()((set) => ({
@@ -58,6 +61,9 @@ export const useUiStore = create<UiState>()((set) => ({
   setPlannerDate: (date) => set({ plannerDate: date }),
 
   quickAddNonce: 0,
+  consumedQuickAddNonce: 0,
   requestQuickAdd: () =>
     set((state) => ({ quickAddNonce: state.quickAddNonce + 1 })),
+  consumeQuickAdd: () =>
+    set((state) => ({ consumedQuickAddNonce: state.quickAddNonce })),
 }));

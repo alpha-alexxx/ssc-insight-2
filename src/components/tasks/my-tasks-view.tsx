@@ -574,14 +574,15 @@ export function MyTasksView() {
     };
   }, [tab]);
 
-  // The shell's `n` shortcut asks for the quick-add bar through the UI
-  // store; each nonce bump is one request (a ref guards re-runs when only
-  // the tab changed).
+  // The shell's `n` shortcut and the palette's "New task" ask for the
+  // quick-add bar through the UI store. Consumption is tracked in the store
+  // so a remount never re-fires an old request.
   const quickAddNonce = useUiStore((s) => s.quickAddNonce);
-  const lastQuickAdd = useRef(0);
+  const consumedQuickAddNonce = useUiStore((s) => s.consumedQuickAddNonce);
+  const consumeQuickAdd = useUiStore((s) => s.consumeQuickAdd);
   useEffect(() => {
-    if (quickAddNonce === 0 || quickAddNonce === lastQuickAdd.current) return;
-    lastQuickAdd.current = quickAddNonce;
+    if (quickAddNonce === consumedQuickAddNonce) return;
+    consumeQuickAdd();
     if (tab === "trash") {
       // Reacting to an external-store event, the same carve-out as the
       // URL-restore effects in use-workspace-data.
@@ -591,7 +592,7 @@ export function MyTasksView() {
     }
     quickAddRef.current?.focus();
     quickAddRef.current?.scrollIntoView({ block: "nearest" });
-  }, [quickAddNonce, tab]);
+  }, [consumeQuickAdd, consumedQuickAddNonce, quickAddNonce, tab]);
 
   // ---- render -----------------------------------------------------------
   const activeEntries = activeFilterEntries(filters);

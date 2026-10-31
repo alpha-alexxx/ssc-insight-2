@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useUiStore } from "@/stores/ui-store";
 
 import {
   NAV_GROUPS,
@@ -155,19 +156,13 @@ function PaletteBody({
     action();
   };
 
-  // "New task" mirrors the `n` shortcut on My Tasks: focus the quick-add bar
-  // via the shell event. When we have to navigate first, wait for the view
-  // swap to paint so the listener exists before the event fires.
+  // "New task" mirrors the `n` shortcut on My Tasks: bump the quick-add
+  // request in the UI store. The view consumes the request whenever it is
+  // (or becomes) mounted, so no timing dance is needed for navigation.
   const newTask = () => {
-    const onTasks = window.location.pathname.startsWith("/my-tasks");
-    if (!onTasks) router.push("/my-tasks");
-    const dispatch = () =>
-      window.dispatchEvent(new Event("ssc:tasks-quick-add"));
-    if (onTasks) {
-      dispatch();
-    } else {
-      requestAnimationFrame(() => requestAnimationFrame(dispatch));
-    }
+    if (!window.location.pathname.startsWith("/my-tasks"))
+      router.push("/my-tasks");
+    useUiStore.getState().requestQuickAdd();
   };
 
   const pageActions: { label: string; action: RecentAction }[] = [];
