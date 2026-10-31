@@ -158,6 +158,10 @@ The additive migration `prisma/migrations/20261029000000_personal_todos` extends
 - A different Google account is a new Neon Auth workspace, so export/import is the supported move. A same-identity email change keeps the workspace and needs no import. Neon Auth tables stay read-only; the app never reassigns ownership server-side.
 - Backups are manual only: no scheduled jobs, reminders, email, or ZIP archive.
 
+## Client data layer
+
+All server state in the workspace goes through **TanStack Query** (one in-memory cache per session — nothing is persisted to storage); a small **Zustand** store (`src/stores/ui-store.ts`) carries only global UI state (⌘K palette, AI drawer, planner date, quick-add handoff), and everything else is component-local state. Query keys and per-resource caching policies live in `src/lib/queries/` and are documented in [docs/caching.md](docs/caching.md); the architecture rules are in [AGENTS.md](AGENTS.md) ("Client data layer"). The client always fetches `no-store` at the HTTP layer — `stale-while-revalidate` headers remain for non-app consumers.
+
 ## API
 
 Routes retain `{data}` / `{error: {code, message}}` response envelopes, validation, same-origin writes, and request-size limits. JSON backups and CSV use downloadable responses.
