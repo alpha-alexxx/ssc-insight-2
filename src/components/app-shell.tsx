@@ -82,6 +82,11 @@ export const VIEW_META: Record<
   settings: { label: "Settings", icon: "settings" },
 };
 
+/** Platform check for the search kbd hint — the shortcut itself accepts both. */
+const IS_APPLE_PLATFORM =
+  typeof navigator !== "undefined" &&
+  /Mac|iP(hone|ad|od)/.test(navigator.userAgent);
+
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "ME";
@@ -101,6 +106,7 @@ export function AppFrame({
   onRouteIntent,
   onAddMock,
   onOpenAi,
+  onOpenSearch,
   children,
   defaultSidebarOpen = true,
 }: {
@@ -112,6 +118,7 @@ export function AppFrame({
   onRouteIntent: (view: AppView) => void;
   onAddMock: () => void;
   onOpenAi: () => void;
+  onOpenSearch: () => void;
   children: React.ReactNode;
   defaultSidebarOpen?: boolean;
 }) {
@@ -134,6 +141,7 @@ export function AppFrame({
           authEnabled={authEnabled}
           aiEnabled={aiEnabled}
           onOpenAi={onOpenAi}
+          onOpenSearch={onOpenSearch}
         />
         {children}
       </SidebarInset>
@@ -141,7 +149,7 @@ export function AppFrame({
   );
 }
 
-const NAV_GROUPS: {
+export const NAV_GROUPS: {
   label: string;
   items: { view: AppView; label: string; href: string }[];
 }[] = [
@@ -463,6 +471,7 @@ export interface AppHeaderProps {
   authEnabled: boolean;
   aiEnabled: boolean;
   onOpenAi: () => void;
+  onOpenSearch: () => void;
 }
 
 /**
@@ -475,6 +484,7 @@ export function AppHeader({
   authEnabled,
   aiEnabled,
   onOpenAi,
+  onOpenSearch,
 }: AppHeaderProps) {
   const { label } = VIEW_META[view];
 
@@ -493,6 +503,28 @@ export function AppHeader({
       <HeaderLocation label={label} />
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          aria-label="Search"
+          className="
+            inline-flex h-8 shrink-0 items-center gap-2 rounded-pill
+            border border-rule-soft bg-paper px-2 text-sm text-muted
+            transition-colors hover:border-rule hover:text-ink
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+            md:px-3
+          "
+        >
+          <PlainIcon name="search" size={14} />
+          <span className="hidden md:inline">Search</span>
+          <kbd
+            aria-hidden="true"
+            className="hidden font-sans text-[0.6875rem] font-medium tracking-wide text-muted md:inline"
+          >
+            {IS_APPLE_PLATFORM ? "⌘K" : "Ctrl K"}
+          </kbd>
+        </button>
+
         {aiEnabled && (
           <Button
             variant="ghost"

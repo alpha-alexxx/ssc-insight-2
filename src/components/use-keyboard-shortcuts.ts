@@ -4,6 +4,7 @@ import { useEffect } from "react";
 /**
  * Global keyboard shortcuts for SSC Insight.
  *
+ * - `⌘K/Ctrl K` Open the search palette
  * - `n`         Add a new mock
  * - `g d`        Go to Dashboard
  * - `g h`        Go to Mock history
@@ -21,6 +22,7 @@ type Handlers = {
   onAddMock: () => void;
   onNavigate: (view: "dashboard" | "history" | "compare" | "settings") => void;
   onShowHelp?: () => void;
+  onOpenSearch?: () => void;
 };
 
 export function useKeyboardShortcuts(handlers: Handlers) {
@@ -37,6 +39,17 @@ export function useKeyboardShortcuts(handlers: Handlers) {
     }
 
     function onKey(event: KeyboardEvent) {
+      // Mod+K opens the search palette — checked before the mod-key
+      // bail-out below (⌘B in the sidebar is the other mod-key shortcut).
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        event.key.toLowerCase() === "k"
+      ) {
+        event.preventDefault();
+        handlers.onOpenSearch?.();
+        return;
+      }
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTypingTarget(event.target)) {
         // Escape should still bubble out of inputs.

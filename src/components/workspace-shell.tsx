@@ -16,6 +16,7 @@ import {
 } from "motion/react";
 import { PlainIcon, DuotoneTile } from "./icon";
 import { DashboardClock } from "./dashboard-clock";
+import { CommandPalette } from "./command-palette";
 import { AppFrame, VIEW_HREF, VIEW_META, type AppView } from "./app-shell";
 import { CompareView } from "./compare-view";
 import { DateRangeFilter } from "./date-range-filter";
@@ -173,6 +174,7 @@ function WorkspaceShellInner({
   const [detail, setDetail] = useState<Attempt | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [plannerDate, setPlannerDate] = useState(istTodayIso());
   // The hidden file input lives in this component's JSX; the import hook
   // only touches it inside callbacks.
@@ -216,6 +218,7 @@ function WorkspaceShellInner({
     [setFilters],
   );
   const add = useCallback(() => navigate("add"), [navigate]);
+  const openSearch = useCallback(() => setSearchOpen(true), []);
   /**
    * Planner → Add Mock. The actual attempt date is prefilled, but remains
    * editable in the form. The return target is a real plan-day route.
@@ -368,13 +371,14 @@ function WorkspaceShellInner({
           add();
         },
         onNavigate: navigate,
+        onOpenSearch: openSearch,
         onShowHelp: () =>
           toast.info(
             "Shortcuts",
-            "n=new (task on My Tasks, mock elsewhere) · g d/h/c/s=navigate · /=focus search · ?=help",
+            "⌘K=search · n=new (task on My Tasks, mock elsewhere) · g d/h/c/s=navigate · /=focus search · ?=help",
           ),
       }),
-      [add, navigate, toast, view],
+      [add, navigate, openSearch, toast, view],
     ),
   );
 
@@ -530,6 +534,7 @@ function WorkspaceShellInner({
           onRouteIntent={routeIntent}
           onAddMock={add}
           onOpenAi={() => openAiChat("chat")}
+          onOpenSearch={openSearch}
         >
           <div className="mx-auto w-full max-w-[1560px] px-3 py-4 md:px-5 md:py-5">
             <AnimatePresence mode="wait" initial={false}>
@@ -838,6 +843,16 @@ function WorkspaceShellInner({
             </AnimatePresence>
           </div>
         </AppFrame>
+        <CommandPalette
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          plan={planApi.plan}
+          personalTasks={planApi.personalTasks}
+          attempts={allAttempts}
+          aiEnabled={!!ai.aiStatus?.enabled}
+          onAddMock={add}
+          onOpenAi={() => openAiChat("chat")}
+        />
         <MockDetailDialog
           attempt={detail}
           onClose={closeDetail}
