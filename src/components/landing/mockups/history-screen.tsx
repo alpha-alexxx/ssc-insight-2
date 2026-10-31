@@ -196,11 +196,12 @@ export function HistoryScreen() {
   );
 }
 
-/** h:mm:ss, matching `formatTime` but tolerating a null duration. */
+/** h:mm:ss, matching `formatTime` (round-first) but tolerating a null duration. */
 function formatDuration(seconds: number | null) {
   if (seconds == null) return "—";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor(seconds / 60) % 60;
-  const s = seconds % 60;
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor(total / 60) % 60;
+  const s = total % 60;
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }

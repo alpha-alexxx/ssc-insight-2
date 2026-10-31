@@ -260,7 +260,10 @@ export function formatNumber(n: number | null | undefined, digits = 1) {
 }
 export function formatTime(seconds: number | null | undefined) {
   if (seconds == null) return "—";
-  return `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  /* Round the whole value first: averages arrive fractional (0:32:57.83…),
+     and rounding only the seconds component could render a ":60". */
+  const total = Math.round(seconds);
+  return `${Math.floor(total / 3600)}:${String(Math.floor(total / 60) % 60).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 export function parseTime(value: string) {
   if (!value.trim()) return null;

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   attemptSchema,
+  formatTime,
   totals,
   subjectStats,
   duplicateKey,
@@ -68,6 +69,18 @@ test("supplied sample totals and time", () => {
   assert.equal(t.accuracy?.toFixed(2), "78.26");
   assert.equal(t.timeSeconds, 5477);
   assert.equal(parseTime("1:31:17"), 5477);
+});
+test("formatTime rounds fractional averages to the nearest second", () => {
+  // The /history average-time KPI: mean of integer attempt seconds arrives
+  // fractional and must read as 0:32:58, never 0:32:57.8333…
+  assert.equal(formatTime(1977.8333333333333), "0:32:58");
+  // Carrying across minute/hour boundaries instead of rendering ":60".
+  assert.equal(formatTime(59.6), "0:01:00");
+  assert.equal(formatTime(3599.6), "1:00:00");
+  assert.equal(formatTime(0.4), "0:00:00");
+  // Integer inputs are unchanged.
+  assert.equal(formatTime(5477), "1:31:17");
+  assert.equal(formatTime(null), "—");
 });
 test("zero attempts, negative scores, missing times and overrides", () => {
   const s = {
