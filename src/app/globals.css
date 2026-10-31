@@ -107,6 +107,9 @@
   --band-cell-pad-y: 18px;
   --band-cell-pad-x: 20px;
   --day-nav-size: 32px;
+  /* The sticky masthead's height. Sticky offsets elsewhere (the calendar's
+     rail, table anchor targets) read this instead of re-hardcoding 52/68. */
+  --app-header-h: 52px;
   /* WCAG 2.2 hit-area floor for icon-only controls. */
   --tap-min: 44px;
 
@@ -372,7 +375,9 @@
 /* Sera's flat ink-outline language: the active thumb trades the soft drop
    shadow for a bold ink hairline that matches the outlined track. */
 [data-style="sera"] .segment[aria-pressed="true"],
-[data-style="sera"] .segment[aria-pressed="true"]:hover {
+[data-style="sera"] .segment[aria-selected="true"],
+[data-style="sera"] .segment[aria-pressed="true"]:hover,
+[data-style="sera"] .segment[aria-selected="true"]:hover {
   box-shadow: inset 0 0 0 1px var(--ink);
 }
 [data-style="sera"] .duotone-tile:hover {
@@ -822,8 +827,12 @@
     background: var(--canvas);
     color: var(--ink);
   }
+  /* `aria-pressed` for toggle buttons; `aria-selected` for the tab variant
+     (the AI panel), because role="tab" does not permit aria-pressed. */
   .segment[aria-pressed="true"],
-  .segment[aria-pressed="true"]:hover {
+  .segment[aria-pressed="true"]:hover,
+  .segment[aria-selected="true"],
+  .segment[aria-selected="true"]:hover {
     background: var(--paper);
     color: var(--ink);
     /* The inset hairline stands in for a border so toggling never shifts
@@ -833,7 +842,8 @@
       0 1px 2px rgba(0, 0, 0, 0.06),
       0 3px 8px -3px rgba(0, 0, 0, 0.16);
   }
-  .segment[aria-pressed="true"] svg {
+  .segment[aria-pressed="true"] svg,
+  .segment[aria-selected="true"] svg {
     color: var(--accent);
   }
   .segment:disabled {
@@ -940,6 +950,38 @@
   .ai-composer > div:focus-within {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+  }
+  /* The coach's ruled field: one hairline container, no card chrome. */
+  .ai-composer-field {
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-control);
+    background: var(--paper);
+    transition: border-color var(--dur-quick) ease;
+  }
+  /* Focus is shown once, on the field's own border — the older
+     `.ai-composer > div:focus-within` ring would double it. */
+  .ai-composer > .ai-composer-field:focus-within {
+    outline: none;
+  }
+  .ai-composer-field:focus-within {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  /* A memo is a document, not a bubble: the label sits in a fixed margin
+     column beside its body, the way the day ledger lays out a section. */
+  .ai-memo-section {
+    display: grid;
+    gap: 2px;
+  }
+  @media (min-width: 480px) {
+    .ai-memo-section {
+      grid-template-columns: 7.5rem minmax(0, 1fr);
+      gap: 12px;
+      align-items: baseline;
+    }
+    .ai-memo-body {
+      margin-top: 0;
+    }
   }
   .task-editor-dialog,
   .task-confirm-dialog {

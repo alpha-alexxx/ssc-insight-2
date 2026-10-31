@@ -139,7 +139,7 @@ The AI schema migrations are `prisma/migrations/20261025000000_ai_usage` (usage 
 
 ## Personal todos
 
-**My Tasks** opens the full personal-task workspace directly. The dashboard combines today's structured assignments and personal tasks before a separate **Study Calendar**. Personal calendars select dates independently of the study schedule. Add a title on a selected date, then optionally edit notes, priority, group, and subtasks. New todos require one date and no time. Existing undated records are preserved in **Needs date**.
+**My Tasks** opens the full personal-task workspace directly. The dashboard combines today's structured assignments and personal tasks before the **Study Calendar**, which unifies scheduled plan work, your dated tasks and every logged result in one ledger across month, week, day and agenda views; phones open on the agenda. Personal calendars select dates independently of the study schedule. Add a title on a selected date, then optionally edit notes, priority, group, and subtasks. New todos require one date and no time. Existing undated records are preserved in **Needs date**.
 
 Groups are reusable across dates. Deleting a group moves its todos to Ungrouped. Parent checkbox actions complete/reopen all subtasks together; all subtasks complete the parent, and unchecking one reopens it. Subtasks share the parent date. Unfinished items retain their dates and become overdue, with priority ordering above completed items. A month calendar, filters, search, sorting, and pagination keep larger lists manageable.
 

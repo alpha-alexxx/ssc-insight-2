@@ -40,7 +40,10 @@ import {
   MAX_EXTRACT_CHARS,
   extractionToAttempt,
   type ExtractionDraft,
+  type ExtractedSubjectDraft,
 } from "@/lib/ai/extraction";
+import { SUBJECTS } from "@/lib/domain";
+import { mockTypeLabel } from "@/lib/format";
 import {
   parseTaskSuggestions,
   type TaskSuggestion,
@@ -168,90 +171,74 @@ export function AiChatSheet({
         overlayClassName="bg-ink/20"
         aria-describedby="ai-sheet-description"
       >
-        <SheetHeader className="shrink-0 gap-2 border-b border-rule-soft px-4 py-4 pr-14 sm:px-5 sm:py-5">
-          <SheetTitle className="flex items-center gap-2.5 font-serif text-xl font-medium sm:text-[22px]">
-            <Sparkles size={22} className="shrink-0 text-accent sm:hidden" />
-            <Sparkles size={24} className="hidden shrink-0 text-accent sm:block" />
-            Your study coach
+        <SheetHeader className="shrink-0 gap-1.5 border-b border-rule-soft px-4 pb-3 pt-4 pr-14 sm:px-5">
+          <SheetTitle className="font-serif text-xl font-medium leading-tight text-ink sm:text-[22px]">
+            Study coach
           </SheetTitle>
           <SheetDescription
             id="ai-sheet-description"
-            className="truncate text-[11px] sm:text-xs"
+            className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[11px] text-muted"
           >
-            {contextLabel ?? "Your workspace"} · Session-only conversation
+            {contextLabel && (
+              <span className="rounded-[2px] border border-rule-soft px-1.5 py-px text-[0.625rem] font-semibold uppercase tracking-[0.12em]">
+                {contextLabel}
+              </span>
+            )}
+            <span>Cleared when you close this panel.</span>
           </SheetDescription>
         </SheetHeader>
         <div
-          className="flex shrink-0 gap-1.5 border-b border-rule-soft px-3 py-2.5 sm:gap-2 sm:px-4 sm:py-3"
+          className="shrink-0 border-b border-rule-soft px-3 py-2.5 sm:px-4"
           role="tablist"
           aria-label="AI mode"
         >
-          {(
-            [
-              {
-                id: "chat",
-                label: "Coach chat",
-                shortLabel: "Chat",
-                icon: MessageSquare,
-              },
-              {
-                id: "todos",
-                label: "Plan todos",
-                shortLabel: "Todos",
-                icon: ListTodo,
-              },
-              {
-                id: "log",
-                label: "Log a mock",
-                shortLabel: "Log",
-                icon: ClipboardPaste,
-              },
-            ] as const
-          ).map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              id={`ai-tab-${item.id}`}
-              aria-controls={`ai-panel-${item.id}`}
-              aria-selected={tab === item.id}
-              aria-label={item.label}
-              tabIndex={tab === item.id ? 0 : -1}
-              onClick={() => {
-                onStop();
-                setTab(item.id);
-              }}
-              onKeyDown={(event) => {
-                const ids = ["chat", "todos", "log"] as const;
-                const next =
-                  event.key === "ArrowRight"
-                    ? (index + 1) % 3
-                    : event.key === "ArrowLeft"
-                      ? (index + 2) % 3
-                      : event.key === "Home"
-                        ? 0
-                        : event.key === "End"
-                          ? 2
-                          : null;
-                if (next !== null) {
-                  event.preventDefault();
+          {/* The app's one segmented-control grammar, not a bespoke tab bar. */}
+          <div className="segment-group !flex w-full">
+            {(
+              [
+                { id: "chat", label: "Ask", icon: MessageSquare },
+                { id: "todos", label: "Todos", icon: ListTodo },
+                { id: "log", label: "Log", icon: ClipboardPaste },
+              ] as const
+            ).map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`ai-tab-${item.id}`}
+                aria-controls={`ai-panel-${item.id}`}
+                aria-selected={tab === item.id}
+                tabIndex={tab === item.id ? 0 : -1}
+                onClick={() => {
                   onStop();
-                  setTab(ids[next]);
-                  document.getElementById(`ai-tab-${ids[next]}`)?.focus();
-                }
-              }}
-              className={cn(
-                "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-control px-2 text-xs transition-colors sm:gap-2 sm:text-[13px]",
-                tab === item.id
-                  ? "bg-ink text-paper"
-                  : "text-muted hover:bg-soft hover:text-ink",
-              )}
-            >
-              <item.icon size={17} className="shrink-0" />
-              <span className="hidden sm:inline">{item.label}</span>
-              <span className="sm:hidden">{item.shortLabel}</span>
-            </button>
-          ))}
+                  setTab(item.id);
+                }}
+                onKeyDown={(event) => {
+                  const ids = ["chat", "todos", "log"] as const;
+                  const next =
+                    event.key === "ArrowRight"
+                      ? (index + 1) % 3
+                      : event.key === "ArrowLeft"
+                        ? (index + 2) % 3
+                        : event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? 2
+                            : null;
+                  if (next !== null) {
+                    event.preventDefault();
+                    onStop();
+                    setTab(ids[next]);
+                    document.getElementById(`ai-tab-${ids[next]}`)?.focus();
+                  }
+                }}
+                className="segment min-w-0 flex-1 justify-center"
+              >
+                <item.icon size={15} className="shrink-0" />
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div
           role="tabpanel"
@@ -391,30 +378,31 @@ function CoachChatTab({
         )}
 
         {!messages.length && configured && (
-          <div className="flex flex-col gap-6 py-1">
+          <div className="flex flex-col gap-5 py-1">
             <div>
-              <h3 className="font-serif text-2xl font-medium leading-tight">
+              <h3 className="font-serif text-[1.375rem] font-medium leading-tight text-ink">
                 What would help you study today?
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Ask about your progress, subjects, or next steps. Answers use
-                your aggregates and latest 20 full mocks.
+                Answers use your aggregates and your latest 20 full mocks —
+                never your notes or identity.
               </p>
             </div>
-            <div className="flex flex-col gap-2.5">
-              {QUICK_QUESTIONS.map((question) => (
+            <div className="border-t border-rule-soft">
+              {QUICK_QUESTIONS.slice(0, 4).map((question) => (
                 <button
                   key={question.text}
                   type="button"
                   onClick={() => submit(question.text)}
-                  className="group flex min-h-16 items-center gap-3 rounded-card border border-rule-soft bg-paper px-3 py-3 text-left text-sm leading-snug text-ink transition-colors hover:border-accent hover:bg-accent-soft active:border-accent active:bg-accent-soft"
+                  className="group flex min-h-12 w-full items-center gap-3 border-b border-rule-soft px-1 py-3 text-left text-sm leading-snug text-ink transition-colors hover:bg-soft"
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-accent-soft text-accent">
-                    <question.icon size={19} />
-                  </span>
+                  <question.icon
+                    size={15}
+                    className="shrink-0 text-muted group-hover:text-accent"
+                  />
                   <span className="min-w-0 flex-1">{question.text}</span>
                   <ChevronRight
-                    size={17}
+                    size={15}
                     className="shrink-0 text-muted group-hover:text-accent"
                   />
                 </button>
@@ -423,19 +411,14 @@ function CoachChatTab({
           </div>
         )}
         {messages.length > 0 && (
-          <div className="flex flex-col gap-3">
-            {messages.map((message, index) => (
-              <ChatBubble
-                key={message.id}
-                message={message}
-                streaming={streaming && index === messages.length - 1}
-                taskApi={taskApi}
-                onTaskAdded={onTaskAdded}
-              />
-            ))}
-            <div ref={endRef} />
-          </div>
+          <CoachMemos
+            messages={messages}
+            streaming={streaming}
+            taskApi={taskApi}
+            onTaskAdded={onTaskAdded}
+          />
         )}
+        <div ref={endRef} />
       </div>
 
       {showLatest && (
@@ -487,7 +470,7 @@ function CoachChatTab({
           submit(input);
         }}
       >
-        <div className="rounded-card border border-rule-soft bg-paper p-2 sm:p-2.5">
+        <div className="ai-composer-field">
           <textarea
             ref={inputRef}
             id="ai-chat-input"
@@ -495,8 +478,8 @@ function CoachChatTab({
             maxLength={maxChars}
             value={input}
             aria-label="Message your study coach"
-            placeholder="Ask about a mock, a weak subject, or what to do next..."
-            className="max-h-28 w-full resize-none border-0 bg-transparent px-2 pt-1.5 text-[13px] leading-relaxed placeholder:text-muted focus:outline-none focus:ring-0"
+            placeholder="Ask about a mock, a weak subject, or what to do next…"
+            className="max-h-28 w-full resize-none border-0 bg-transparent px-3 pt-2.5 text-[13px] leading-relaxed placeholder:text-muted focus:outline-none focus:ring-0"
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
               if (
@@ -509,32 +492,32 @@ function CoachChatTab({
               }
             }}
           />
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-0.5">
+          <div className="flex items-center justify-between gap-2 border-t border-rule-soft px-2 py-1.5">
+            <div className="flex min-w-0 items-center gap-1">
               <button
                 type="button"
-                aria-label="Clear chat"
-                title="Clear chat"
-                className="inline-flex size-11 items-center justify-center rounded-[var(--radius-pill)] text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none disabled:opacity-40 sm:size-10"
+                aria-label="Clear conversation"
+                title="Clear conversation"
+                className="inline-flex size-10 items-center justify-center rounded-control text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none disabled:opacity-40"
                 disabled={streaming || !messages.length}
                 onClick={onClear}
               >
-                <Trash2 size={18} />
+                <Trash2 size={16} />
               </button>
               {error && lastSent && (
                 <button
                   type="button"
                   aria-label="Edit question"
                   title="Edit question"
-                  className="inline-flex size-11 items-center justify-center rounded-[var(--radius-pill)] text-accent transition-colors hover:bg-accent-soft disabled:pointer-events-none disabled:opacity-40 sm:size-10"
+                  className="inline-flex size-10 items-center justify-center rounded-control text-accent transition-colors hover:bg-soft disabled:pointer-events-none disabled:opacity-40"
                   onClick={() => setInput(lastSent)}
                 >
-                  <Pencil size={17} />
+                  <Pencil size={15} />
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="mr-1 text-[10px] tabular text-muted sm:text-[11px]">
+            <div className="flex items-center gap-2">
+              <span className="tabular text-[10px] text-muted">
                 {charCount}/{maxChars}
               </span>
               {streaming ? (
@@ -542,20 +525,20 @@ function CoachChatTab({
                   type="button"
                   aria-label="Stop generating"
                   title="Stop"
-                  className="inline-flex size-11 items-center justify-center rounded-[var(--radius-pill)] border border-rule bg-paper text-ink transition-colors hover:bg-canvas sm:size-10"
+                  className="inline-flex size-10 items-center justify-center rounded-control border border-rule bg-paper text-ink transition-colors hover:bg-canvas"
                   onClick={onStop}
                 >
-                  <Square size={15} />
+                  <Square size={14} />
                 </button>
               ) : (
                 <button
                   type="submit"
                   aria-label="Send message"
                   title="Send"
-                  className="inline-flex size-11 items-center justify-center rounded-[var(--radius-pill)] bg-accent text-paper transition-colors duration-150 hover:bg-accent-hover disabled:pointer-events-none disabled:bg-canvas disabled:text-muted sm:size-10"
+                  className="inline-flex size-10 items-center justify-center rounded-control bg-accent text-paper transition-colors duration-150 hover:bg-accent-hover disabled:pointer-events-none disabled:bg-canvas disabled:text-muted"
                   disabled={!input.trim() || streaming}
                 >
-                  <ArrowUp size={19} strokeWidth={2.4} />
+                  <ArrowUp size={17} strokeWidth={2.4} />
                 </button>
               )}
             </div>
@@ -566,9 +549,140 @@ function CoachChatTab({
   );
 }
 
-/* ---------------- chat bubbles + rich text ---------------- */
+/* ---------------- coach memos ---------------- */
 
-function ChatBubble({
+/** Section labels the coach is prompted to use. Recognised here so a memo can
+ * render them as a ruled left-label column instead of a wall of prose. */
+const MEMO_LABELS = new Set([
+  "WHAT I SEE",
+  "WHAT TO DO",
+  "WORKING WELL",
+  "NEEDS ATTENTION",
+  "NEXT ACTIONS",
+  "NEXT STEPS",
+  "WHY",
+]);
+
+type MemoBlock =
+  | { kind: "section"; label: string; body: string }
+  | { kind: "text"; body: string };
+
+const HEADLINE_MAX = 92;
+
+/** Split an answer into an optional headline and labelled sections.
+ *
+ * The headline is only the answer's **first paragraph**, and only when that
+ * paragraph is a short declarative line — a long opening paragraph is body
+ * text, not a title, and setting it in the display serif would shout. Prose
+ * the model writes before its first section stays body text; prose after a
+ * section closes that section. Everything renders through the same safe
+ * formatter, so nothing is lost whichever branch is taken. */
+export function parseMemo(content: string): {
+  headline: string[];
+  blocks: MemoBlock[];
+} {
+  const headline: string[] = [];
+  const blocks: MemoBlock[] = [];
+  let current: { label: string; lines: string[] } | null = null;
+  let seenSection = false;
+  /** Untouched prose seen before the first section head. */
+  let preamble: string[] = [];
+
+  const flush = () => {
+    if (!current) return;
+    blocks.push({
+      kind: "section",
+      label: current.label,
+      body: current.lines.join("\n").trim(),
+    });
+    current = null;
+  };
+
+  const flushPreamble = () => {
+    if (!preamble.length) return;
+    const [first, ...rest] = preamble;
+    const short =
+      first!.length <= HEADLINE_MAX &&
+      !/^\s*[-*\d]/.test(first!) &&
+      rest.every((line) => !line.trim());
+    if (short) headline.push(first!);
+    else blocks.push({ kind: "text", body: preamble.join("\n").trim() });
+    preamble = [];
+  };
+
+  for (const raw of content.split("\n")) {
+    const line = raw.trim();
+    if (!line) {
+      if (current) current.lines.push("");
+      else if (!seenSection) preamble.push("");
+      continue;
+    }
+    const arrow = line.match(/^\*\*([A-Za-z][A-Za-z \-']{2,28}?)\*\*:?\s*(.*)$/);
+    const upper = line.match(
+      /^(WHAT I SEE|WHAT TO DO|WORKING WELL|NEEDS ATTENTION|NEXT ACTIONS|NEXT STEPS|WHY)\b:?\s*(.*)$/i,
+    );
+    const candidate = arrow
+      ? arrow[1]!.trim().toUpperCase()
+      : upper
+        ? upper[1]!.trim().toUpperCase()
+        : null;
+    if (candidate && MEMO_LABELS.has(candidate)) {
+      flush();
+      flushPreamble();
+      seenSection = true;
+      current = { label: candidate, lines: [arrow?.[2] ?? upper?.[2] ?? ""] };
+      continue;
+    }
+    if (current) current.lines.push(line);
+    else if (!seenSection) preamble.push(line);
+    else {
+      flush();
+      blocks.push({ kind: "text", body: line });
+    }
+  }
+  flush();
+  flushPreamble();
+  return { headline, blocks };
+}
+
+/** The memo list: one document, not a chat transcript. Your question becomes
+ * the dateline that opens the answer beneath it. */
+function CoachMemos({
+  messages,
+  streaming,
+  taskApi,
+  onTaskAdded,
+}: {
+  messages: ChatMessage[];
+  streaming: boolean;
+  taskApi?: AiSheetTaskApi;
+  onTaskAdded?: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      {messages.map((message, index) =>
+        message.role === "user" ? (
+          <p
+            key={message.id}
+            className="section-label border-t border-rule-soft pt-4 first:border-t-0 first:pt-0"
+          >
+            Asked
+          </p>
+        ) : (
+          <CoachMemo
+            key={message.id}
+            message={message}
+            streaming={streaming && index === messages.length - 1}
+            taskApi={taskApi}
+            onTaskAdded={onTaskAdded}
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
+function CoachMemo({
   message,
   streaming,
   taskApi,
@@ -581,12 +695,10 @@ function ChatBubble({
 }) {
   const [copied, setCopied] = useState(false);
   const parsed = useMemo(
-    () =>
-      message.role === "assistant"
-        ? parseTaskSuggestions(message.content)
-        : { text: message.content, suggestions: [] as TaskSuggestion[] },
-    [message.role, message.content],
+    () => parseTaskSuggestions(message.content),
+    [message.content],
   );
+  const memo = useMemo(() => parseMemo(parsed.text), [parsed.text]);
 
   const copy = async () => {
     try {
@@ -598,53 +710,63 @@ function ChatBubble({
     }
   };
 
-  if (message.role === "user") {
+  if (!message.content) {
     return (
-      <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-control bg-soft px-3 py-2 text-sm leading-relaxed text-ink">
-        {message.content}
-      </div>
+      <p className="inline-flex items-center gap-2 text-sm text-muted">
+        {streaming ? (
+          <>
+            <PlainIcon name="refresh" size={12} className="animate-spin" />
+            Writing…
+          </>
+        ) : (
+          "No response."
+        )}
+      </p>
     );
   }
 
-  const waiting = !message.content;
   return (
-    <div className="min-w-0 max-w-full break-words py-2 text-sm leading-relaxed">
-      {waiting ? (
-        <span className="inline-flex items-center gap-1.5 text-muted">
-          {streaming ? (
-            <>
-              <PlainIcon name="refresh" size={12} className="animate-spin" />
-              Thinking…
-            </>
-          ) : (
-            "No response."
-          )}
-        </span>
-      ) : (
-        <>
-          <MessageContent content={parsed.text} />
-          {parsed.suggestions.map((suggestion, index) => (
-            <TaskSuggestionCard
-              key={`${message.id}-${index}`}
-              suggestion={suggestion}
-              taskApi={taskApi}
-              onTaskAdded={onTaskAdded}
-            />
-          ))}
-        </>
+    <article className="ai-memo min-w-0 break-words">
+      {memo.headline.length > 0 && (
+        <h3 className="font-serif text-[1.0625rem] font-medium leading-snug text-ink">
+          <MessageContent content={memo.headline.join("\n")} />
+        </h3>
       )}
-      {!waiting && (
-        <button
-          type="button"
-          onClick={() => void copy()}
-          aria-label={copied ? "Copied" : "Copy answer"}
-          className="-ml-2 mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 text-xs text-muted transition-colors hover:bg-soft hover:text-ink"
-        >
-          {copied ? <Check size={13} /> : <Copy size={13} />}
-          {copied ? "Copied" : "Copy"}
-        </button>
+      {memo.blocks.map((block, index) =>
+        block.kind === "section" ? (
+          <div key={index} className="ai-memo-section mt-3">
+            <p className="section-label">{block.label}</p>
+            <div className="ai-memo-body mt-1 text-sm leading-relaxed text-ink">
+              <MessageContent content={block.body} />
+            </div>
+          </div>
+        ) : (
+          <div
+            key={index}
+            className="mt-2 text-sm leading-relaxed text-ink"
+          >
+            <MessageContent content={block.body} />
+          </div>
+        ),
       )}
-    </div>
+      {parsed.suggestions.map((suggestion, index) => (
+        <TaskSuggestionCard
+          key={`${message.id}-${index}`}
+          suggestion={suggestion}
+          taskApi={taskApi}
+          onTaskAdded={onTaskAdded}
+        />
+      ))}
+      <button
+        type="button"
+        onClick={() => void copy()}
+        aria-label={copied ? "Copied" : "Copy answer"}
+        className="mt-3 inline-flex min-h-9 items-center gap-1.5 text-[11px] text-muted transition-colors hover:text-ink"
+      >
+        {copied ? <Check size={12} /> : <Copy size={12} />}
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </article>
   );
 }
 
@@ -829,11 +951,9 @@ function TaskSuggestionCard({
     <div
       role="group"
       aria-label="Task suggestion from the coach"
-      className="mt-2.5 rounded-control border border-dashed border-accent/50 bg-paper p-3"
+      className="mt-3 border-l-2 border-l-accent bg-paper py-2 pl-3"
     >
-      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-accent">
-        <Sparkles size={11} /> Suggested task
-      </p>
+      <p className="section-label text-accent">Suggested task</p>
       <p className="mt-1.5 text-[13px] font-medium leading-snug">
         {suggestion.title}
       </p>
@@ -911,6 +1031,209 @@ function TaskSuggestionCard({
   );
 }
 
+/* ---------------- subject roster ---------------- */
+
+/**
+ * The parsed draft as a roster: one ruled row per subject with its question
+ * count and right/wrong split, so the reader verifies the numbers against the
+ * scorecard at a glance. Rows that cannot be resolved say so in place; the
+ * full field editor stays one tap away behind "Edit details".
+ */
+function SubjectRoster({
+  draft,
+  onChange,
+  onOpenDetails,
+  onBack,
+  onContinue,
+  error,
+}: {
+  draft: ExtractionDraft;
+  onChange: (next: ExtractionDraft) => void;
+  onOpenDetails: () => void;
+  onBack: () => void;
+  onContinue: () => void;
+  error: string;
+}) {
+  const blockers = draft.issues.filter((issue) => issue.severity === "blocker");
+  const warnings = draft.issues.filter((issue) => issue.severity === "warning");
+  const ready = blockers.length === 0 && draft.subjects.length > 0;
+
+  const setSubject = (
+    index: number,
+    patch: Partial<ExtractedSubjectDraft>,
+  ) => {
+    onChange({
+      ...draft,
+      subjects: draft.subjects.map((subject, at) =>
+        at === index ? { ...subject, ...patch } : subject,
+      ),
+    });
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 border-b border-rule-soft px-4 pb-3 pt-4 sm:px-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h3 className="min-w-0 break-words font-serif text-[1.25rem] font-medium leading-tight text-ink sm:text-[1.375rem]">
+            {draft.name?.trim() || "Parsed result"}
+          </h3>
+          <span
+            className={cn(
+              "section-label",
+              ready ? "text-positive" : "text-warning",
+            )}
+          >
+            {ready
+              ? "Ready"
+              : `${blockers.length} unresolved`}
+          </span>
+        </div>
+        <p className="mt-1 text-[11px] text-muted">
+          {[
+            draft.platform?.trim(),
+            draft.date,
+            draft.type ? mockTypeLabel(draft.type) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || "Check the values below against your scorecard."}
+        </p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-5">
+        <ul className="divide-y divide-rule-soft border-b border-rule-soft">
+          {draft.subjects.map((subject, index) => {
+            const incomplete =
+              subject.questions == null ||
+              subject.correct == null ||
+              subject.incorrect == null;
+            return (
+              <li key={`${subject.subjectId}-${index}`} className="py-2.5">
+                <div className="flex items-baseline gap-3">
+                  <span className="min-w-0 flex-1 truncate font-serif text-[15px] text-ink">
+                    {SUBJECTS[subject.subjectId].name}
+                  </span>
+                  {incomplete ? (
+                    <span className="shrink-0 text-[11px] font-medium text-warning">
+                      Needs a value
+                    </span>
+                  ) : (
+                    <span className="flex shrink-0 items-baseline gap-2.5 text-[11px] tabular text-muted">
+                      <span>{subject.questions}Q</span>
+                      <span className="font-medium text-positive">
+                        {subject.correct} ✓
+                      </span>
+                      <span className="font-medium text-danger">
+                        {subject.incorrect} ✗
+                      </span>
+                    </span>
+                  )}
+                </div>
+                {incomplete && (
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        ["questions", "Questions"],
+                        ["correct", "Correct"],
+                        ["incorrect", "Wrong"],
+                      ] as const
+                    ).map(([field, label]) => (
+                      <label
+                        key={field}
+                        className="text-[10px] font-medium text-muted"
+                      >
+                        {label}
+                        <input
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          value={subject[field] ?? ""}
+                          onChange={(event) =>
+                            setSubject(index, {
+                              [field]:
+                                event.target.value === ""
+                                  ? null
+                                  : Number(event.target.value),
+                            })
+                          }
+                          className="mt-1 h-10 w-full px-2 text-sm"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        {warnings.length > 0 && (
+          <ul className="mt-3 space-y-1.5">
+            {warnings.map((issue) => (
+              <li
+                key={`${issue.code}-${issue.path ?? ""}`}
+                className="border-l-2 border-l-warning pl-2.5 text-[11px] leading-relaxed text-muted"
+              >
+                {issue.message}
+              </li>
+            ))}
+          </ul>
+        )}
+        {blockers.length > 0 && (
+          <ul className="mt-3 space-y-1.5">
+            {blockers.map((issue) => (
+              <li
+                key={`${issue.code}-${issue.path ?? ""}`}
+                role="alert"
+                className="border-l-2 border-l-danger pl-2.5 text-[11px] leading-relaxed text-danger"
+              >
+                {issue.message}
+              </li>
+            ))}
+          </ul>
+        )}
+        {error && (
+          <p role="alert" className="mt-3 text-xs text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+
+      <div className="shrink-0 border-t border-rule-soft px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11 sm:min-h-0"
+            onClick={onBack}
+          >
+            Back
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11 sm:min-h-0"
+            onClick={onOpenDetails}
+          >
+            Edit details
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="ml-auto min-h-11 sm:min-h-0"
+            onClick={onContinue}
+            disabled={!ready}
+          >
+            Continue to the form
+            <ChevronRight size={13} />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Log a mock tab ---------------- */
 
 /** Paste → parse (AI or standard) → review → hand the reviewed draft to the
@@ -942,7 +1265,11 @@ function LogMockTab({
   };
   const [paste, setPaste] = useState("");
   const [draft, setDraft] = useState<ExtractionDraft | null>(null);
-  const [reviewing, setReviewing] = useState(false);
+  /* false = paste step, "roster" = the parsed summary, "details" = the full
+     field editor. The roster is the default review surface. */
+  const [reviewing, setReviewing] = useState<false | "roster" | "details">(
+    false,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [statusChecked, setStatusChecked] = useState(false);
@@ -975,7 +1302,7 @@ function LogMockTab({
       });
       if (!result.draft) throw new Error("Could not arrange this report.");
       setDraft(result.draft);
-      setReviewing(true);
+      setReviewing("roster");
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -1020,13 +1347,33 @@ function LogMockTab({
 
   if (reviewing && draft) {
     return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <SubjectRoster
+            draft={draft}
+            onChange={setDraft}
+            onOpenDetails={() => setReviewing("details")}
+            onBack={() => {
+              setReviewing(false);
+              setError("");
+            }}
+            onContinue={useReviewed}
+            error={error}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (reviewing === "details" && draft) {
+    return (
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
         <ExtractionReview
           draft={draft}
           shape={shape}
           onChange={setDraft}
           onUse={useReviewed}
-          onBack={() => setReviewing(false)}
+          onBack={() => setReviewing("roster")}
           onDiscard={() => {
             setDraft(null);
             setReviewing(false);
@@ -1039,29 +1386,16 @@ function LogMockTab({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 sm:py-5">
-      <h3 className="font-serif text-2xl font-medium leading-tight">
+      <h3 className="font-serif text-[1.375rem] font-medium leading-tight text-ink">
         Log a mock test
       </h3>
-      <p className="mt-3 text-sm leading-relaxed text-muted">
-        Paste the scorecard here, review the arranged draft, and continue to the
-        mock form. The form stays the only place that saves — this panel only
-        prepares the values.
+      <p className="mt-2 text-sm leading-relaxed text-muted">
+        Paste the scorecard. You review the parsed subjects here, then continue
+        to the mock form — the only place that saves.
       </p>
-      <div className="mt-5 flex items-start gap-3 rounded-card bg-positive-soft p-4">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-paper text-positive">
-          <ClipboardPaste size={23} />
-        </span>
-        <div className="min-w-0">
-          <h4 className="text-sm font-medium">Paste your scorecard</h4>
-          <p className="mt-1 text-sm leading-relaxed text-muted">
-            Copy the result text from your scorecard. Review the extracted
-            subject details before continuing.
-          </p>
-        </div>
-      </div>
       <label
         htmlFor="ai-log-mock-paste"
-        className="mt-5 block text-sm font-medium"
+        className="mt-4 block text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted"
       >
         Scorecard text
       </label>
@@ -1072,7 +1406,7 @@ function LogMockTab({
         value={paste}
         onChange={(event) => setPaste(event.target.value)}
         placeholder="Paste the full scorecard section…"
-        className="mt-2 min-h-48 max-h-80 resize-y rounded-card text-sm leading-relaxed"
+        className="mt-1.5 min-h-48 max-h-80 resize-y text-sm leading-relaxed"
       />
       <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted">
         <span>
@@ -1119,8 +1453,8 @@ function LogMockTab({
           </Button>
         )}
       </div>
-      <p className="mt-4 flex items-start gap-2 rounded-card bg-soft p-4 text-xs leading-relaxed text-muted">
-        <Info size={17} className="mt-0.5 shrink-0" />
+      <p className="mt-4 flex items-start gap-2 border-t border-rule-soft pt-3 text-xs leading-relaxed text-muted">
+        <Info size={15} className="mt-0.5 shrink-0" />
         <span>
           {aiEnabled
             ? "AI parsing returns an editable draft with cross-checks; you review every field before continuing."

@@ -44,7 +44,7 @@ export function ExamSwitcher({
     return (
       <span
         aria-hidden="true"
-        className="inline-flex h-8 w-20 shrink-0 items-center rounded-control bg-soft/60"
+        className="inline-flex size-11 shrink-0 items-center rounded-control bg-soft/40 sm:h-8 sm:w-20"
       />
     );
   }

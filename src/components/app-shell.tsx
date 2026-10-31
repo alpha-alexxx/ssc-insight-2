@@ -325,20 +325,16 @@ export function AppSidebar({
   );
 }
 
-/** Sidebar footer note: the active exam's name, from the exam scope. */
+/** Sidebar footer note: the active scope ("SSC CGL · Tier 2"). */
 function ActiveExamFooterNote() {
   const scope = useExamScope();
-  const name = scope.exams
-    ? (scope.exams.builtIn.find((exam) => exam.id === scope.activeExamId)
-        ?.name ??
-      scope.exams.customExams.find((exam) => exam.id === scope.activeExamId)
-        ?.name ??
-      "SSC CGL")
+  const label = scope.exams
+    ? scope.examLabel(scope.activeExamId, scope.activeTierId)
     : "SSC CGL";
   return (
     <p className="mx-2 flex items-center gap-1.5 py-2.5 text-[0.625rem] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
       <PlainIcon name="calendar" size={11} />
-      {name} · dates in IST
+      {label} · dates in IST
     </p>
   );
 }
@@ -356,16 +352,16 @@ export interface AppHeaderProps {
   onOpenSearch: () => void;
 }
 
-/** Shared styles for icon-only action buttons in the header. */
-const iconActionClass =
-  "inline-flex size-8 shrink-0 items-center justify-center rounded-control text-muted " +
-  "transition-colors hover:bg-soft hover:text-ink " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
-
 /**
  * Top-of-app navigation bar. Full-bleed: pinned to the top, left, and right
  * of the viewport with no surrounding margin. Only the bottom edge carries a
  * hairline — the other three edges are the viewport itself.
+ *
+ * **Five controls on phones.** Six controls plus a breadcrumb cannot fit in
+ * 375px, so below `sm` the bar keeps the trigger, the (truncating) page title,
+ * search, theme and the account avatar. Ask AI lives in the sidebar and the
+ * ⌘K palette; the exam switcher collapses to its icon. From `sm` every
+ * control returns with its label and the search becomes the full pill.
  */
 export function AppHeader({
   view,
@@ -389,32 +385,33 @@ export function AppHeader({
   return (
     <header
       className="
-        sticky inset-x-0 top-0 z-30
-        flex h-13 w-full shrink-0 items-center gap-2
+        app-header sticky inset-x-0 top-0 z-30
+        flex h-[var(--app-header-h)] w-full shrink-0 items-center gap-1.5
         border-b border-rule-soft
-        bg-paper/95 px-4 backdrop-blur-sm
-        md:px-6
+        bg-paper/95 px-3 backdrop-blur-sm
+        sm:gap-2 sm:px-4 md:px-6
       "
     >
-      <SidebarTrigger className="size-8 shrink-0" />
+      <SidebarTrigger className="size-11 shrink-0 sm:size-8" />
 
       <HeaderLocation label={label} />
 
-      <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+        {/* Phones: a square icon. From sm: the pill with the shortcut hint. */}
         <button
           type="button"
           onClick={onOpenSearch}
           aria-label="Search"
           className="
-            inline-flex h-8 shrink-0 items-center gap-2 rounded-pill
-            border border-rule-soft bg-paper px-2 text-sm text-muted
+            inline-flex size-11 shrink-0 items-center justify-center
+            rounded-control border border-rule-soft bg-paper text-muted
             transition-colors hover:border-rule hover:text-ink
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-            md:px-3
+            sm:h-8 sm:w-auto sm:justify-start sm:gap-2 sm:rounded-pill sm:px-3
           "
         >
-          <PlainIcon name="search" size={14} />
-          <span className="hidden md:inline">Search</span>
+          <PlainIcon name="search" size={15} />
+          <span className="hidden sm:inline">Search</span>
           <kbd
             aria-hidden="true"
             className="hidden font-sans text-[0.6875rem] font-medium tracking-wide text-muted md:inline"
@@ -423,12 +420,14 @@ export function AppHeader({
           </kbd>
         </button>
 
+        {/* Ask AI is a phone-sidebar and ⌘K destination; the header carries it
+            only where there is room for the label to be honest. */}
         {aiEnabled && (
           <Button
             variant="ghost"
             size="sm"
             onClick={onOpenAi}
-            className="h-8 px-2.5"
+            className="hidden h-8 px-2.5 sm:inline-flex"
             aria-label="Ask AI"
           >
             <PlainIcon
@@ -441,9 +440,9 @@ export function AppHeader({
           </Button>
         )}
 
-        <ExamSwitcher onManageExams={openSettings} />
+        <ExamSwitcher onManageExams={openSettings} compact />
 
-        <ThemeToggle className="size-8" />
+        <ThemeToggle className="size-11 sm:size-8" />
 
         <AuthControl
           enabled={authEnabled}
@@ -463,7 +462,10 @@ export function AppHeader({
  */
 function HeaderLocation({ label }: { label: string }) {
   return (
-    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2">
+    <nav
+      aria-label="Breadcrumb"
+      className="flex min-w-[3.25rem] flex-1 items-center gap-2 overflow-hidden sm:min-w-0 sm:flex-none"
+    >
       <span className="hidden shrink-0 text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-muted sm:inline">
         Workspace
       </span>
@@ -473,8 +475,9 @@ function HeaderLocation({ label }: { label: string }) {
         className="hidden shrink-0 text-muted sm:inline"
         aria-hidden="true"
       />
+      {/* The leaf title is the one thing that must survive a narrow bar. */}
       <span
-        className="truncate text-sm font-semibold text-ink"
+        className="min-w-0 truncate text-sm font-semibold text-ink"
         aria-current="page"
       >
         {label}

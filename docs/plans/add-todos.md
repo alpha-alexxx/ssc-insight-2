@@ -31,6 +31,8 @@ The additive `20261029000000_personal_todos` migration was tested against a disp
 ## Finalized navigation and lifecycle
 
 - Study calendar hosts Mock plan / Personal todos tabs. The personal tab supports dates beyond the built-in mock-plan window.
+
+  _Superseded 2026-10-31:_ the calendar shipped as one unified ledger over three toggleable layers (plan / personal / logged) rather than two tabs, so the plan's scheduled work and the user's dated tasks sit on the same date row. The personal layer is still unbounded by the mock-plan window.
 - My Tasks provides another way to access the same personal todos; adding or editing from either page updates the other without creating copies.
 - Keep the personal tab focused on dated grouped checklists, not time-slot scheduling.
 - Trash is a separate recoverable view. Trashed todos/subtasks are excluded from normal lists, counts, overdue checks, and default AI context.

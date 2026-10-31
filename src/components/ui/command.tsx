@@ -64,18 +64,25 @@ const CommandDialog = ({
 
 const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => (
-  <div className="flex items-center gap-2.5 border-b border-rule-soft px-4" cmdk-input-wrapper="">
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
+    /** Trailing affordance in the input row (a key hint, a clear action). */
+    suffix?: React.ReactNode;
+  }
+>(({ className, suffix, ...props }, ref) => (
+  <div
+    className="flex items-center gap-2.5 border-b border-rule-soft px-4"
+    cmdk-input-wrapper=""
+  >
     <Search className="size-4 shrink-0 text-muted" />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-12 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50 max-sm:text-base",
-        className
+        "flex h-[52px] w-full bg-transparent text-sm outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50 max-sm:text-base",
+        className,
       )}
       {...props}
     />
+    {suffix}
   </div>
 ))
 
@@ -87,7 +94,7 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn("max-h-[min(45dvh,360px)] overflow-y-auto overflow-x-hidden", className)}
+    className={cn("max-h-[min(58dvh,520px)] overflow-y-auto overflow-x-hidden", className)}
     {...props}
   />
 ))
@@ -109,13 +116,26 @@ CommandEmpty.displayName = CommandPrimitive.Empty.displayName
 
 const CommandGroup = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Group>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group> & {
+    /** Right-aligned result count in the group's ruled head band. */
+    count?: number;
+  }
+>(({ className, heading, count, ...props }, ref) => (
   <CommandPrimitive.Group
     ref={ref}
+    heading={
+      count == null ? (
+        heading
+      ) : (
+        <span className="flex items-baseline justify-between gap-3">
+          <span>{heading}</span>
+          <span className="tabular text-muted">{count}</span>
+        </span>
+      )
+    }
     className={cn(
       "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[0.625rem] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.14em] [&_[cmdk-group-heading]]:text-muted",
-      className
+      className,
     )}
     {...props}
   />
@@ -142,8 +162,12 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-control px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-soft data-[selected=true]:text-ink [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-      className
+      /* One row grammar for every result type: icon column, title, then a
+         right-aligned meta line. Selected state is the quiet soft wash for
+         pointer and keyboard alike — a list of ten rows must not become a
+         wall of accent. */
+      "relative flex cursor-default select-none items-center gap-3 rounded-control px-2 py-2 text-sm outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-soft data-[selected=true]:text-ink [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+      className,
     )}
     {...props}
   />

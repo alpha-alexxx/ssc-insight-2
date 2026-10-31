@@ -12,7 +12,15 @@ import {
 import { Button } from "../ui/button";
 import { api } from "@/lib/api-client";
 import { addIsoDays, istTodayIso } from "@/lib/plan/view-model";
+import { weekdayDate, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+/** "Mon 3 Nov" — the compact date the ledger rows lead with. */
+function weekdayDateLabel(iso: string): string {
+  if (!iso) return "Needs date";
+  const weekday = weekdayDate(iso).split(",")[0] ?? "";
+  return `${weekday.slice(0, 3)} ${shortDate(iso)}`;
+}
 import { useInvalidateTodos, useTodoList } from "../use-todos-data";
 import type { Task, TaskDraft, TaskListResponse, Subtask } from "./types";
 
@@ -49,6 +57,9 @@ export function TodoAiComposer({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [success, setSuccess] = useState("");
+  /** Which proposal rows have their fields open. The ledger shows one line per
+   * change by default; editing is opt-in so five proposals stay scannable. */
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const token = useRef(crypto.randomUUID());
   const reference = useTodoList<TaskListResponse>("limit=100&view=all");
   const invalidateTodos = useInvalidateTodos();
@@ -116,6 +127,7 @@ export function TodoAiComposer({
     return {
       title: op.data?.title ?? before?.title ?? "",
       dueDate: op.data?.dueDate ?? before?.dueDate ?? "",
+      priority: op.data?.priority ?? before?.priority ?? "normal",
       subtasks,
       completed,
     };
@@ -187,17 +199,12 @@ export function TodoAiComposer({
               work based on your plan and progress.
             </p>
           </div>
-          <div className="flex items-start gap-3 rounded-card bg-accent-soft p-4">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-paper text-accent">
-              <CalendarClock size={23} />
-            </span>
-            <div className="min-w-0">
-              <h4 className="text-sm font-medium">Set your plan</h4>
-              <p className="mt-1 text-sm leading-relaxed text-muted">
-                Choose dates and tell the coach what you want to plan. Review
-                the proposed todos before applying changes.
-              </p>
-            </div>
+          <div className="flex items-start gap-2.5 border-l-2 border-l-accent pl-3">
+            <CalendarClock size={15} className="mt-0.5 shrink-0 text-accent" />
+            <p className="min-w-0 text-sm leading-relaxed text-muted">
+              Choose dates and say what you want to plan. You review every
+              proposed todo before anything is saved.
+            </p>
           </div>
         </>
       )}
@@ -229,14 +236,14 @@ export function TodoAiComposer({
             }}
           >
             <label>
-              What would you like to plan?
+              <span className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted">What would you like to plan?</span>
               <textarea
                 required
                 maxLength={4000}
                 rows={compact ? 5 : 3}
                 className={
                   compact
-                    ? "mt-2 resize-y rounded-card text-sm leading-relaxed"
+                    ? "mt-2 resize-y text-sm leading-relaxed"
                     : undefined
                 }
                 value={prompt}
@@ -250,7 +257,7 @@ export function TodoAiComposer({
                 </span>
               )}
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted">
               <label>
                 Start date
                 <input
@@ -272,17 +279,12 @@ export function TodoAiComposer({
               </label>
             </div>
             {compact && (
-              <div className="rounded-card bg-soft p-4">
-                <div className="flex items-start gap-2.5">
-                  <Zap size={19} className="mt-0.5 shrink-0 text-accent" />
-                  <div>
-                    <h4 className="text-sm font-medium">Quick options</h4>
-                    <p className="mt-1 text-xs text-muted">
-                      Use a template to get started faster.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+              <div className="border-t border-rule-soft pt-3">
+                <p className="flex items-center gap-2 text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <Zap size={12} className="shrink-0 text-accent" />
+                  Start from a template
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -365,338 +367,347 @@ export function TodoAiComposer({
             </p>
           )}
           {draft && !draft.needsDates && (
-            <div className="space-y-4 border-t border-rule-soft pt-4">
-              <div>
-                <h4 className="font-serif text-lg">Review proposed changes</h4>
-                <p className="mt-1 text-xs text-muted">
-                  Only selected changes will be applied. Deletions move todos to
-                  Trash.
-                </p>
-                {draft.contextTruncated && (
-                  <p className="mt-2 text-xs text-warning">
-                    Only part of your task history fitted in the AI context.
-                    Review suggestions against the rest of your planner.
-                  </p>
-                )}
+            <div className="border-t border-rule-soft pt-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 className="section-label">
+                  Review · {draft.operations.length}{" "}
+                  {draft.operations.length === 1 ? "change" : "changes"}
+                </h4>
+                <span className="text-[10px] text-muted">
+                  Only checked rows are applied
+                </span>
               </div>
+              {draft.contextTruncated && (
+                <p className="mt-2 border-l-2 border-l-warning pl-2.5 text-[11px] leading-relaxed text-warning">
+                  Only part of your task history fitted in the AI context.
+                  Review suggestions against the rest of your planner.
+                </p>
+              )}
               {!draft.operations.length && (
-                <p className="text-sm text-muted">
+                <p className="mt-3 text-sm text-muted">
                   No changes proposed. Try a more specific instruction.
                 </p>
               )}
-              {draft.operations.map((op, index) => {
-                const before = op.id ? draft.before?.[op.id] : null;
-                const after = proposedValue(op, before ?? null);
-                const duplicate = duplicateWarning(index, op, before ?? null);
-                return (
-                  <article
-                    key={index}
-                    className={cn(
-                      "space-y-3 border p-3",
-                      op.type === "delete"
-                        ? "border-danger bg-danger-soft"
-                        : "border-rule-soft bg-paper",
-                    )}
-                  >
-                    <label className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(index)}
-                        disabled={busy}
-                        onChange={(e) => {
-                          setSelected(
-                            e.target.checked
-                              ? [...selected, index]
-                              : selected.filter((i) => i !== index),
-                          );
-                          token.current = crypto.randomUUID();
-                        }}
-                      />
-                      <span className="text-sm font-medium">
-                        {op.type === "create"
-                          ? "Add todo"
-                          : op.type === "delete"
-                            ? "Move to Trash"
-                            : "Update todo"}
-                      </span>
-                    </label>
-                    {before && (
-                      <div className="space-y-1 text-xs text-muted">
-                        <p className="font-medium text-ink">Before</p>
-                        <p className="break-words">
-                          {before.title} · {before.dueDate ?? "Needs date"} ·{" "}
-                          {before.priority} priority · {before.status} ·{" "}
-                          {groups.find((group) => group.id === before.groupId)
-                            ?.name ?? "Ungrouped"}
-                        </p>
-                        {before.notes && (
-                          <p className="whitespace-pre-wrap break-words">
-                            {before.notes}
+              <ul className="mt-1 divide-y divide-rule-soft">
+                {draft.operations.map((op, index) => {
+                  const before = op.id ? (draft.before?.[op.id] ?? null) : null;
+                  const after = proposedValue(op, before ?? null);
+                  const duplicate = duplicateWarning(index, op, before ?? null);
+                  const checked = selected.includes(index);
+                  const open = expanded[index] ?? false;
+                  const dateLabel = after.dueDate
+                    ? weekdayDateLabel(after.dueDate)
+                    : "Needs date";
+                  return (
+                    <li key={index} className="py-2.5">
+                      <div className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={checked}
+                          disabled={busy}
+                          aria-label={`${op.type === "delete" ? "Trash" : op.type === "create" ? "Add" : "Update"} ${after.title || "proposal"}`}
+                          onChange={(e) => {
+                            setSelected(
+                              e.target.checked
+                                ? [...selected, index]
+                                : selected.filter((i) => i !== index),
+                            );
+                            token.current = crypto.randomUUID();
+                          }}
+                        />
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "w-3 shrink-0 font-serif text-base leading-6",
+                            op.type === "delete"
+                              ? "text-danger"
+                              : op.type === "create"
+                                ? "text-positive"
+                                : "text-accent",
+                          )}
+                        >
+                          {op.type === "delete" ? "−" : op.type === "create" ? "+" : "~"}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] uppercase tracking-[0.1em] text-muted">
+                            {op.type === "delete"
+                              ? "Trash"
+                              : op.type === "create"
+                                ? "Add"
+                                : "Change"}{" "}
+                            · {dateLabel}
                           </p>
-                        )}
-                        {before.subtasks?.length > 0 && (
-                          <p>
-                            {before.subtasks
-                              .map(
-                                (s) =>
-                                  `${s.completed ? "Done: " : ""}${s.title}`,
-                              )
-                              .join("; ")}
+                          <p
+                            className={cn(
+                              "break-words text-sm font-medium leading-snug",
+                              op.type === "delete"
+                                ? "text-danger line-through"
+                                : "text-ink",
+                            )}
+                          >
+                            {after.title || "(untitled)"}
                           </p>
-                        )}
-                      </div>
-                    )}
-                    {op.type !== "delete" && (
-                      <div className="space-y-3">
-                        <p className="text-xs font-medium">
-                          {before ? "After" : "New todo"}
-                        </p>
-                        <label>
-                          Title
-                          <input
-                            required
-                            maxLength={200}
-                            value={op.data?.title ?? before?.title ?? ""}
-                            onChange={(e) =>
-                              changeOperation(index, { title: e.target.value })
-                            }
-                            disabled={busy}
-                          />
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <label>
-                            Date
-                            <input
-                              type="date"
-                              required
-                              value={op.data?.dueDate ?? before?.dueDate ?? ""}
-                              onChange={(e) =>
-                                changeOperation(index, {
-                                  dueDate: e.target.value,
-                                })
-                              }
-                              disabled={busy}
-                            />
-                          </label>
-                          <label>
-                            Priority
-                            <select
-                              value={
-                                op.data?.priority ??
-                                before?.priority ??
-                                "normal"
-                              }
-                              onChange={(e) =>
-                                changeOperation(index, {
-                                  priority: e.target.value,
-                                })
-                              }
-                              disabled={busy}
+                          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted">
+                            <span className="capitalize">{after.priority} priority</span>
+                            {before && before.dueDate && before.dueDate !== after.dueDate && (
+                              <span className="line-through">
+                                was {weekdayDateLabel(before.dueDate)}
+                              </span>
+                            )}
+                            {after.subtasks.length > 0 && (
+                              <span>
+                                {after.subtasks.filter((s) => s.completed).length}/
+                                {after.subtasks.length} subtasks
+                              </span>
+                            )}
+                          </p>
+                          {duplicate && (
+                            <p
+                              role="status"
+                              className="mt-1 border-l-2 border-l-warning pl-2 text-[11px] leading-relaxed text-warning"
                             >
-                              <option value="high">High</option>
-                              <option value="normal">Normal</option>
-                              <option value="low">Low</option>
-                            </select>
-                          </label>
-                        </div>
-                        <label>
-                          Group
-                          <select
-                            value={
-                              op.data?.groupId !== undefined
-                                ? (op.data.groupId ?? "")
-                                : (before?.groupId ?? "")
-                            }
-                            disabled={busy}
-                            onChange={(event) =>
-                              changeOperation(index, {
-                                groupId: event.target.value || null,
-                              })
-                            }
-                          >
-                            <option value="">Ungrouped</option>
-                            {groups.map((group) => (
-                              <option key={group.id} value={group.id}>
-                                {group.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Notes
-                          <textarea
-                            rows={2}
-                            maxLength={2000}
-                            value={op.data?.notes ?? before?.notes ?? ""}
-                            onChange={(e) =>
-                              changeOperation(index, { notes: e.target.value })
-                            }
-                            disabled={busy}
-                          />
-                        </label>
-                        <label className="check-row">
-                          <input
-                            type="checkbox"
-                            checked={after.completed}
-                            disabled={busy}
-                            onChange={(event) => {
-                              const completed = event.target.checked;
-                              changeOperation(index, {
-                                completed,
-                                subtasks: after.subtasks.map((subtask) => ({
-                                  ...subtask,
-                                  completed,
-                                })),
-                              });
-                            }}
-                          />
-                          <span>Complete todo and all subtasks</span>
-                        </label>
-                        {after.subtasks.map((sub, i) => (
-                          <div
-                            key={sub.id ?? i}
-                            className="flex items-center gap-2"
-                          >
-                            <input
-                              type="checkbox"
-                              aria-label={`Complete proposed subtask ${i + 1}`}
-                              checked={sub.completed}
-                              disabled={busy}
-                              onChange={(event) =>
-                                changeOperation(index, {
-                                  subtasks: after.subtasks.map((item, n) =>
-                                    n === i
-                                      ? {
-                                          ...item,
-                                          completed: event.target.checked,
-                                        }
-                                      : item,
-                                  ),
-                                  completed: undefined,
-                                })
-                              }
-                            />
-                            <label className="min-w-0 flex-1">
-                              Subtask {i + 1}
-                              <input
-                                maxLength={200}
-                                value={sub.title}
+                              {duplicate}
+                            </p>
+                          )}
+                          {open && op.type !== "delete" && (
+                            <div className="mt-2 space-y-2 border-l border-rule-soft pl-3">
+                              <label className="text-[11px] text-muted">
+                                Title
+                                <input
+                                  required
+                                  maxLength={200}
+                                  className="mt-1"
+                                  value={op.data?.title ?? before?.title ?? ""}
+                                  onChange={(e) =>
+                                    changeOperation(index, { title: e.target.value })
+                                  }
+                                  disabled={busy}
+                                />
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <label className="text-[11px] text-muted">
+                                  Date
+                                  <input
+                                    type="date"
+                                    required
+                                    className="mt-1"
+                                    value={op.data?.dueDate ?? before?.dueDate ?? ""}
+                                    onChange={(e) =>
+                                      changeOperation(index, { dueDate: e.target.value })
+                                    }
+                                    disabled={busy}
+                                  />
+                                </label>
+                                <label className="text-[11px] text-muted">
+                                  Priority
+                                  <select
+                                    className="mt-1"
+                                    value={op.data?.priority ?? before?.priority ?? "normal"}
+                                    onChange={(e) =>
+                                      changeOperation(index, { priority: e.target.value })
+                                    }
+                                    disabled={busy}
+                                  >
+                                    <option value="high">High</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="low">Low</option>
+                                  </select>
+                                </label>
+                              </div>
+                              <label className="text-[11px] text-muted">
+                                Group
+                                <select
+                                  className="mt-1"
+                                  value={
+                                    op.data?.groupId !== undefined
+                                      ? (op.data.groupId ?? "")
+                                      : (before?.groupId ?? "")
+                                  }
+                                  disabled={busy}
+                                  onChange={(event) =>
+                                    changeOperation(index, {
+                                      groupId: event.target.value || null,
+                                    })
+                                  }
+                                >
+                                  <option value="">Ungrouped</option>
+                                  {groups.map((group) => (
+                                    <option key={group.id} value={group.id}>
+                                      {group.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="text-[11px] text-muted">
+                                Notes
+                                <textarea
+                                  rows={2}
+                                  maxLength={2000}
+                                  className="mt-1"
+                                  value={op.data?.notes ?? before?.notes ?? ""}
+                                  onChange={(e) =>
+                                    changeOperation(index, { notes: e.target.value })
+                                  }
+                                  disabled={busy}
+                                />
+                              </label>
+                              <label className="check-row text-[11px]">
+                                <input
+                                  type="checkbox"
+                                  checked={after.completed}
+                                  disabled={busy}
+                                  onChange={(event) => {
+                                    const completed = event.target.checked;
+                                    changeOperation(index, {
+                                      completed,
+                                      subtasks: after.subtasks.map((subtask) => ({
+                                        ...subtask,
+                                        completed,
+                                      })),
+                                    });
+                                  }}
+                                />
+                                <span>Complete with all subtasks</span>
+                              </label>
+                              {after.subtasks.map((sub, i) => (
+                                <div key={sub.id ?? i} className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Complete proposed subtask ${i + 1}`}
+                                    checked={sub.completed}
+                                    disabled={busy}
+                                    onChange={(event) =>
+                                      changeOperation(index, {
+                                        subtasks: after.subtasks.map((item, n) =>
+                                          n === i
+                                            ? { ...item, completed: event.target.checked }
+                                            : item,
+                                        ),
+                                        completed: undefined,
+                                      })
+                                    }
+                                  />
+                                  <input
+                                    aria-label={`Subtask ${i + 1} title`}
+                                    className="min-w-0 flex-1"
+                                    maxLength={200}
+                                    value={sub.title}
+                                    disabled={busy}
+                                    onChange={(event) =>
+                                      changeOperation(index, {
+                                        subtasks: after.subtasks.map((item, n) =>
+                                          n === i ? { ...item, title: event.target.value } : item,
+                                        ),
+                                        completed: undefined,
+                                      })
+                                    }
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    disabled={busy}
+                                    aria-label={`Remove proposed subtask ${i + 1}`}
+                                    onClick={() =>
+                                      changeOperation(index, {
+                                        subtasks: after.subtasks.filter((_, n) => n !== i),
+                                        completed: undefined,
+                                      })
+                                    }
+                                  >
+                                    <X size={14} />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
                                 disabled={busy}
-                                onChange={(event) =>
+                                onClick={() =>
                                   changeOperation(index, {
-                                    subtasks: after.subtasks.map((item, n) =>
-                                      n === i
-                                        ? {
-                                            ...item,
-                                            title: event.target.value,
-                                          }
-                                        : item,
-                                    ),
+                                    subtasks: [
+                                      ...after.subtasks,
+                                      { id: crypto.randomUUID(), title: "", completed: false },
+                                    ],
                                     completed: undefined,
                                   })
                                 }
-                              />
-                            </label>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              disabled={busy}
-                              aria-label={`Remove proposed subtask ${i + 1}`}
-                              onClick={() =>
-                                changeOperation(index, {
-                                  subtasks: after.subtasks.filter(
-                                    (_, n) => n !== i,
-                                  ),
-                                  completed: undefined,
-                                })
-                              }
-                            >
-                              <X size={14} />
-                            </Button>
-                          </div>
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() =>
-                            changeOperation(index, {
-                              subtasks: [
-                                ...after.subtasks,
-                                {
-                                  id: crypto.randomUUID(),
-                                  title: "",
-                                  completed: false,
-                                },
-                              ],
-                              completed: undefined,
-                            })
-                          }
-                        >
-                          Add subtask
-                        </Button>
-                        {duplicate && (
-                          <p
-                            role="status"
-                            className="border border-warning bg-warning-soft p-2 text-xs text-warning"
+                              >
+                                Add subtask
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {op.type !== "delete" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpanded((current) => ({
+                                ...current,
+                                [index]: !current[index],
+                              }))
+                            }
+                            aria-expanded={open}
+                            className="shrink-0 pt-1 text-[11px] font-medium text-accent hover:text-accent-hover"
                           >
-                            {duplicate}
-                          </p>
+                            {open ? "Done" : "Edit"}
+                          </button>
                         )}
                       </div>
-                    )}
-                  </article>
-                );
-              })}
+                    </li>
+                  );
+                })}
+              </ul>
               {duplicateLookupTruncated && (
-                <p className="text-xs text-muted">
+                <p className="mt-2 text-[11px] text-muted">
                   Duplicate hints compare this draft with the first 100 active
-                  todos. Review older todos in All if needed.
+                  todos.
                 </p>
               )}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  disabled={
-                    busy ||
-                    !selected.length ||
-                    draft.operations.some(
-                      (op, i) =>
-                        selected.includes(i) &&
-                        op.type !== "delete" &&
-                        (!(
-                          op.data?.title ?? draft.before?.[op.id ?? ""]?.title
-                        )?.trim() ||
-                          !(
-                            op.data?.dueDate ??
-                            draft.before?.[op.id ?? ""]?.dueDate
-                          ) ||
-                          (op.data?.subtasks ?? []).some(
-                            (sub) => !sub.title.trim(),
-                          )),
-                    )
-                  }
-                  onClick={() => void apply()}
-                >
-                  Confirm {selected.length}{" "}
-                  {selected.length === 1 ? "change" : "changes"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() => {
-                    setDraft(null);
-                    setSelected([]);
-                  }}
-                >
-                  Discard draft
-                </Button>
+              <div className="sticky bottom-0 -mx-1 mt-3 flex items-center justify-between gap-3 border-t border-rule-soft bg-paper/95 px-1 py-2.5 backdrop-blur-sm">
+                <span className="text-[11px] tabular text-muted">
+                  {selected.length} of {draft.operations.length} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setDraft(null);
+                      setSelected([]);
+                      setExpanded({});
+                    }}
+                  >
+                    Discard
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      busy ||
+                      !selected.length ||
+                      draft.operations.some(
+                        (op, i) =>
+                          selected.includes(i) &&
+                          op.type !== "delete" &&
+                          (!(op.data?.title ?? draft.before?.[op.id ?? ""]?.title)?.trim() ||
+                            !(op.data?.dueDate ?? draft.before?.[op.id ?? ""]?.dueDate) ||
+                            (op.data?.subtasks ?? []).some((sub) => !sub.title.trim())),
+                      )
+                    }
+                    onClick={() => void apply()}
+                  >
+                    Apply {selected.length}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
+
           {error && (
             <p role="alert" className="text-sm leading-relaxed text-danger">
               {error}

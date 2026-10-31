@@ -235,12 +235,20 @@ function PaletteBody({
       <CommandInput
         value={raw}
         onValueChange={setRaw}
-        placeholder="Search pages, tasks, plan days, mocks…"
+        placeholder="Search mocks, tasks, plan days…"
+        suffix={
+          <kbd
+            aria-hidden="true"
+            className="mr-1 hidden shrink-0 rounded-[3px] border border-rule-soft px-1.5 py-0.5 font-sans text-[0.625rem] font-medium uppercase tracking-wide text-muted sm:inline"
+          >
+            esc
+          </kbd>
+        }
       />
       <CommandList className="max-sm:max-h-none max-sm:flex-1">
         {/* Recent searches — only while the input is empty. */}
         {!searching && recent.length > 0 && (
-          <CommandGroup heading="Recent searches">
+          <CommandGroup heading="Recent searches" count={recent.length}>
             {recent.map((entry) => (
               <CommandItem
                 key={entry}
@@ -248,7 +256,7 @@ function PaletteBody({
                 onSelect={() => setRaw(entry)}
               >
                 <PlainIcon name="history" size={16} tone="muted" />
-                <span className="min-w-0 truncate">{entry}</span>
+                <span className="min-w-0 flex-1 truncate">{entry}</span>
               </CommandItem>
             ))}
             <CommandItem
@@ -257,7 +265,7 @@ function PaletteBody({
               className="text-muted"
             >
               <PlainIcon name="close" size={16} tone="muted" />
-              <span>Clear history</span>
+              <span className="min-w-0 flex-1">Clear history</span>
             </CommandItem>
           </CommandGroup>
         )}
@@ -266,6 +274,7 @@ function PaletteBody({
         {visiblePages.length > 0 && (
           <CommandGroup
             heading={searching ? "Pages & actions" : "Pages"}
+            count={visiblePages.length}
           >
             {visiblePages.map(({ label, action }) => (
               <CommandItem
@@ -281,7 +290,9 @@ function PaletteBody({
                   size={16}
                   tone={action.shortcut ? "accent" : "muted"}
                 />
-                <span className="truncate">{action.label}</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {action.label}
+                </span>
                 {action.shortcut && (
                   <CommandShortcut>{action.shortcut}</CommandShortcut>
                 )}
@@ -293,9 +304,11 @@ function PaletteBody({
         {loadingFirstPage && <SearchingSkeleton />}
 
         {searchFailed && (
-          <div role="alert" className="px-4 py-6 text-center">
-            <p className="text-sm text-ink">Search could not load.</p>
-            <p className="mx-auto mt-1 max-w-xs text-xs text-muted">
+          <div role="alert" className="px-4 py-6">
+            <p className="font-serif text-base text-ink">
+              Search could not load.
+            </p>
+            <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">
               {search.error instanceof Error
                 ? search.error.message
                 : "The connection dropped before results arrived."}
@@ -312,7 +325,7 @@ function PaletteBody({
         )}
 
         {searching && grouped.attempts.length > 0 && (
-          <CommandGroup heading="Mock history">
+          <CommandGroup heading="Mock history" count={grouped.attempts.length}>
             {grouped.attempts.map((item) => (
               <CommandItem
                 key={item.id}
@@ -334,16 +347,14 @@ function PaletteBody({
                 <span className="min-w-0 flex-1 truncate">
                   <Highlight text={item.title} query={query} />
                 </span>
-                <span className="ml-auto shrink-0 pl-2 text-xs text-muted">
-                  {item.subtitle}
-                </span>
+                <ResultMeta text={item.subtitle} />
               </CommandItem>
             ))}
           </CommandGroup>
         )}
 
         {searching && grouped.tasks.length > 0 && (
-          <CommandGroup heading="Your tasks">
+          <CommandGroup heading="Your tasks" count={grouped.tasks.length}>
             {grouped.tasks.map((item) => (
               <CommandItem
                 key={item.id}
@@ -359,16 +370,14 @@ function PaletteBody({
                 <span className="min-w-0 flex-1 truncate">
                   <Highlight text={item.title} query={query} />
                 </span>
-                <span className="ml-auto shrink-0 pl-2 text-xs text-muted">
-                  {item.subtitle}
-                </span>
+                <ResultMeta text={item.subtitle} />
               </CommandItem>
             ))}
           </CommandGroup>
         )}
 
         {searching && grouped.groups.length > 0 && (
-          <CommandGroup heading="Task groups">
+          <CommandGroup heading="Task groups" count={grouped.groups.length}>
             {grouped.groups.map((item) => (
               <CommandItem
                 key={item.id}
@@ -384,16 +393,14 @@ function PaletteBody({
                 <span className="min-w-0 flex-1 truncate">
                   <Highlight text={item.title} query={query} />
                 </span>
-                <span className="ml-auto shrink-0 pl-2 text-xs text-muted">
-                  {item.subtitle}
-                </span>
+                <ResultMeta text={item.subtitle} />
               </CommandItem>
             ))}
           </CommandGroup>
         )}
 
         {searching && grouped.plan.length > 0 && (
-          <CommandGroup heading="Study plan">
+          <CommandGroup heading="Study plan" count={grouped.plan.length}>
             {grouped.plan.map((item) => (
               <CommandItem
                 key={item.id}
@@ -409,9 +416,7 @@ function PaletteBody({
                 <span className="min-w-0 flex-1 truncate">
                   <Highlight text={item.title} query={query} />
                 </span>
-                <span className="ml-auto shrink-0 pl-2 text-xs text-muted">
-                  {item.subtitle}
-                </span>
+                <ResultMeta text={item.subtitle} />
               </CommandItem>
             ))}
           </CommandGroup>
@@ -422,7 +427,7 @@ function PaletteBody({
             <CommandItem
               value="Load more results"
               onSelect={() => void search.fetchNextPage()}
-              className="justify-center text-accent"
+              className="justify-center text-muted"
             >
               {search.isFetchingNextPage ? (
                 <>
@@ -436,24 +441,21 @@ function PaletteBody({
               ) : (
                 <>
                   <PlainIcon name="chevronDown" size={14} />
-                  <span>Load more results</span>
+                  <span>Load more</span>
                 </>
               )}
             </CommandItem>
           </CommandGroup>
         )}
 
-        {searching && !loadingFirstPage && resultCount > 0 && (
-          <p className="border-t border-rule-soft px-4 py-2.5 text-[0.6875rem] text-muted">
-            {resultCount} result{resultCount === 1 ? "" : "s"} loaded
-            {hasMore ? " · more available" : ""}
-          </p>
-        )}
-
         {empty && (
-          <CommandEmpty>
-            No matches for “{query}” — try a mock name, task title, group, or
-            plan day.
+          <CommandEmpty className="px-6 py-8">
+            <p className="font-serif text-base text-ink">
+              No matches for “{query}”.
+            </p>
+            <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted">
+              Try a mock name, a task title, a group, or a plan day.
+            </p>
           </CommandEmpty>
         )}
 
@@ -463,11 +465,33 @@ function PaletteBody({
           resultCount === 0 &&
           visiblePages.length > 0 && (
             <p className="px-4 pb-3 pt-1 text-xs text-muted">
-              No tasks, mocks, or plan days match — the pages above did.
+              Nothing in your records matches — the pages above did.
             </p>
           )}
       </CommandList>
+      {/* Keyboard legend. Hidden on phones (no keyboard row to spare); the
+          counts in each group head already say how much was found. */}
+      <div className="hidden items-center gap-4 border-t border-rule-soft px-4 py-2 text-[0.625rem] text-muted sm:flex">
+        <span>
+          <kbd className="font-sans font-medium text-ink">↑↓</kbd> move
+        </span>
+        <span>
+          <kbd className="font-sans font-medium text-ink">↵</kbd> open
+        </span>
+        <span>
+          <kbd className="font-sans font-medium text-ink">esc</kbd> close
+        </span>
+      </div>
     </>
+  );
+}
+
+/** Right-aligned meta in a result row: one line, clipped, never wrapping. */
+function ResultMeta({ text }: { text: string }) {
+  return (
+    <span className="max-w-[45%] shrink-0 truncate text-[11px] text-muted">
+      {text}
+    </span>
   );
 }
 

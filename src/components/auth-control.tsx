@@ -58,7 +58,7 @@ export function AuthControl({
             aria-label="Account menu"
             title={source}
             className="
-              inline-flex size-8 shrink-0 items-center justify-center
+              inline-flex size-11 shrink-0 items-center justify-center sm:size-8
               rounded-full transition-shadow outline-none
               hover:ring-2 hover:ring-rule-soft
               focus-visible:ring-2 focus-visible:ring-accent/40
