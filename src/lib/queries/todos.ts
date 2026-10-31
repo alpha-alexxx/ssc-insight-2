@@ -51,11 +51,11 @@ export const todoTasksQueryOptions = queryOptions({
     api<PersonalTaskView[]>("/api/tasks", { signal }),
 });
 
-export function todoCalendarQueryOptions(range: CalendarRange) {
+export function todoCalendarQueryOptions<T = unknown>(range: CalendarRange) {
   return queryOptions({
     queryKey: todoKeys.calendar(range),
     queryFn: ({ signal }) =>
-      api<unknown>(
+      api<T>(
         `/api/todos/calendar?from=${range.from}&to=${range.to}`,
         { signal },
       ),

@@ -10,7 +10,7 @@ import { PlanErrorCard, ProgressRule } from "./plan-shared";
 import { PlanTaskRow } from "./plan-task-row";
 import { ResultEditor } from "./day/result-editor";
 import { usePlanData } from "../use-plan-data";
-import { mutateTodoRequest, useTodoQuery } from "../use-todos-data";
+import { useTodoList, useTodoMutations } from "../use-todos-data";
 import { TaskStatusButton } from "../tasks/task-status-button";
 import type { Task, TaskListResponse } from "../tasks/types";
 import { useHorizontalSwipe } from "@/hooks/use-horizontal-swipe";
@@ -61,9 +61,8 @@ export function PlanDayView({
     null,
   );
   const [markAllOpen, setMarkAllOpen] = useState(false);
-  const todos = useTodoQuery<TaskListResponse>(
-    `/api/todos?view=day&date=${date}&limit=20`,
-  );
+  const todos = useTodoList<TaskListResponse>(`view=day&date=${date}&limit=20`);
+  const { mutateTodoRequest } = useTodoMutations();
   // Optimistic overlay for the personal-task section. State (not a ref) so
   // render may read it; only event handlers mutate it.
   const [personalOverlay] = useState(

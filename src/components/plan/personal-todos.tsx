@@ -37,7 +37,7 @@ import { DuotoneTile, PlainIcon } from "../icon";
 import { PersonalCalendar } from "./personal-calendar";
 import { TaskEditor } from "../tasks/task-editor";
 import { TodoAiComposer } from "../tasks/ai-composer";
-import { useTodoQuery, mutateTodoRequest } from "../use-todos-data";
+import { useTodoList, useTodoMutations } from "../use-todos-data";
 
 type Subtask = { id: string; title: string; completed: boolean };
 type Group = { id: string; name: string };
@@ -169,12 +169,13 @@ export function PersonalTodos({
     group: groupFilter,
     sort,
   });
+  const { mutateTodoRequest } = useTodoMutations();
   const {
     data,
     error: loadError,
     loading,
     refresh: load,
-  } = useTodoQuery<Response>(`/api/todos?${query}`);
+  } = useTodoList<Response>(query.toString());
   useEffect(() => {
     if (data && page > Math.max(1, Math.ceil(data.total / data.limit))) {
       const timer = window.setTimeout(
@@ -1674,9 +1675,10 @@ function KanbanBoard({
   groupsOpen: boolean;
   onToggleGroups: () => void;
 }) {
-  const { data, error, loading, refresh } = useTodoQuery<Response>(
-    `/api/todos?view=day&date=${date}&limit=100`,
+  const { data, error, loading, refresh } = useTodoList<Response>(
+    `view=day&date=${date}&limit=100`,
   );
+  const { mutateTodoRequest } = useTodoMutations();
   const open = (data?.items ?? []).filter((t) => t.status !== "completed");
   const done = (data?.items ?? []).filter((t) => t.status === "completed");
   const columns: { label: string; count: number; items: Todo[]; tint: string }[] = [
@@ -1797,8 +1799,8 @@ function OverdueTodoPreview({
   selectedDate: string;
   onEdit: (todo: Todo) => void;
 }) {
-  const { data, error, refresh } = useTodoQuery<Response>(
-    `/api/todos?view=overdue&limit=3&excludeDate=${selectedDate}`,
+  const { data, error, refresh } = useTodoList<Response>(
+    `view=overdue&limit=3&excludeDate=${selectedDate}`,
   );
   if (error)
     return (

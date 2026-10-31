@@ -8,7 +8,11 @@ import { PageHeader } from "../page-header";
 import { DuotoneTile } from "../icon";
 import { useToast } from "../toast";
 import { useOverlayFocus } from "../use-overlay-viewport";
-import { mutateTodoRequest, useTodoQuery } from "../use-todos-data";
+import {
+  useInvalidateTodos,
+  useTodoList,
+  useTodoMutations,
+} from "../use-todos-data";
 import { addIsoDays, istTodayIso } from "@/lib/plan/view-model";
 import { longDate, weekdayDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -42,7 +46,7 @@ const TAB_ITEMS: { id: TaskViewTab; label: string }[] = [
 
 /** Unfiltered listing that keeps the rail (groups + counts) and the overview
  * strip fed; inactive list queries alias this cache entry for free. */
-const RAIL_PATH = "/api/todos?view=all&limit=100&sort=date";
+const RAIL_QUERY = "view=all&limit=100&sort=date";
 const LIST_LIMIT = 50;
 
 type ApplyOp = {
@@ -109,6 +113,8 @@ export function MyTasksView() {
   }, [searchInput]);
 
   // ---- queries ----------------------------------------------------------
+  const { mutateTodoRequest } = useTodoMutations();
+  const invalidateTodos = useInvalidateTodos();
   const filterSuffix = useMemo(() => {
     const params = new URLSearchParams();
     if (filters.priority !== "all") params.set("priority", filters.priority);
@@ -126,25 +132,25 @@ export function MyTasksView() {
       ? `&completion=${filters.status}`
       : "";
 
-  const rail = useTodoQuery<TaskListResponse>(RAIL_PATH);
-  const overdueQuery = useTodoQuery<TaskListResponse>(
+  const rail = useTodoList<TaskListResponse>(RAIL_QUERY);
+  const overdueQuery = useTodoList<TaskListResponse>(
     myDayMode && !dayMode
-      ? `/api/todos?view=overdue&limit=${LIST_LIMIT}${filterSuffix}`
-      : RAIL_PATH,
+      ? `view=overdue&limit=${LIST_LIMIT}${filterSuffix}`
+      : RAIL_QUERY,
   );
-  const todayQuery = useTodoQuery<TaskListResponse>(
+  const todayQuery = useTodoList<TaskListResponse>(
     myDayMode && !dayMode
-      ? `/api/todos?view=today&limit=${LIST_LIMIT}${filterSuffix}`
-      : RAIL_PATH,
+      ? `view=today&limit=${LIST_LIMIT}${filterSuffix}`
+      : RAIL_QUERY,
   );
-  const mainPath = boardMode
-    ? `/api/todos?view=all&limit=100${filterSuffix}${statusSuffix}`
+  const mainQuery = boardMode
+    ? `view=all&limit=100${filterSuffix}${statusSuffix}`
     : dayMode
-      ? `/api/todos?view=day&date=${dayDetail}&limit=${LIST_LIMIT}${filterSuffix}`
+      ? `view=day&date=${dayDetail}&limit=${LIST_LIMIT}${filterSuffix}`
       : tab === "myday"
-        ? RAIL_PATH
-        : `/api/todos?view=${tab}&limit=${LIST_LIMIT}&page=${page}${filterSuffix}${statusSuffix}`;
-  const main = useTodoQuery<TaskListResponse>(mainPath);
+        ? RAIL_QUERY
+        : `view=${tab}&limit=${LIST_LIMIT}&page=${page}${filterSuffix}${statusSuffix}`;
+  const main = useTodoList<TaskListResponse>(mainQuery);
 
   const counts = rail.data?.counts;
   const groups = useMemo(() => rail.data?.groups ?? [], [rail.data]);
@@ -323,7 +329,7 @@ export function MyTasksView() {
       const message =
         cause instanceof Error ? cause.message : "Could not save. Try again.";
       if (message.includes("changed")) {
-        window.dispatchEvent(new Event("ssc:todos-changed"));
+        void invalidateTodos();
         toast.info(
           "Task was updated elsewhere",
           "Showing the latest version — try again.",
@@ -613,7 +619,7 @@ export function MyTasksView() {
             variant="outline"
             size="sm"
             className="border-danger/40 text-danger hover:bg-danger/10"
-            onClick={() => window.dispatchEvent(new Event("ssc:todos-changed"))}
+            onClick={() => void invalidateTodos()}
           >
             Retry
           </Button>

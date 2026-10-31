@@ -1,132 +1,116 @@
 "use client";
-
-import {
-  createContext,
-  useContext,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
+import {
+  todoCalendarQueryOptions,
+  todoKeys,
+  todoListQueryOptions,
+  todoTasksQueryOptions,
+  type CalendarRange,
+  type TodoListParams,
+} from "@/lib/queries/todos";
 
-type Entry = { value?: unknown; promise?: Promise<unknown> };
-type Store = { entries: Map<string, Entry>; listeners: Set<() => void> };
-const Context = createContext<Store | null>(null);
+/**
+ * Personal-tasks data layer, on TanStack Query.
+ *
+ * This replaces the bespoke shell-lifetime Map cache: keys are structured
+ * (["todos", scope, params]) so mutations invalidate by prefix, requests
+ * carry AbortSignals, identical param sets deduplicate, and the QueryClient
+ * garbage-collects entries five minutes after their last observer instead
+ * of an LRU cap. The old `ssc:todos-changed` broadcast maps to
+ * `invalidateQueries({ queryKey: todoKeys.all })` — it refetches exactly
+ * the mounted (active) queries, which is the fan-out the event produced.
+ *
+ * Result shapes ({data, error, loading, refresh}) match the previous hooks
+ * so view code is unchanged; `loading` is true only before the first data
+ * arrives, and `refresh` revalidates one key.
+ */
 
-/** Shell lifetime query cache. Keys include every filter and calendar range. */
-export function TodosDataProvider({ children }: { children: ReactNode }) {
-  const [store] = useState<Store>(() => ({
-    entries: new Map(),
-    listeners: new Set(),
-  }));
-  useEffect(() => {
-    const invalidate = () => {
-      store.entries.clear();
-      store.listeners.forEach((listener) => listener());
-    };
-    window.addEventListener("ssc:todos-changed", invalidate);
-    return () => {
-      window.removeEventListener("ssc:todos-changed", invalidate);
-      store.entries.clear();
-    };
-  }, [store]);
-  return <Context.Provider value={store}>{children}</Context.Provider>;
-}
-
-export function useTodoQuery<T>(path: string) {
-  const store = useContext(Context);
-  if (!store) throw new Error("Personal tasks require the workspace provider.");
-  const [state, setState] = useState<{
-    key: string;
-    data?: T;
-    error: string;
-    loading: boolean;
-  }>({ key: path, error: "", loading: true });
-  const request = useRef(0);
-  const [retry, setRetry] = useState(0);
-  const refresh = useCallback(() => {
-    store.entries.delete(path);
-    setRetry((value) => value + 1);
-  }, [path, store]);
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      const revision = ++request.current;
-      let entry = store.entries.get(path);
-      if (!entry) {
-        entry = {};
-        const current = entry;
-        current.promise = api<T>(path)
-          .then((value) => {
-            current.value = value;
-            return value;
-          })
-          .catch((error: unknown) => {
-            if (store.entries.get(path) === current) store.entries.delete(path);
-            throw error;
-          });
-        store.entries.set(path, current);
-        // Bound the cache: transient paths (e.g. debounced search keys) must
-        // not grow it without limit. Map preserves insertion order, so the
-        // first key is the oldest entry.
-        if (store.entries.size > 40) {
-          const oldest = store.entries.keys().next();
-          if (!oldest.done && oldest.value !== path)
-            store.entries.delete(oldest.value);
-        }
-      }
-      const current = entry;
-      void (
-        current.value !== undefined
-          ? Promise.resolve(current.value)
-          : current.promise!
-      )
-        .then((data) => {
-          if (
-            alive &&
-            revision === request.current &&
-            store.entries.get(path) === current
-          )
-            setState({ key: path, data: data as T, error: "", loading: false });
-        })
-        .catch((error: unknown) => {
-          if (alive && revision === request.current)
-            setState({
-              key: path,
-              error:
-                error instanceof Error
-                  ? error.message
-                  : "Could not load tasks.",
-              loading: false,
-            });
-        });
-    };
-    load();
-    store.listeners.add(load);
-    return () => {
-      alive = false;
-      store.listeners.delete(load);
-    };
-  }, [path, store, retry]);
+/** The query-string part of GET /api/todos (everything after "?"). */
+export function useTodoList<T>(query: string) {
+  const queryClient = useQueryClient();
+  // The params object IS the cache key: identical param sets deduplicate,
+  // and invalidation can target one list or the whole todos family.
+  const params = Object.fromEntries(
+    new URLSearchParams(query),
+  ) as TodoListParams;
+  const result = useQuery(todoListQueryOptions<T>(params));
+  const refresh = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: todoKeys.list(params) }),
+    [queryClient, params],
+  );
   return {
-    data: state.key === path ? state.data : undefined,
-    error: state.key === path ? state.error : "",
-    loading: state.key !== path || state.loading,
+    data: result.data,
+    error: result.error?.message ?? "",
+    loading: result.isPending,
     refresh,
   };
 }
 
-export async function mutateTodoRequest<T = unknown>(
-  path: string,
-  method: string,
-  body?: unknown,
-): Promise<T> {
-  const result = await api<T>(path, {
-    method,
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  window.dispatchEvent(new Event("ssc:todos-changed"));
-  return result;
+/** GET /api/tasks — the planner's full personal-task list. */
+export function useTodoTasks() {
+  const queryClient = useQueryClient();
+  const result = useQuery(todoTasksQueryOptions);
+  const refresh = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: todoKeys.tasks() }),
+    [queryClient],
+  );
+  return {
+    data: result.data,
+    error: result.error?.message ?? "",
+    loading: result.isPending,
+    refresh,
+  };
+}
+
+/** GET /api/todos/calendar — per-day pending/completed counts for a range. */
+export function useTodoCalendar<T>(range: CalendarRange) {
+  const queryClient = useQueryClient();
+  const result = useQuery(todoCalendarQueryOptions<T>(range));
+  const refresh = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: todoKeys.calendar(range) }),
+    [queryClient, range],
+  );
+  return {
+    data: result.data,
+    error: result.error?.message ?? "",
+    loading: result.isPending,
+    refresh,
+  };
+}
+
+/**
+ * Todo writes: same (path, method, body) call signature as before, but the
+ * post-success invalidation is a scoped cache operation instead of a window
+ * event. Every mounted todos query refetches; unmounted keys turn stale.
+ */
+export function useTodoMutations() {
+  const queryClient = useQueryClient();
+  const mutateTodoRequest = useCallback(
+    async <T = unknown,>(
+      path: string,
+      method: string,
+      body?: unknown,
+    ): Promise<T> => {
+      const result = await api<T>(path, {
+        method,
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      await queryClient.invalidateQueries({ queryKey: todoKeys.all });
+      return result;
+    },
+    [queryClient],
+  );
+  return { mutateTodoRequest };
+}
+
+/** Invalidate the whole todos family — the direct replacement for firing
+ * `ssc:todos-changed` (conflict resolution, AI apply, retry buttons). */
+export function useInvalidateTodos() {
+  const queryClient = useQueryClient();
+  return useCallback(
+    () => queryClient.invalidateQueries({ queryKey: todoKeys.all }),
+    [queryClient],
+  );
 }

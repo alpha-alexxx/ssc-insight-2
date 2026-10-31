@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "../ui/button";
-import { useTodoQuery } from "../use-todos-data";
+import { useTodoCalendar } from "../use-todos-data";
 import { addIsoDays, istTodayIso } from "@/lib/plan/view-model";
 import { monthDate, longDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -26,9 +26,9 @@ export function PersonalCalendar({
 }) {
   const [month, setMonth] = useState(selected.slice(0, 7) + "-01");
   const { from, to } = personalMonthRange(month);
-  const { data, error, loading, refresh } = useTodoQuery<{
+  const { data, error, loading, refresh } = useTodoCalendar<{
     days: Record<string, { pending: number; completed: number }>;
-  }>(`/api/todos/calendar?from=${from}&to=${to}`);
+  }>({ from, to });
   const today = istTodayIso();
   const shift = (direction: number) => {
     const value = new Date(month + "T12:00:00Z");

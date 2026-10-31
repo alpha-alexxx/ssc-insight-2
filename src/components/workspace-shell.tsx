@@ -39,7 +39,6 @@ import {
 import { useWorkspaceData } from "./use-workspace-data";
 import { usePlanData } from "./use-plan-data";
 import { MyTasksView } from "./tasks/my-tasks-view";
-import { TodosDataProvider } from "./use-todos-data";
 import { CalendarView } from "./plan/calendar-view";
 import { PlanDayView } from "./plan/plan-day-view";
 import { SettingsPanels } from "./settings-panels";
@@ -127,15 +126,13 @@ export function WorkspaceShell({
   return (
     <QueryProvider>
       <ToastProvider>
-        <TodosDataProvider>
-          <WorkspaceShellInner
-            authEnabled={authEnabled}
-            userEmail={userEmail}
-            defaultSidebarOpen={defaultSidebarOpen}
-            userName={userName}
-            userImage={userImage}
-          />
-        </TodosDataProvider>
+        <WorkspaceShellInner
+          authEnabled={authEnabled}
+          userEmail={userEmail}
+          defaultSidebarOpen={defaultSidebarOpen}
+          userName={userName}
+          userImage={userImage}
+        />
       </ToastProvider>
     </QueryProvider>
   );

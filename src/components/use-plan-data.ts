@@ -3,7 +3,7 @@ import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "./toast";
 import { api } from "@/lib/api-client";
-import { useTodoQuery } from "./use-todos-data";
+import { useInvalidateTodos, useTodoTasks } from "./use-todos-data";
 import {
   planKeys,
   planQueryOptions,
@@ -109,8 +109,11 @@ export function usePlanData() {
   const queryClient = useQueryClient();
   const planQuery = useQuery(planQueryOptions);
   const plan = planQuery.data ?? null;
-  const taskQuery = useTodoQuery<PersonalTaskView[]>("/api/tasks");
+  const taskQuery = useTodoTasks();
   const personalTasks = taskQuery.data ?? [];
+  // Personal-task writes must refresh every mounted todos view; the
+  // invalidation replaces the old ssc:todos-changed broadcast.
+  const invalidateTodos = useInvalidateTodos();
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: planKeys.all });
@@ -196,13 +199,16 @@ export function usePlanData() {
     [saveDayNotesMut],
   );
 
-  const createPersonalTask = useCallback(async (input: PersonalTaskInput) => {
-    await api<PersonalTaskView>("/api/tasks", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
-    window.dispatchEvent(new Event("ssc:todos-changed"));
-  }, []);
+  const createPersonalTask = useCallback(
+    async (input: PersonalTaskInput) => {
+      await api<PersonalTaskView>("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      await invalidateTodos();
+    },
+    [invalidateTodos],
+  );
 
   const updatePersonalTask = useCallback(
     async (id: string, patch: Partial<PersonalTaskInput>) => {
@@ -210,25 +216,27 @@ export function usePlanData() {
         method: "PUT",
         body: JSON.stringify(patch),
       });
-      window.dispatchEvent(new Event("ssc:todos-changed"));
+      await invalidateTodos();
     },
-    [],
+    [invalidateTodos],
   );
 
   const deletePersonalTask = useCallback(
     async (id: string) => {
       try {
         await api(`/api/tasks/${id}`, { method: "DELETE" });
-        window.dispatchEvent(new Event("ssc:todos-changed"));
+        await invalidateTodos();
       } catch (e) {
         toast.error(
           "Couldn't delete the task",
           e instanceof Error ? e.message : undefined,
         );
+        // The failed delete may have changed nothing, but the plan cache is
+        // the authoritative copy this hook owns — revalidate it.
         void refresh();
       }
     },
-    [refresh, toast],
+    [invalidateTodos, refresh, toast],
   );
 
   return {

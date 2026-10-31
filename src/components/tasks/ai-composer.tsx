@@ -13,7 +13,7 @@ import { Button } from "../ui/button";
 import { api } from "@/lib/api-client";
 import { addIsoDays, istTodayIso } from "@/lib/plan/view-model";
 import { cn } from "@/lib/utils";
-import { useTodoQuery } from "../use-todos-data";
+import { useInvalidateTodos, useTodoList } from "../use-todos-data";
 import type { Task, TaskDraft, TaskListResponse, Subtask } from "./types";
 
 type Proposal = {
@@ -50,9 +50,8 @@ export function TodoAiComposer({
     [error, setError] = useState(""),
     [success, setSuccess] = useState("");
   const token = useRef(crypto.randomUUID());
-  const reference = useTodoQuery<TaskListResponse>(
-    "/api/todos?limit=100&view=all",
-  );
+  const reference = useTodoList<TaskListResponse>("limit=100&view=all");
+  const invalidateTodos = useInvalidateTodos();
   const groups = reference.data?.groups ?? [];
   const existingTodos = reference.data?.items ?? [];
   const duplicateLookupTruncated =
@@ -157,7 +156,7 @@ export function TodoAiComposer({
           operations: draft.operations.filter((_, i) => selected.includes(i)),
         }),
       });
-      window.dispatchEvent(new Event("ssc:todos-changed"));
+      await invalidateTodos();
       onChanged?.();
       setDraft(null);
       setSelected([]);
