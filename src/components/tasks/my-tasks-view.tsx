@@ -8,6 +8,7 @@ import { PageHeader } from "../page-header";
 import { DuotoneTile } from "../icon";
 import { useToast } from "../toast";
 import { useOverlayFocus } from "../use-overlay-viewport";
+import { useUiStore } from "@/stores/ui-store";
 import {
   useInvalidateTodos,
   useTodoList,
@@ -567,21 +568,30 @@ export function MyTasksView() {
         setSelectedIds(new Set());
       }
     }
-    function onQuickAdd() {
-      if (tab === "trash") {
-        setCreating(true);
-        return;
-      }
-      quickAddRef.current?.focus();
-      quickAddRef.current?.scrollIntoView({ block: "nearest" });
-    }
     window.addEventListener("keydown", onKey);
-    window.addEventListener("ssc:tasks-quick-add", onQuickAdd);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("ssc:tasks-quick-add", onQuickAdd);
     };
   }, [tab]);
+
+  // The shell's `n` shortcut asks for the quick-add bar through the UI
+  // store; each nonce bump is one request (a ref guards re-runs when only
+  // the tab changed).
+  const quickAddNonce = useUiStore((s) => s.quickAddNonce);
+  const lastQuickAdd = useRef(0);
+  useEffect(() => {
+    if (quickAddNonce === 0 || quickAddNonce === lastQuickAdd.current) return;
+    lastQuickAdd.current = quickAddNonce;
+    if (tab === "trash") {
+      // Reacting to an external-store event, the same carve-out as the
+      // URL-restore effects in use-workspace-data.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCreating(true);
+      return;
+    }
+    quickAddRef.current?.focus();
+    quickAddRef.current?.scrollIntoView({ block: "nearest" });
+  }, [quickAddNonce, tab]);
 
   // ---- render -----------------------------------------------------------
   const activeEntries = activeFilterEntries(filters);

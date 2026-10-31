@@ -4,10 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { aiKeys, aiStatusQueryOptions } from "@/lib/queries/ai";
+import { useUiStore } from "@/stores/ui-store";
 import { NdjsonDecoder, parseChatEvent } from "@/lib/ai/ndjson";
 import type {
   AiScreenContext,
-  AiStatus,
   ChatMessage,
   CoachMeta,
   CoachResponse,
@@ -82,7 +82,9 @@ export function useAiWorkspace() {
   const [coachMeta, setCoachMeta] = useState<CoachMeta | null>(null);
   const [coachBusy, setCoachBusy] = useState(false);
   const [coachError, setCoachError] = useState("");
-  const [chatOpen, setChatOpen] = useState(false);
+  // Drawer visibility lives in the UI store (header, dashboard cards, the
+  // palette, and the shell all open it); messages and streaming stay local.
+  const chatOpen = useUiStore((s) => s.aiChatOpen);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatStreaming, setChatStreaming] = useState(false);
   const [chatError, setChatError] = useState("");
@@ -108,7 +110,7 @@ export function useAiWorkspace() {
   const generateCoach = useCallback(async () => {
     if (chatAbort.current) return; // a stream is already in flight
     setChatError("");
-    setChatOpen(true);
+    useUiStore.getState().setAiChatOpen(true);
     setChatStreaming(true);
     const requestId = newId();
     const assistantId = newId();
@@ -159,12 +161,12 @@ export function useAiWorkspace() {
 
   const openChat = useCallback(() => {
     setChatError("");
-    setChatOpen(true);
+    useUiStore.getState().setAiChatOpen(true);
   }, []);
 
   const setChatOpenSafe = useCallback((open: boolean) => {
     if (!open) chatAbort.current?.abort();
-    setChatOpen(open);
+    useUiStore.getState().setAiChatOpen(open);
   }, []);
 
   const stopChat = useCallback(() => {

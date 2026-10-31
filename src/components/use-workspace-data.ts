@@ -15,7 +15,6 @@ import {
 } from "@/lib/queries/analytics";
 import { allAttemptsQueryOptions, attemptKeys } from "@/lib/queries/attempts";
 import { settingsKeys, settingsQueryOptions } from "@/lib/queries/settings";
-import type { Attempt } from "@/lib/domain";
 import type { DashboardScope, Filters, PageSize, SortKey } from "@/lib/domain";
 
 /**

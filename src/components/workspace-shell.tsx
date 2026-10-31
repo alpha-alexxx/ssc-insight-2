@@ -47,6 +47,7 @@ import { SettingsPanels } from "./settings-panels";
 import { ToastProvider, useToast } from "./toast";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import { useThemePrefs, viewTransition } from "./theme-style-provider";
+import { useUiStore, type AiChatTab } from "@/stores/ui-store";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { settingsKeys, updateSettingsRequest } from "@/lib/queries/settings";
@@ -228,8 +229,16 @@ function WorkspaceShellInner({
   // made anywhere (detail dialog, another picker page) still land.
   const selectedResults = useAttemptsByIds(selected);
   const [busy, setBusy] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [plannerDate, setPlannerDate] = useState(istTodayIso());
+  // Global shell UI state lives in the Zustand store (stores/ui-store.ts):
+  // palette visibility, the AI drawer flag/tab, the planner date, and the
+  // quick-add handoff. Compare selection, dialogs, and form inputs stay
+  // component-local.
+  const searchOpen = useUiStore((s) => s.searchOpen);
+  const setSearchOpen = useUiStore((s) => s.setSearchOpen);
+  const requestQuickAdd = useUiStore((s) => s.requestQuickAdd);
+  const aiChatTab = useUiStore((s) => s.aiChatTab);
+  const plannerDate = useUiStore((s) => s.plannerDate);
+  const setPlannerDate = useUiStore((s) => s.setPlannerDate);
   // The hidden file input lives in this component's JSX; the import hook
   // only touches it inside callbacks.
   const fileRef = useRef<HTMLInputElement>(null);
@@ -272,7 +281,7 @@ function WorkspaceShellInner({
     [updateFilters],
   );
   const add = useCallback(() => navigate("add"), [navigate]);
-  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const openSearch = useCallback(() => setSearchOpen(true), [setSearchOpen]);
   /**
    * Planner → Add Mock. The actual attempt date is prefilled, but remains
    * editable in the form. The return target is a real plan-day route.
@@ -288,7 +297,7 @@ function WorkspaceShellInner({
       if (task) params.set("name", task.name);
       router.push(`/add?${params.toString()}`);
     },
-    [router],
+    [router, setPlannerDate],
   );
   const changeFilter = useCallback(
     (key: keyof Filters, value: string) => {
@@ -439,7 +448,7 @@ function WorkspaceShellInner({
         // form — new work means a task there, not a mock.
         onAddMock: () => {
           if (view === "tasks") {
-            window.dispatchEvent(new Event("ssc:tasks-quick-add"));
+            requestQuickAdd();
             return;
           }
           add();
@@ -452,7 +461,7 @@ function WorkspaceShellInner({
             "⌘K=search · n=new (task on My Tasks, mock elsewhere) · g d/h/c/s=navigate · /=focus search · ?=help",
           ),
       }),
-      [add, navigate, openSearch, toast, view],
+      [add, navigate, openSearch, requestQuickAdd, toast, view],
     ),
   );
 
@@ -533,15 +542,10 @@ function WorkspaceShellInner({
    * AddMockView on the next /add render, then cleared. The form stays the
    * sole save path; this only prefills it. */
   const [addPrefill, setAddPrefill] = useState<LogMockPayload | null>(null);
-  const [aiChatTab, setAiChatTab] = useState<"chat" | "log" | "todos">("chat");
   /** Opens the shared AI sheet on a specific flow tab ("plan_todo" = todos). */
-  const openAiChat = useCallback(
-    (tab: "chat" | "log" | "todos") => {
-      setAiChatTab(tab);
-      ai.chat.setOpen(true);
-    },
-    [ai.chat],
-  );
+  const openAiChat = useCallback((tab: AiChatTab) => {
+    useUiStore.getState().openAiChat(tab);
+  }, []);
   const handleLogMock = useCallback(
     (draft: LogMockPayload) => {
       setAddPrefill(draft);
@@ -598,7 +602,7 @@ function WorkspaceShellInner({
       }
       toast.success("Mock saved", "Your progress is up to date.");
     },
-    [navigate, refreshAfterMutation, router, toast],
+    [navigate, refreshAfterMutation, router, setPlannerDate, toast],
   );
   const closeForm = useCallback(() => navigate("dashboard"), [navigate]);
 
