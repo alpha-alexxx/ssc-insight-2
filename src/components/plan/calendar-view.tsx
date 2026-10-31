@@ -8,6 +8,7 @@ import { Swap } from "../motion-swap";
 import { MetricStripSkeleton } from "../metric-strip";
 import { Skeleton } from "../ui/skeleton";
 import { useToast } from "../toast";
+import { cn } from "@/lib/utils";
 import { PlanErrorCard } from "./plan-shared";
 import { EventDialog } from "./event-dialog";
 import { usePlanData } from "../use-plan-data";
@@ -294,10 +295,14 @@ export function CalendarView({
               className="segment"
               onClick={() => setMode(entry.id)}
             >
+              {/* Icons drop below 360px so labels keep room at 320. */}
               <PlainIcon
                 name={entry.icon}
                 size={14}
-                className={mode === entry.id ? "shrink-0" : "shrink-0 text-muted"}
+                className={cn(
+                  "shrink-0 max-[359px]:hidden",
+                  mode !== entry.id && "text-muted",
+                )}
               />
               {entry.label}
             </button>

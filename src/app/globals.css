@@ -2249,9 +2249,9 @@ html {
   .metric-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  /* The calendar's strip is one swipeable row on phones: cells keep a
-     readable minimum width and the row scrolls horizontally with snap. The
-     2×2 border pair above is neutralized so the row keeps its hairlines. */
+  /* Opt-in swipeable strip row (My Tasks overview): cells keep a readable
+     minimum width and the row scrolls horizontally with snap. The 2×2 border
+     pair above is neutralized so the row keeps its hairlines. */
   .metric-strip-scroll {
     display: flex;
     overflow-x: auto;

@@ -78,29 +78,34 @@ export function PeriodNav({
           <TooltipContent>Next {unit}</TooltipContent>
         </Tooltip>
       </div>
-      {selected !== today && (
-        <button type="button" className="day-nav-today" onClick={onToday}>
-          Today
-        </button>
-      )}
-      <label className="flex items-center gap-2 text-xs">
-        <span className="sr-only">Jump to a plan date</span>
-        {/* Base CSS sets `width: 100%` on form fields through a zero-specificity
-            `:where(...)` rule, so the plain `w-auto` utility already wins — no
-            `!important` needed. */}
-        <input
-          type="date"
-          className="h-8 w-auto rounded-control border border-rule bg-paper px-2 py-0 text-xs tabular"
-          title="Jump to a date"
-          aria-label="Jump to a plan date"
-          min={planStart}
-          max={planEnd}
-          value={selected}
-          onChange={(event) => {
-            if (event.target.value) onSelect(event.target.value);
-          }}
-        />
-      </label>
+      {/* Today + the date jump stay one glued cluster so the phone row reads
+          as two ends — arrows here, jump-to-date there — never three
+          scattered controls. */}
+      <span className="flex items-center gap-2">
+        {selected !== today && (
+          <button type="button" className="day-nav-today" onClick={onToday}>
+            Today
+          </button>
+        )}
+        <label className="flex items-center gap-2 text-xs">
+          <span className="sr-only">Jump to a plan date</span>
+          {/* Base CSS sets `width: 100%` on form fields through a zero-specificity
+              `:where(...)` rule, so the plain `w-auto` utility already wins — no
+              `!important` needed. */}
+          <input
+            type="date"
+            className="h-8 w-auto rounded-control border border-rule bg-paper px-2 py-0 text-xs tabular"
+            title="Jump to a date"
+            aria-label="Jump to a plan date"
+            min={planStart}
+            max={planEnd}
+            value={selected}
+            onChange={(event) => {
+              if (event.target.value) onSelect(event.target.value);
+            }}
+          />
+        </label>
+      </span>
     </>
   );
 }
