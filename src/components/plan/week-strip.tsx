@@ -144,7 +144,7 @@ function WeekCell({
     >
       <span
         className={cn(
-          "text-[0.5625rem] uppercase tracking-[0.1em] sm:text-[0.625rem] sm:tracking-[0.12em]",
+          "text-[0.625rem] uppercase tracking-[0.1em] sm:text-[0.625rem] sm:tracking-[0.12em]",
           isToday ? "font-semibold text-accent" : "text-muted",
         )}
       >
@@ -190,7 +190,7 @@ function EmptyCell({ date }: { date: string }) {
       aria-hidden="true"
       className="flex min-w-0 flex-col items-center gap-1 rounded-panel px-0.5 py-2 text-center text-muted sm:items-start sm:gap-2 sm:px-3 sm:py-3.5 sm:text-left sm:border sm:border-rule-soft/60 sm:bg-canvas"
     >
-      <span className="text-[0.5625rem] uppercase tracking-[0.1em] sm:text-[0.625rem] sm:tracking-[0.12em]">
+      <span className="text-[0.625rem] uppercase tracking-[0.1em] sm:text-[0.625rem] sm:tracking-[0.12em]">
         {isoWeekdayShort(date)}
       </span>
       <span className="font-serif text-[1.0625rem] leading-none tabular sm:text-[1.5rem]">

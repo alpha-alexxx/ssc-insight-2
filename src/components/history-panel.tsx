@@ -91,7 +91,7 @@ function SortHeader({
       aria-label={`Sort by ${label}`}
     >
       {label}
-      <span aria-hidden="true" className="text-[9px] leading-none">
+      <span aria-hidden="true" className="text-[0.625rem] leading-none">
         {active ? (sort.dir === "asc" ? "▲" : "▼") : "⇅"}
       </span>
     </button>
@@ -122,39 +122,39 @@ function KpiCard({
   delta?: { text: string; good: boolean } | null;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-panel border border-rule-soft bg-paper px-4 py-3.5">
-      <span
-        className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-control",
-          tile,
-        )}
-        aria-hidden="true"
-      >
-        <PlainIcon name={icon} size={19} />
+    <div className="metric-cell">
+      <span className="metric-head">
+        <span
+          className={cn(
+            "flex size-6 shrink-0 items-center justify-center rounded-control",
+            tile,
+          )}
+          aria-hidden="true"
+        >
+          <PlainIcon name={icon} size={13} />
+        </span>
+        <span className="metric-label truncate">{label}</span>
       </span>
-      <div className="min-w-0">
-        <p className="truncate text-[11px] text-muted">{label}</p>
-        <p className="mt-0.5 flex items-baseline gap-1.5 font-serif text-2xl leading-none tabular text-ink">
-          {value}
-          {suffix && (
-            <span className="text-xs font-normal text-muted">{suffix}</span>
-          )}
-          {delta && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-0.5 text-[11px] font-normal",
-                delta.good ? "text-positive" : "text-warning",
-              )}
-            >
-              <PlainIcon
-                name={delta.good ? "arrowUpRight" : "arrowDownRight"}
-                size={11}
-              />
-              {delta.text}
-            </span>
-          )}
-        </p>
-      </div>
+      <span className="metric-figure">
+        <span className="metric-value">{value}</span>
+        {suffix && (
+          <span className="text-xs font-normal text-muted">{suffix}</span>
+        )}
+        {delta && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-0.5 text-[0.6875rem] font-normal",
+              delta.good ? "text-positive" : "text-warning",
+            )}
+          >
+            <PlainIcon
+              name={delta.good ? "arrowUpRight" : "arrowDownRight"}
+              size={11}
+            />
+            {delta.text}
+          </span>
+        )}
+      </span>
     </div>
   );
 }
@@ -243,7 +243,8 @@ export const HistoryPanel = memo(function HistoryPanel({
   return (
     <div className="min-w-0">
       {mode === "history" && (
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="strip-frame mb-4">
+          <div className="metric-strip">
           <KpiCard
             icon="history"
             tile="bg-accent-soft text-accent"
@@ -293,6 +294,7 @@ export const HistoryPanel = memo(function HistoryPanel({
                 : null
             }
           />
+          </div>
         </div>
       )}
       <Panel
@@ -322,7 +324,7 @@ export const HistoryPanel = memo(function HistoryPanel({
                 <input
                   aria-label="Search mocks"
                   placeholder="Search mocks…  /"
-                  className="pl-8 py-2 text-xs w-40 sm:w-56"
+                  className="w-full py-2 pl-8 text-xs sm:w-56"
                   value={search}
                   onChange={(e) => onSearch(e.target.value)}
                   onKeyDown={(e) => {
@@ -337,7 +339,7 @@ export const HistoryPanel = memo(function HistoryPanel({
                     type="button"
                     aria-label="Clear search"
                     onClick={() => onSearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 muted hover:text-ink"
+                    className="tap-target absolute right-2 top-1/2 -translate-y-1/2 muted hover:text-ink"
                   >
                     <PlainIcon name="close" size={13} />
                   </button>
@@ -493,14 +495,14 @@ export const HistoryPanel = memo(function HistoryPanel({
                       <td>
                         <div className="flex items-center gap-1.5">
                           <button
-                            className="inline-flex size-8 items-center justify-center rounded-control border border-rule-soft text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                            className="inline-flex size-8 tap-target items-center justify-center rounded-control border border-rule-soft text-muted transition-colors hover:border-accent/50 hover:text-accent"
                             aria-label={`View ${a.name}`}
                             onClick={() => onOpen(a)}
                           >
                             <PlainIcon name="search" size={14} />
                           </button>
                           <button
-                            className="inline-flex size-8 items-center justify-center rounded-control border border-rule-soft text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                            className="inline-flex size-8 tap-target items-center justify-center rounded-control border border-rule-soft text-muted transition-colors hover:border-accent/50 hover:text-accent"
                             aria-label={`Open details for ${a.name}`}
                             onClick={() => onOpen(a)}
                           >
@@ -545,7 +547,7 @@ export const HistoryPanel = memo(function HistoryPanel({
                   aria-label="Previous page"
                   disabled={safePage === 1}
                   onClick={() => setPage(safePage - 1)}
-                  className="inline-flex size-8 items-center justify-center rounded-control border border-rule-soft text-muted transition-colors hover:text-ink disabled:opacity-40"
+                  className="inline-flex size-8 tap-target items-center justify-center rounded-control border border-rule-soft text-muted transition-colors hover:text-ink disabled:opacity-40"
                 >
                   <PlainIcon name="arrowLeft" size={13} />
                 </button>
@@ -566,7 +568,7 @@ export const HistoryPanel = memo(function HistoryPanel({
                         aria-current={p === safePage ? "page" : undefined}
                         onClick={() => setPage(p)}
                         className={cn(
-                          "inline-flex size-8 items-center justify-center rounded-control text-xs font-medium tabular transition-colors",
+                          "inline-flex size-8 tap-target items-center justify-center rounded-control text-xs font-medium tabular transition-colors",
                           p === safePage
                             ? "bg-accent text-paper"
                             : "border border-rule-soft text-muted hover:text-ink",
@@ -581,7 +583,7 @@ export const HistoryPanel = memo(function HistoryPanel({
                   aria-label="Next page"
                   disabled={safePage === pageCount}
                   onClick={() => setPage(safePage + 1)}
-                  className="inline-flex size-8 items-center justify-center rounded-control border border-rule-soft text-muted transition-colors hover:text-ink disabled:opacity-40"
+                  className="inline-flex size-8 tap-target items-center justify-center rounded-control border border-rule-soft text-muted transition-colors hover:text-ink disabled:opacity-40"
                 >
                   <PlainIcon name="arrowRight" size={13} />
                 </button>

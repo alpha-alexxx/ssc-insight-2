@@ -64,7 +64,7 @@ export function AiCoachCard({
             onClick={onOpenChat}
             className="block w-full rounded-control border border-rule-soft bg-canvas px-4 py-3 text-left transition-colors hover:border-accent/40"
           >
-            <span className="flex items-center gap-1.5 text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-accent">
+            <span className="flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-accent">
               <Sparkles size={11} /> Latest insight
             </span>
             <span className="mt-1.5 block truncate font-serif text-[0.9375rem] font-medium leading-snug">

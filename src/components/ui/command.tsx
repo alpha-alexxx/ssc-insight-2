@@ -36,16 +36,25 @@ const Command = React.forwardRef<
 ))
 Command.displayName = CommandPrimitive.displayName
 
-const CommandDialog = ({ children, ...props }: DialogProps) => {
+const CommandDialog = ({
+  children,
+  shouldFilter,
+  ...props
+}: DialogProps & { shouldFilter?: boolean }) => {
   return (
     <Dialog {...props}>
-      <DialogContent className="top-[12%] translate-y-0 overflow-hidden p-0 md:top-[16%] sm:max-w-xl">
+      {/* Phones get the whole canvas — a centered panel this size would leave
+          four readable lines and a cramped input under the mobile keyboard. */}
+      <DialogContent className="top-[12%] translate-y-0 overflow-hidden p-0 md:top-[16%] sm:max-w-xl max-sm:top-0 max-sm:left-0 max-sm:translate-x-0 max-sm:h-dvh max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-b-0 max-sm:pt-[env(safe-area-inset-top,0px)]">
         {/* Radix requires an accessible title/description for the dialog. */}
         <DialogTitle className="sr-only">Search</DialogTitle>
         <DialogDescription className="sr-only">
           Jump to a page, run an action, or find tasks, plan days, and mocks.
         </DialogDescription>
-        <Command className="[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:size-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2.5 [&_[cmdk-item]_svg]:size-4">
+        <Command
+          shouldFilter={shouldFilter}
+          className="[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:size-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2.5 [&_[cmdk-item]_svg]:size-4"
+        >
           {children}
         </Command>
       </DialogContent>

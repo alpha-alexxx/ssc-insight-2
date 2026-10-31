@@ -147,6 +147,12 @@ export function attemptWhere(filters: Filters): Prisma.MockAttemptWhereInput {
                 mode: "insensitive",
               },
             },
+            {
+              notes: {
+                contains: escapeLike(filters.search),
+                mode: "insensitive",
+              },
+            },
           ],
         }
       : {}),
@@ -154,6 +160,8 @@ export function attemptWhere(filters: Filters): Prisma.MockAttemptWhereInput {
 }
 
 // PostgreSQL contains uses LIKE; users expect literal substring searches.
-function escapeLike(value: string) {
+// Shared with the unified search service (lib/search.ts) — every pattern
+// match goes through this so % _ \ in a query stay literal.
+export function escapeLike(value: string) {
   return value.replace(/[\\%_]/g, "\\$&");
 }

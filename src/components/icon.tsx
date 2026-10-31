@@ -35,6 +35,7 @@ import {
   Calculator,
   ChartNoAxesColumnIncreasing,
   Check,
+  ChevronDown,
   ChevronRight,
   CircleHelp,
   ClipboardPaste,
@@ -133,6 +134,7 @@ export type IconName =
   | "arrowDownRight"
   | "minus"
   | "chevronRight"
+  | "chevronDown"
   // subjects
   | "quant"
   | "reasoning"
@@ -193,6 +195,7 @@ const ICONS: Record<IconName, IconEntry> = {
   arrowDownRight: { lucide: ArrowDownRight },
   minus: { lucide: Minus },
   chevronRight: { lucide: ChevronRight },
+  chevronDown: { lucide: ChevronDown },
   quant: { lucide: Calculator },
   reasoning: { lucide: Brain },
   computer: { lucide: Monitor },

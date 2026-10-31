@@ -108,6 +108,30 @@ export function SettingsPanels({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[190px_minmax(0,1fr)]">
+      {/* The rail only exists at lg. Below that a ruled tab strip replaces it
+          — without one there was no way to reach a section at all, because
+          every unselected panel was also hidden. */}
+      <nav
+        aria-label="Settings sections"
+        className="-mx-4 flex gap-1 overflow-x-auto border-b border-rule-soft px-4 lg:hidden"
+      >
+        {sections.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-pressed={section === item.id}
+            onClick={() => setSection(item.id)}
+            className={cn(
+              "-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-colors",
+              section === item.id
+                ? "border-accent text-ink"
+                : "border-transparent text-muted hover:text-ink",
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
       <nav
         aria-label="Settings sections"
         className="hidden h-fit lg:sticky lg:top-[72px] lg:block"
@@ -134,7 +158,7 @@ export function SettingsPanels({
 
       <div className="flex min-w-0 flex-col gap-4">
         <div
-          className={section === "study" ? "block" : "block lg:hidden"}
+          className={section === "study" ? "block" : "hidden lg:block"}
           id="settings-study"
         >
           <Panel
@@ -207,14 +231,14 @@ export function SettingsPanels({
         </div>
 
         <div
-          className={section === "appearance" ? "block" : "block lg:hidden"}
+          className={section === "appearance" ? "block" : "hidden lg:block"}
           id="settings-appearance"
         >
           <AppearancePanel />
         </div>
 
         <div
-          className={section === "ai" ? "block" : "block lg:hidden"}
+          className={section === "ai" ? "block" : "hidden lg:block"}
           id="settings-ai"
         >
           <Panel dense icon="sparkles" title="AI provider">
@@ -225,7 +249,7 @@ export function SettingsPanels({
         </div>
 
         <div
-          className={section === "data" ? "block" : "block lg:hidden"}
+          className={section === "data" ? "block" : "hidden lg:block"}
           id="settings-data"
         >
           <Panel
@@ -284,7 +308,7 @@ export function SettingsPanels({
         </div>
 
         <div
-          className={section === "about" ? "block" : "block lg:hidden"}
+          className={section === "about" ? "block" : "hidden lg:block"}
           id="settings-about"
         >
           <Panel

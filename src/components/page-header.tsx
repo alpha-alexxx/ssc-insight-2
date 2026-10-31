@@ -33,7 +33,7 @@ export function PageHeader({
         <div className="min-w-0">
           <h1 className="workspace-title">{title}</h1>
           {description && (
-            <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-muted">
+            <p className="mt-1.5 max-w-3xl text-[0.8125rem] leading-relaxed text-muted sm:text-xs">
               {description}
             </p>
           )}
@@ -45,9 +45,7 @@ export function PageHeader({
         </div>
       </div>
       {actions && (
-        <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-end">
-          {actions}
-        </div>
+        <div className="action-row sm:justify-end">{actions}</div>
       )}
     </header>
   );

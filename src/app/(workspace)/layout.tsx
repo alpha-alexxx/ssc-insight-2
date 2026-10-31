@@ -42,6 +42,7 @@ export default async function WorkspaceLayout({
         authEnabled={process.env.GOOGLE_AUTH_ENABLED === "true"}
         userEmail={user.email ?? ""}
         userName={user.name ?? ""}
+        userImage={user.image ?? ""}
       />
     </PrivateWorkspace>
   );

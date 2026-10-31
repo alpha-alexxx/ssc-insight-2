@@ -45,13 +45,20 @@ export function useWorkspaceData() {
     abortRef.current = abort;
     setLoading(true);
     setError("");
+    // Search obeys the unified search contract: a one-character query is too
+    // broad to fetch, so it holds until the second character (or clears).
+    const gatedFilters: Filters = {
+      ...filters,
+      search:
+        filters.search && filters.search.length >= 2 ? filters.search : "",
+    };
     const query = new URLSearchParams(
-      Object.entries(filters).filter(([, v]) => !!v),
+      Object.entries(gatedFilters).filter(([, v]) => !!v),
     );
     // Dashboard analytics has its own analytical scope. Persisted type and
     // subject filters still drive Mock history and Compare.
     const analyticsQuery = new URLSearchParams(
-      Object.entries(filters).filter(
+      Object.entries(gatedFilters).filter(
         ([key, value]) =>
           !!value &&
           key !== "type" &&
@@ -64,9 +71,9 @@ export function useWorkspaceData() {
       const allPromise = api<Attempt[]>("/api/mock-attempts", { signal: abort.signal });
       // With no filters active the filtered list is the unfiltered list —
       // share one request instead of fetching the same payload twice.
-      const filteredPromise: Promise<Attempt[]> = Object.values(filters).some(
-        Boolean,
-      )
+      const filteredPromise: Promise<Attempt[]> = Object.values(
+        gatedFilters,
+      ).some(Boolean)
         ? api<Attempt[]>(`/api/mock-attempts?${query}`, { signal: abort.signal })
         : allPromise;
       const [rows, stats, all] = await Promise.all([
@@ -91,8 +98,13 @@ export function useWorkspaceData() {
     }
   }, [filters, scope]);
 
+  // The first load is instant; filter churn (typing included) settles for
+  // 350ms before a request fires — the unified search debounce.
+  const mountedRef = useRef(false);
   useEffect(() => {
-    const timer = setTimeout(() => void refresh(), 150);
+    const delay = mountedRef.current ? 350 : 0;
+    mountedRef.current = true;
+    const timer = setTimeout(() => void refresh(), delay);
     return () => clearTimeout(timer);
   }, [refresh]);
   useEffect(
@@ -102,23 +114,28 @@ export function useWorkspaceData() {
     [],
   );
 
-  // Restore the shareable URL state (filters + scope) once after hydration —
-  // declared before the mirror effect so a deep link's query is read before
-  // anything writes back. It also runs before the refresh debounce fires, so
-  // the first fetch already uses the restored filters. Synchronous setState
-  // is the point here: this is the one-shot sync with an external system
-  // (the address bar) that React's effect rules carve out, and it must land
-  // before the debounced refresh reads `filters`.
+  // Restore the shareable URL state (filters + scope) whenever the view
+  // changes — the shell persists across client-side navigation, so a
+  // palette/programmatic handoff like /history?search=… would otherwise be
+  // stripped by the mirror effect below (its one-shot restore never re-ran).
+  // Declared before the mirror effect so a deep link's query is read before
+  // anything writes back, and it runs before the refresh debounce fires, so
+  // the fetch already uses the restored filters. Synchronous setState is the
+  // point here: this is the sync with an external system (the address bar)
+  // that React's effect rules carve out.
   const [urlReady, setUrlReady] = useState(false);
   useEffect(() => {
     const state = parseWorkspaceState(window.location.search);
-    // One-shot post-hydration restore of external (address bar) state; the
-    // setState must land before the debounced refresh reads `filters`.
+    // Post-hydration / post-navigation restore of external (address bar)
+    // state; the setState must land before the debounced refresh reads
+    // `filters`.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFilters(state.filters);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setScope(state.scope);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrlReady(true);
-  }, []);
+  }, [pathname]);
   // Keep the address bar in step with the workspace state. replaceState
   // (not router navigation) so typing never triggers RSC round-trips or
   // spams history; reloads and shared links reconstruct the state from it.

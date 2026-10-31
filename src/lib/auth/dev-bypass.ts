@@ -16,7 +16,12 @@ export function devAuthBypassActive() {
 
 export function devBypassUser() {
   const userId = process.env.DEV_AUTH_USER_ID?.trim() || "local-dev-user";
-  return { id: userId, name: "Local Developer", email: "dev@localhost" };
+  return {
+    id: userId,
+    name: "Local Developer",
+    email: "dev@localhost",
+    image: null,
+  };
 }
 
 /** Minimal Better Auth get-session payload for the local dev session. */

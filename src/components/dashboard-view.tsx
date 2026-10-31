@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 /**
  * Dashboard composition. The metric strip answers "where am I?", Today's Plan
  * pairs the study day with the personal task column side by side (tabbed
- * below lg), the week strip replaces the full calendar, and the pipeline
+ * below xl), the week strip replaces the full calendar, and the pipeline
  * column keeps progress, revision and the coach in view. Performance analysis
  * stays below as a distinct, scope-aware section.
  */
@@ -134,10 +134,7 @@ export function DashboardView({
               )}
             </p>
             <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2
-                id="today-plan-heading"
-                className="font-serif text-[1.375rem] font-medium leading-[1.2] tracking-[-0.025em] text-ink"
-              >
+              <h2 id="today-plan-heading" className="section-title text-ink">
                 What&apos;s the Plan!
               </h2>
               {/* The return control sits beside the title, not in the arrow
@@ -158,7 +155,7 @@ export function DashboardView({
             <div
               role="group"
               aria-label="Change the plan day"
-              className="flex h-9 w-full items-stretch divide-x divide-rule-soft overflow-hidden rounded-control border border-rule-soft bg-paper sm:w-auto sm:shrink-0"
+              className="flex h-11 w-full items-stretch divide-x divide-rule-soft overflow-hidden rounded-control border border-rule-soft bg-paper sm:h-9 sm:w-auto sm:shrink-0"
             >
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -167,7 +164,7 @@ export function DashboardView({
                     aria-label="Previous day"
                     disabled={activeDate <= plan.startDate}
                     onClick={() => shiftFocus(-1)}
-                    className="flex w-8 items-center justify-center text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none disabled:opacity-35 motion-reduce:transition-none"
+                    className="flex w-11 items-center justify-center text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none disabled:opacity-35 motion-reduce:transition-none sm:w-8"
                   >
                     <ChevronLeft size={15} />
                   </button>
@@ -184,7 +181,7 @@ export function DashboardView({
               >
                 {isoWeekdayShort(activeDate)}, {longDate(activeDate)}
                 {activeDate === today && (
-                  <span className="rounded-pill bg-ink px-1.5 py-px font-sans text-[0.5625rem] font-semibold uppercase tracking-[0.08em] text-paper">
+                  <span className="rounded-pill bg-ink px-1.5 py-px font-sans text-[0.625rem] font-semibold uppercase tracking-[0.08em] text-paper">
                     Today
                   </span>
                 )}
@@ -196,7 +193,7 @@ export function DashboardView({
                     aria-label="Next day"
                     disabled={activeDate >= plan.endDate}
                     onClick={() => shiftFocus(1)}
-                    className="flex w-8 items-center justify-center text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none disabled:opacity-35 motion-reduce:transition-none"
+                    className="flex w-11 items-center justify-center text-muted transition-colors hover:bg-soft hover:text-ink disabled:pointer-events-none disabled:opacity-35 motion-reduce:transition-none sm:w-8"
                   >
                     <ChevronRight size={15} />
                   </button>
@@ -210,11 +207,11 @@ export function DashboardView({
             on its own rule-to-rule row at phone widths — it used to float on
             the canvas as a third stacked bar between the title and the
             panels. It is full-width until the two panes can sit side by side
-            (lg), which is exactly when the switch stops being needed. */}
+            (xl), which is exactly when the switch stops being needed. */}
         <div
           role="group"
           aria-label="Switch between the study plan and personal tasks"
-          className="segment-group is-block mt-3 lg:hidden"
+          className="segment-group is-block mt-3 xl:hidden"
         >
           <button
             type="button"
@@ -238,12 +235,12 @@ export function DashboardView({
           </button>
         </div>
         <div className="mt-4 h-px bg-rule-soft" aria-hidden="true" />
-        <div className="mt-5 grid items-start gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <div className="mt-5 grid items-start gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           <div
             id="pane-study"
             className={cn(
               "min-w-0",
-              mobilePane !== "study" && "hidden lg:block",
+              mobilePane !== "study" && "hidden xl:block",
             )}
           >
             {planApi.error && !plan ? (
@@ -272,7 +269,7 @@ export function DashboardView({
             id="pane-personal"
             className={cn(
               "min-w-0",
-              mobilePane !== "personal" && "hidden lg:block",
+              mobilePane !== "personal" && "hidden xl:block",
             )}
           >
             <PersonalTodos
@@ -314,12 +311,12 @@ export function DashboardView({
             tile, serif title, subtitle), a full-bleed hairline, then the
             control row — scope tabs left, platform/date filters right —
             everything on paper inside the panel. */}
-        <div className="panel mb-6">
+        <div className="panel mb-4 sm:mb-6">
           <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
             <DuotoneTile
               name="report"
               tile="accent"
-              className="size-10 shrink-0"
+              className="size-9 shrink-0 sm:size-10"
             />
             <div className="min-w-0">
               <h2 id="performance-heading" className="panel-title">

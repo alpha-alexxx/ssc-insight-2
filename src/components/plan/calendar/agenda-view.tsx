@@ -112,7 +112,7 @@ export function AgendaView({
                       {shortDate(day.date)}
                     </span>
                     {day.date === today && (
-                      <span className="rounded-pill bg-ink px-1.5 py-px text-[0.5625rem] font-medium uppercase tracking-wide text-paper">
+                      <span className="rounded-pill bg-ink px-1.5 py-px text-[0.625rem] font-medium uppercase tracking-wide text-paper">
                         Today
                       </span>
                     )}

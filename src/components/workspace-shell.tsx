@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   AnimatePresence,
   motion,
@@ -96,26 +97,45 @@ export function WorkspaceShell({
   authEnabled = false,
   userEmail = "",
   userName = "",
+  userImage = "",
   defaultSidebarOpen = true,
 }: {
   authEnabled?: boolean;
   userEmail?: string;
   userName?: string;
+  userImage?: string;
   defaultSidebarOpen?: boolean;
 }) {
   // ToastProvider wraps the inner component so useToast works inside it.
   // ErrorBoundary already wraps the whole tree in layout.tsx.
+  // QueryClientProvider scopes TanStack Query to the workspace — search
+  // surfaces use it; the rest of the shell keeps its own data layer.
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchOnWindowFocus: false,
+            retry: 1,
+            staleTime: 30_000,
+          },
+        },
+      }),
+  );
   return (
-    <ToastProvider>
-      <TodosDataProvider>
-        <WorkspaceShellInner
-          authEnabled={authEnabled}
-          userEmail={userEmail}
-          defaultSidebarOpen={defaultSidebarOpen}
-          userName={userName}
-        />
-      </TodosDataProvider>
-    </ToastProvider>
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <TodosDataProvider>
+          <WorkspaceShellInner
+            authEnabled={authEnabled}
+            userEmail={userEmail}
+            defaultSidebarOpen={defaultSidebarOpen}
+            userName={userName}
+            userImage={userImage}
+          />
+        </TodosDataProvider>
+      </ToastProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -123,11 +143,13 @@ function WorkspaceShellInner({
   authEnabled = false,
   userEmail = "",
   userName = "",
+  userImage = "",
   defaultSidebarOpen = true,
 }: {
   authEnabled?: boolean;
   userEmail?: string;
   userName?: string;
+  userImage?: string;
   defaultSidebarOpen?: boolean;
 }) {
   const toast = useToast();
@@ -529,6 +551,7 @@ function WorkspaceShellInner({
           view={view}
           userName={userName}
           userEmail={userEmail}
+          userImage={userImage}
           authEnabled={authEnabled}
           aiEnabled={!!ai.aiStatus?.enabled}
           onRouteIntent={routeIntent}
@@ -536,7 +559,7 @@ function WorkspaceShellInner({
           onOpenAi={() => openAiChat("chat")}
           onOpenSearch={openSearch}
         >
-          <div className="mx-auto w-full max-w-[1560px] px-3 py-4 md:px-5 md:py-5">
+          <div className="workspace-content mx-auto w-full max-w-[1560px] px-4 py-4 sm:px-5 md:py-5">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={view === "add" ? "add" : view}
@@ -846,9 +869,6 @@ function WorkspaceShellInner({
         <CommandPalette
           open={searchOpen}
           onOpenChange={setSearchOpen}
-          plan={planApi.plan}
-          personalTasks={planApi.personalTasks}
-          attempts={allAttempts}
           aiEnabled={!!ai.aiStatus?.enabled}
           onAddMock={add}
           onOpenAi={() => openAiChat("chat")}

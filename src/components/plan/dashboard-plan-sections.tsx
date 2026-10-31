@@ -193,7 +193,7 @@ export function TodayFocusPanel({
 
         {focus && (
           <div className="callout-accent mt-3">
-            <span className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-accent">
+            <span className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-accent">
               Next up
             </span>
             <PlainIcon name="file" size={13} className="text-accent" />
@@ -334,7 +334,7 @@ function PipelineProgressSection({
   return (
     <section aria-label="Plan progress">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-muted">
+        <h3 className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted">
           Progress
         </h3>
       </div>
@@ -382,7 +382,7 @@ function PipelineProgressSection({
                 <p className="font-serif text-lg leading-none tabular">
                   {value}
                 </p>
-                <p className="mt-0.5 text-[0.5625rem] uppercase tracking-[0.08em] text-muted">
+                <p className="mt-0.5 text-[0.625rem] uppercase tracking-[0.08em] text-muted">
                   {label}
                 </p>
               </div>
@@ -434,7 +434,7 @@ function PipelineProgressSection({
                 >
                   {phase.name}
                 </span>
-                <span className="shrink-0 text-[0.5625rem] leading-tight text-muted">
+                <span className="shrink-0 text-[0.625rem] leading-tight text-muted">
                   Days {phase.days}
                 </span>
               </div>
@@ -495,7 +495,7 @@ function PipelineProgressSection({
                     >
                       {phase.name}
                     </span>
-                    <span className="block text-[0.5625rem] leading-tight text-muted">
+                    <span className="block text-[0.625rem] leading-tight text-muted">
                       Days {phase.days}
                     </span>
                   </span>
@@ -506,7 +506,7 @@ function PipelineProgressSection({
         </div>
         <div className="callout-accent mt-3">
           <Flag size={13} className="shrink-0 text-accent" aria-hidden="true" />
-          <span className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-accent">
+          <span className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-accent">
             Next milestone
           </span>
           <span className="min-w-0 flex-1 truncate text-xs font-medium">
@@ -546,7 +546,7 @@ function PipelineUpcomingSection({
       className="mt-3 border-t border-rule-soft pt-3"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-muted">
+        <h3 className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted">
           Upcoming tests
         </h3>
         <Link
@@ -636,7 +636,7 @@ function PipelineRevisionSection({
       className="mt-3 border-t border-rule-soft pt-3"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-muted">
+        <h3 className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted">
           Revision queue
         </h3>
         <span
@@ -708,7 +708,7 @@ function PipelineRevisionSection({
             />
           </button>
         )}
-        <p className="mt-2 text-[0.5625rem] leading-relaxed text-muted">
+        <p className="mt-2 text-[0.625rem] leading-relaxed text-muted">
           Completion is manual; attempting a test never marks revision done.
         </p>
       </div>

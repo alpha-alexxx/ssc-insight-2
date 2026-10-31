@@ -3,23 +3,41 @@
 import { useState } from "react";
 import { authClient } from "@/lib/auth/client";
 import { startGoogleSignIn } from "@/lib/auth/sign-in";
-import { GoogleGlyph } from "./google-glyph";
 import { PlainIcon } from "./icon";
-import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 /** Props for {@link AuthControl}. */
 export interface AuthControlProps {
   enabled: boolean;
+  name: string;
+  email: string;
+  imageUrl: string;
+  onSettings: () => void;
 }
 
 /**
- * Header auth surface. Presents three states — disabled, signed-out, and
- * signed-in — in one visual language: an identity mark (avatar or Google
- * glyph), an outline control for the primary action, and a paper-docked
- * alert for failures. All state changes route through the app's custom
- * events so the workspace guard reacts immediately.
+ * Header account menu — the workspace's single auth surface. The trigger is
+ * the avatar (Google photo when present, otherwise the name's first letter);
+ * the menu holds the identity (name + email), Settings, and Sign out.
+ * Sign-out routes through the app's custom events so the workspace guard
+ * reacts immediately.
  */
-export function AuthControl({ enabled }: AuthControlProps) {
+export function AuthControl({
+  enabled,
+  name,
+  email,
+  imageUrl,
+  onSettings,
+}: AuthControlProps) {
+  const { busy, error, signOut } = useAuthActions();
+
   if (!enabled) {
     return (
       <span className="text-[0.6875rem] font-medium text-muted">
@@ -27,12 +45,71 @@ export function AuthControl({ enabled }: AuthControlProps) {
       </span>
     );
   }
-  return <ConnectedAuthControl />;
+
+  const source = (name || email || "?").trim();
+  const initial = source.charAt(0).toUpperCase() || "?";
+
+  return (
+    <div className="relative flex min-w-0 items-center">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Account menu"
+            title={source}
+            className="
+              inline-flex size-8 shrink-0 items-center justify-center
+              rounded-full transition-shadow outline-none
+              hover:ring-2 hover:ring-rule-soft
+              focus-visible:ring-2 focus-visible:ring-accent/40
+              data-[state=open]:ring-2 data-[state=open]:ring-rule
+            "
+          >
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt=""
+                aria-hidden="true"
+                className="size-8 rounded-full object-cover ring-1 ring-rule-soft"
+              />
+            ) : (
+              <span
+                aria-hidden="true"
+                className="sidebar-avatar grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[0.625rem] font-semibold tracking-wide text-paper"
+              >
+                {initial}
+              </span>
+            )}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[13rem]">
+          <DropdownMenuLabel className="normal-case tracking-normal">
+            <span className="block truncate text-xs font-medium text-ink">
+              {name || "My workspace"}
+            </span>
+            <span className="block truncate text-[0.625rem] font-normal text-muted">
+              {email || "Private account"}
+            </span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={onSettings}>
+            <PlainIcon name="settings" size={15} />
+            Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem danger disabled={busy} onSelect={signOut}>
+            <PlainIcon name="logout" size={15} />
+            {busy ? "Signing out…" : "Sign out"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {error && <AuthError message={error} />}
+    </div>
+  );
 }
 
 /**
  * Shared sign-in/sign-out actions. Dispatches the workspace-guard's custom
- * events so every auth surface (header control, sidebar user menu) behaves
+ * events so the header account menu and any other auth surface behave
  * identically.
  */
 export function useAuthActions() {
@@ -67,102 +144,6 @@ export function useAuthActions() {
   }
 
   return { busy, error, setError, signIn, signOut };
-}
-
-function ConnectedAuthControl() {
-  const {
-    data: session,
-    isPending,
-    error: sessionError,
-  } = authClient.useSession();
-  const { busy, error, signIn, signOut } = useAuthActions();
-
-  const visibleError =
-    error ||
-    (sessionError ? "Sign-in is unavailable. Please retry shortly." : "");
-
-  return (
-    <div className="relative flex min-w-0 items-center gap-1.5 sm:gap-2">
-      {session?.user ? (
-        <SignedIn user={session.user} busy={busy} onSignOut={signOut} />
-      ) : (
-        <SignedOut busy={busy} pending={isPending} onSignIn={signIn} />
-      )}
-      {visibleError && <AuthError message={visibleError} />}
-    </div>
-  );
-}
-
-/** Signed-in identity chip + a quiet sign-out control. */
-function SignedIn({
-  user,
-  busy,
-  onSignOut,
-}: {
-  user: { name?: string | null; email?: string | null };
-  busy: boolean;
-  onSignOut: () => void;
-}) {
-  const source = (user.name ?? user.email ?? "?").trim();
-  const initial = source.charAt(0).toUpperCase() || "?";
-
-  return (
-    <>
-      <span
-        aria-hidden
-        className="hidden size-7 shrink-0 items-center justify-center rounded-pill border border-rule-soft bg-soft text-[0.6875rem] font-semibold tabular-nums text-ink sm:inline-flex"
-        title={source}
-      >
-        {initial}
-      </span>
-      <span
-        className="hidden max-w-32 truncate text-xs font-medium text-ink md:inline"
-        title={user.name ?? undefined}
-      >
-        {user.name ?? user.email}
-      </span>
-      <Button variant="outline" size="sm" disabled={busy} onClick={onSignOut}>
-        {busy ? "Signing out…" : "Sign out"}
-      </Button>
-    </>
-  );
-}
-
-/** Signed-out call to action, with an inline Google glyph. */
-function SignedOut({
-  busy,
-  pending,
-  onSignIn,
-}: {
-  busy: boolean;
-  pending: boolean;
-  onSignIn: () => void;
-}) {
-  const loading = busy || pending;
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={loading}
-      onClick={onSignIn}
-      aria-label="Continue with Google"
-    >
-      {loading ? (
-        <>
-          <span
-            aria-hidden
-            className="size-1.5 rounded-full bg-accent motion-safe:animate-pulse"
-          />
-          <span>{busy ? "Connecting…" : "Checking…"}</span>
-        </>
-      ) : (
-        <>
-          <GoogleGlyph />
-          <span className="hidden sm:inline">Continue with Google</span>
-        </>
-      )}
-    </Button>
-  );
 }
 
 /** Paper-docked error alert, right-aligned beneath the control. */

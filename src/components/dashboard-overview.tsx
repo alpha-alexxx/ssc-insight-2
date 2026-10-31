@@ -134,10 +134,12 @@ export function DashboardOverview({
   ];
 
   return (
-    <div className="metric-strip">
-      {metrics.map(({ key, ...metric }) => (
-        <MetricCell key={key} {...metric} />
-      ))}
+    <div className="strip-frame">
+      <div className="metric-strip">
+        {metrics.map(({ key, ...metric }) => (
+          <MetricCell key={key} {...metric} />
+        ))}
+      </div>
     </div>
   );
 }

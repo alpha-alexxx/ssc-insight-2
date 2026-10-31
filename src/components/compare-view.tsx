@@ -199,7 +199,7 @@ export const CompareView = memo(function CompareView({
               return (
                 <label
                   key={a.id}
-                  className={`flex flex-wrap items-center gap-3 px-6 py-3 cursor-pointer transition-colors sm:flex-nowrap ${
+                  className={`flex flex-wrap items-center gap-3 px-4 py-3 cursor-pointer transition-colors sm:flex-nowrap sm:px-6 ${
                     checked ? "bg-accent-soft/50 hover:bg-accent-soft" : "hover:bg-canvas"
                   }`}
                 >
@@ -339,7 +339,7 @@ export const CompareView = memo(function CompareView({
                   type="button"
                   aria-label={`Remove ${a.name} from comparison`}
                   onClick={() => onToggle(a.id)}
-                  className="text-muted transition-colors hover:text-danger"
+                  className="tap-target text-muted transition-colors hover:text-danger"
                 >
                   <PlainIcon name="close" size={12} />
                 </button>
@@ -351,7 +351,7 @@ export const CompareView = memo(function CompareView({
               </span>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="action-row shrink-0 gap-2 sm:w-auto">
             <Button
               size="sm"
               disabled={compared.length < 2}

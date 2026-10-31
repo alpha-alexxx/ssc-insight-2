@@ -97,15 +97,17 @@ export function MetricCell({
 /** Loading placeholder matching the real strip's cell rhythm. */
 export function MetricStripSkeleton({ label }: { label: string }) {
   return (
-    <div className="metric-strip" aria-busy="true" aria-label={label}>
-      {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="metric-cell">
-          <Skeleton className="h-2.5 w-20" />
-          <Skeleton className="mt-2.5 h-8 w-20" />
-          <Skeleton className="mt-2 h-2.5 w-24" />
-          <Skeleton className="mt-3 h-0.5 w-full" />
-        </div>
-      ))}
+    <div className="strip-frame">
+      <div className="metric-strip" aria-busy="true" aria-label={label}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="metric-cell">
+            <Skeleton className="h-2.5 w-20" />
+            <Skeleton className="mt-2.5 h-8 w-20" />
+            <Skeleton className="mt-2 h-2.5 w-24" />
+            <Skeleton className="mt-3 h-0.5 w-full" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

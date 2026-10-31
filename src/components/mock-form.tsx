@@ -863,7 +863,7 @@ export function MockForm({
                 </p>
               )}
             </div>
-            <div className="flex gap-3">
+            <div className="action-row gap-3 sm:w-auto">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>

@@ -85,6 +85,31 @@
   --stat-cell-pad-y: 23px;
   --stat-cell-pad-x: 24px;
 
+  /* ---- type scale ----
+     Every heading and metric reads its size from one of these, so a style
+     (mira, below) or a breakpoint (the phone block at the end of the file)
+     resizes type by overriding the token — never by re-declaring the class.
+     Values here are the shipped desktop sizes. */
+  /* Phone-safe floor: 375px lands at 28px (the workspace-title size) instead
+     of 32px, so a display title on a form page never outshouts the page. */
+  --type-page-title: clamp(1.75rem, 3.2vw, 2.75rem);
+  --type-workspace-title: clamp(1.75rem, 2.6vw, 2.125rem);
+  --type-section-title: 1.375rem;
+  --type-panel-title: 1rem;
+  --type-panel-title-dense: 1.0625rem;
+  --type-metric: clamp(1.75rem, 2.6vw, 2.125rem);
+  --type-stat: 2.625rem;
+  --type-section-label: 0.625rem;
+
+  /* ---- component geometry (tokenised so phones can re-standardise it) ---- */
+  --metric-cell-pad-y: 16px;
+  --metric-cell-pad-x: 18px;
+  --band-cell-pad-y: 18px;
+  --band-cell-pad-x: 20px;
+  --day-nav-size: 32px;
+  /* WCAG 2.2 hit-area floor for icon-only controls. */
+  --tap-min: 44px;
+
   /* ---- sidebar chrome (style-adaptive; vega defaults = today's sizes) ---- */
   --sidebar-rule-w: 1px;
   --sidebar-rule-color: var(--rule);
@@ -389,27 +414,21 @@
   --sidebar-row-h: 28px;
   --sidebar-row-h-lg: 42px;
   --sidebar-header-pad-y: 8px;
+  /* Mira's compact type and cell rhythm are token overrides, not class
+     re-declarations: the phone block later in this file must be able to
+     supersede them without a specificity fight. */
+  --type-page-title: clamp(1.75rem, 2.8vw, 2.375rem);
+  --type-panel-title: 1.25rem;
+  --type-stat: 2.125rem;
+  --type-metric: 1.5rem;
+  --metric-cell-pad-y: 10px;
+  --metric-cell-pad-x: 14px;
   /* Compact elevation to match mira's tighter scale. */
   --landing-lift: 0 1px 2px color-mix(in oklab, var(--ink) 8%, transparent),
     0 10px 24px -16px color-mix(in oklab, var(--ink) 45%, transparent);
 }
-[data-style="mira"] .page-title {
-  font-size: clamp(1.75rem, 2.8vw, 2.375rem);
-}
-[data-style="mira"] .panel-title {
-  font-size: 1.25rem;
-}
-[data-style="mira"] .stat-value {
-  font-size: 2.125rem;
-}
 [data-style="mira"] .chart-empty {
   min-height: 170px;
-}
-[data-style="mira"] .metric-cell {
-  padding: 10px 14px;
-}
-[data-style="mira"] .metric-value {
-  font-size: 1.5rem;
 }
 
 /* ---------- sidebar: style-adaptive chrome ----------
@@ -652,14 +671,30 @@
   }
   .panel-title {
     font-family: var(--font-heading);
-    font-size: 16px;
+    font-size: var(--type-panel-title);
     line-height: 1.2;
     font-weight: 500;
     letter-spacing: -0.025em;
   }
+  /* Dense-panel title: one step under .panel-title on every screen, so the
+     section title always outranks the compact panel chrome inside it. */
+  .panel-title-dense {
+    font-family: var(--font-heading);
+    font-size: var(--type-panel-title-dense);
+    font-weight: 500;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+  .section-title {
+    font-family: var(--font-heading);
+    font-size: var(--type-section-title);
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+  }
   .page-title {
     font-family: var(--font-heading);
-    font-size: clamp(2rem, 3.2vw, 2.75rem);
+    font-size: var(--type-page-title);
     line-height: 1.12;
     font-weight: 450;
     letter-spacing: -0.035em;
@@ -705,7 +740,7 @@
   }
   .stat-value {
     font-family: var(--font-heading);
-    font-size: 2.625rem;
+    font-size: var(--type-stat);
     font-weight: 450;
     line-height: 1.2;
     letter-spacing: -0.035em;
@@ -944,17 +979,18 @@
       padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
       scroll-padding-bottom: 24px;
     }
-    .task-editor-dialog input,
-    .task-editor-dialog textarea,
-    .ai-composer textarea,
-    /* The sheet renders its own inputs (paste box, ExtractionReview fields). */
-    .ai-workspace-sheet input,
-    .ai-workspace-sheet textarea,
-    .ai-workspace-sheet select,
-    .personal-workspace input,
-    .personal-workspace select {
-      font-size: 16px;
-    }
+    /* The 16px field rule is app-wide now (end of file), so the old
+       per-surface list is gone — it missed the mock form, settings and the
+       portaled task filter sheet, which still zoomed on iOS. */
+  }
+  /* Search-palette hit highlighting: the accent-soft wash says "you matched"
+     without shouting, stays legible in every palette × style combination,
+     and keeps <mark>'s semantic emphasis while overriding its default ink. */
+  .search-mark {
+    background: var(--accent-soft);
+    color: var(--ink);
+    border-radius: 2px;
+    padding: 0 1px;
   }
   .sheet-content[data-state="closed"] {
     animation: sheet-out-right 160ms ease;
@@ -1142,7 +1178,7 @@
   /* ---------- Compact workspace primitives ---------- */
   .workspace-title {
     font-family: var(--font-heading);
-    font-size: clamp(1.75rem, 2.6vw, 2.125rem);
+    font-size: var(--type-workspace-title);
     line-height: 1.12;
     font-weight: 500;
     letter-spacing: -0.03em;
@@ -1168,7 +1204,7 @@
   .metric-cell {
     display: block;
     min-width: 0;
-    padding: 16px 18px;
+    padding: var(--metric-cell-pad-y) var(--metric-cell-pad-x);
     text-align: left;
     transition: background-color var(--dur-quick) ease;
   }
@@ -1224,7 +1260,7 @@
   }
   .metric-value {
     font-family: var(--font-heading);
-    font-size: clamp(1.75rem, 2.6vw, 2.125rem);
+    font-size: var(--type-metric);
     line-height: 1.15;
     font-weight: 550;
     letter-spacing: -0.025em;
@@ -1294,7 +1330,7 @@
   }
   .score-band > div {
     min-width: 0;
-    padding: 18px 20px 16px;
+    padding: var(--band-cell-pad-y) var(--band-cell-pad-x);
   }
   .score-band > div + div {
     border-left: 1px solid var(--rule-soft);
@@ -1336,8 +1372,8 @@
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: var(--day-nav-size);
+    height: var(--day-nav-size);
     border: 1px solid var(--rule);
     border-radius: var(--radius-control);
     background: var(--paper);
@@ -1366,7 +1402,7 @@
     flex: 0 0 auto;
     align-items: center;
     gap: 8px;
-    height: 32px;
+    height: var(--day-nav-size);
     min-width: 0;
     padding: 0 12px;
     border: 1px solid var(--rule);
@@ -1375,7 +1411,7 @@
   }
   .day-nav-today {
     flex: 0 0 auto;
-    height: 32px;
+    height: var(--day-nav-size);
     padding: 0 12px;
     border: 1px solid var(--rule);
     border-radius: var(--radius-control);
@@ -2246,12 +2282,8 @@ html {
     --table-cell-pad-y: 13px;
     --table-cell-pad-x: 12px;
   }
-  .metric-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   /* Opt-in swipeable strip row (My Tasks overview): cells keep a readable
-     minimum width and the row scrolls horizontally with snap. The 2×2 border
-     pair above is neutralized so the row keeps its hairlines. */
+     minimum width and the row scrolls horizontally with snap. */
   .metric-strip-scroll {
     display: flex;
     overflow-x: auto;
@@ -2264,44 +2296,15 @@ html {
   .metric-strip-scroll .metric-cell {
     flex: 0 0 9.5rem;
     scroll-snap-align: start;
+    padding: 12px;
   }
+  /* The swipe row is a single line, so every cell keeps a left hairline and
+     none gets the 2×2 top border the divided strip uses. */
   .metric-strip-scroll .metric-cell + .metric-cell {
-    border-left: 1px solid var(--rule-soft);
-  }
-  .metric-strip-scroll .metric-cell:nth-child(3) {
     border-left: 1px solid var(--rule-soft);
   }
   .metric-strip-scroll .metric-cell:nth-child(n + 3) {
     border-top: 0;
-  }
-  .metric-cell {
-    padding: 12px;
-  }
-  .metric-cell:nth-child(3) {
-    border-left: 0;
-  }
-  .metric-cell:nth-child(n + 3) {
-    border-top: 1px solid var(--rule-soft);
-  }
-  .metric-value {
-    font-size: 1.5rem;
-  }
-  .score-band {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .score-band > div {
-    padding: 12px 14px;
-  }
-  .score-band > div:nth-child(3) {
-    border-left: 0;
-  }
-  .score-band > div:nth-child(n + 3) {
-    border-top: 1px solid var(--rule-soft);
-  }
-  /* The conditional target cell closes the band full-width on phones. */
-  .score-band > div:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-    border-left: 0;
   }
   .stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2318,10 +2321,43 @@ html {
   .stat-value {
     font-size: 2.1875rem;
   }
-  .panel-title {
-    font-size: 1.3125rem;
+}
+
+/* ---------- Phone touch density ----------
+   LAST token override in the file, deliberately. 44px is an accessibility
+   floor, not a style preference, so it supersedes every [data-style] density.
+   A style block appended below this one would silently win on phones again. */
+@media (max-width: 639.98px), (pointer: coarse) and (max-width: 1279.98px) {
+  :root {
+    --control-height: 44px;
+    --control-height-sm: 44px;
+    --control-pad-y: 12px;
+    --control-pad-x: 16px;
+    --segment-pad-y: 10px;
+    --day-nav-size: 44px;
+    --metric-cell-pad-y: 12px;
+    --metric-cell-pad-x: 12px;
+    --band-cell-pad-y: 12px;
+    --band-cell-pad-x: 14px;
+
+    /* Type steps. The old 21px .panel-title on phones was an inversion —
+       the narrowest screens got the largest section titles — so titles now
+       step down and metrics step to 24px, matching DESIGN.md. */
+    --type-panel-title: 1rem;
+    --type-panel-title-dense: 1rem;
+    --type-section-title: 1.25rem;
+    --type-metric: 1.5rem;
+    --type-section-label: 0.6875rem;
+  }
+  /* Explicit so a future re-ordering of the mira block cannot resurrect its
+     compact 20px title on phones. */
+  [data-style="mira"] {
+    --type-panel-title: 1rem;
+    --type-panel-title-dense: 1rem;
+    --type-metric: 1.5rem;
   }
 }
+
 /* Very narrow phones: tighten segmented controls so four options fit. */
 @media (max-width: 420px) {
   :root {
@@ -2329,6 +2365,101 @@ html {
   }
   .segment {
     font-size: 0.7188rem;
+  }
+}
+
+/* ---------- Page-level action rows ----------
+   On phones actions span the row (one primary per screen stays obvious);
+   from sm they return to their intrinsic widths. `.action-row` owns that
+   switch so every view's footer behaves the same way. */
+.action-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+@media (min-width: 640px) {
+  .action-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    width: auto;
+  }
+}
+
+/* Icon-only controls keep their visual size but owe the finger 44px. The
+   pseudo-element grows the hit area without touching layout, so rows do not
+   reflow between pointer types. */
+.tap-target {
+  position: relative;
+}
+.tap-target::after {
+  content: "";
+  position: absolute;
+  inset: 50%;
+  translate: -50% -50%;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- iOS focus zoom ----------
+   Safari zooms the viewport when a focused field is under 16px. Applies to
+   every text control app-wide, including portaled sheets and dialogs, which
+   is why it is unlayered rather than scoped per surface (the earlier scoped
+   list is what let the mock form and the task filter sheet still zoom). */
+@media (max-width: 639.98px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* ---------- Divider strips respond to their own width, not the viewport ----
+   The sidebar opens at md, so a 768px viewport has ~488px of content while a
+   767px viewport has ~735px. A viewport query cannot see that difference, and
+   four 120px cells were the result. The frames below are query containers, so
+   the strip folds to 2×2 whenever the content column drops under 680px —
+   phones, and 768–1023 with the sidebar open — and keeps its shipped
+   4-across geometry from ~680px up (1024 with the sidebar is ~744px).
+   Unlayered, so it beats the utilities that set the container's padding. */
+.workspace-content,
+.strip-frame {
+  container-type: inline-size;
+}
+@container (max-width: 679.98px) {
+  .metric-strip:not(.metric-strip-scroll) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .metric-strip:not(.metric-strip-scroll) .metric-cell {
+    padding: var(--metric-cell-pad-y) var(--metric-cell-pad-x);
+  }
+  .metric-strip:not(.metric-strip-scroll) .metric-cell:nth-child(3) {
+    border-left: 0;
+  }
+  .metric-strip:not(.metric-strip-scroll) .metric-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .score-band,
+  .score-band.is-five {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .score-band > div {
+    padding: var(--band-cell-pad-y) var(--band-cell-pad-x);
+  }
+  .score-band > div:nth-child(3) {
+    border-left: 0;
+  }
+  .score-band > div:nth-child(n + 3) {
+    border-top: 1px solid var(--rule-soft);
+  }
+  /* The conditional target cell closes the band full-width. */
+  .score-band > div:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    border-left: 0;
   }
 }
 
@@ -2388,13 +2519,16 @@ html {
 }
 
 /* Preserve compact desktop density while giving coarse pointers comfortable
-   hit areas. WCAG 2.2's 24px floor is exceeded without stretching text links. */
-@media (pointer: coarse) {
+   hit areas. WCAG 2.2's 24px floor is exceeded without stretching text links.
+   Narrow viewports are included so a phone is fully usable even when the
+   browser reports a fine pointer (touch laptops, emulation, CDP harnesses). */
+@media (pointer: coarse), (max-width: 639.98px) {
   [data-slot="button"],
   [data-sidebar="menu-button"],
   .day-nav-step,
-  .segment {
-    min-width: 44px;
-    min-height: 44px;
+  .segment,
+  .tap-target {
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
   }
 }

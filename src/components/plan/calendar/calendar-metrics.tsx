@@ -48,6 +48,7 @@ export function CalendarMetrics({
   const mocksDone = mocks.filter((task) => task.completed).length;
 
   return (
+    <div className="strip-frame">
     <div className="metric-strip">
       <MetricCell
         label="Next mock"
@@ -85,6 +86,7 @@ export function CalendarMetrics({
         hint="Scheduled mocks completed"
         pct={mocks.length > 0 ? mocksDone / mocks.length : null}
       />
+    </div>
     </div>
   );
 }

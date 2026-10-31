@@ -117,10 +117,20 @@ test("Postgres filters preserve IST inclusive dates, subject relation and litera
     OR: [
       { name: { contains: "100\\%\\_test\\\\value", mode: "insensitive" } },
       { platform: { contains: "100\\%\\_test\\\\value", mode: "insensitive" } },
+      { notes: { contains: "100\\%\\_test\\\\value", mode: "insensitive" } },
     ],
   });
   assert.deepEqual(
     attemptWhere({ type: "all", subject: "all", platform: "all" }),
     {},
   );
+});
+
+test("search where-clauses sweep notes alongside name and platform", () => {
+  const where = attemptWhere({ search: "mock" });
+  assert.deepEqual(where.OR, [
+    { name: { contains: "mock", mode: "insensitive" } },
+    { platform: { contains: "mock", mode: "insensitive" } },
+    { notes: { contains: "mock", mode: "insensitive" } },
+  ]);
 });

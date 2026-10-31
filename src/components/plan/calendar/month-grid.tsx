@@ -232,7 +232,7 @@ function MonthCell({
           {Number(iso.slice(8))}
         </span>
         {total > 0 && (
-          <span className="text-[9px] tabular text-muted">
+          <span className="text-[0.625rem] tabular text-muted">
             {allDone ? (
               <PlainIcon name="check" size={10} className="text-positive" />
             ) : (
@@ -276,7 +276,7 @@ function MonthCell({
             />
           ))}
           {tasks.length > 3 && (
-            <span className="text-[9px] leading-none text-muted">
+            <span className="text-[0.625rem] leading-none text-muted">
               +{tasks.length - 3}
             </span>
           )}

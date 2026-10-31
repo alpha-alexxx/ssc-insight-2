@@ -1,19 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
-import { AuthControl, useAuthActions } from "./auth-control";
+import { AuthControl } from "./auth-control";
 import { DuotoneIcon, PlainIcon } from "./icon";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -87,20 +78,13 @@ const IS_APPLE_PLATFORM =
   typeof navigator !== "undefined" &&
   /Mac|iP(hone|ad|od)/.test(navigator.userAgent);
 
-export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "ME";
-  const first = parts[0]![0] ?? "";
-  const last = parts.length > 1 ? (parts.at(-1)![0] ?? "") : "";
-  return (first + last).toUpperCase() || "ME";
-}
-
 /** Route-aware shell wrapper. Kept here so the workspace layout imports one
  * component for both the sidebar provider and the page frame. */
 export function AppFrame({
   view,
   userName,
   userEmail,
+  userImage,
   authEnabled,
   aiEnabled,
   onRouteIntent,
@@ -113,6 +97,7 @@ export function AppFrame({
   view: AppView;
   userName: string;
   userEmail: string;
+  userImage: string;
   authEnabled: boolean;
   aiEnabled: boolean;
   onRouteIntent: (view: AppView) => void;
@@ -126,8 +111,6 @@ export function AppFrame({
     <SidebarProvider defaultOpen={defaultSidebarOpen}>
       <AppSidebar
         view={view}
-        userName={userName}
-        userEmail={userEmail}
         onRouteIntent={onRouteIntent}
         onAddMock={onAddMock}
       />
@@ -138,8 +121,12 @@ export function AppFrame({
       >
         <AppHeader
           view={view}
+          userName={userName}
+          userEmail={userEmail}
+          userImage={userImage}
           authEnabled={authEnabled}
           aiEnabled={aiEnabled}
+          onRouteIntent={onRouteIntent}
           onOpenAi={onOpenAi}
           onOpenSearch={onOpenSearch}
         />
@@ -219,14 +206,10 @@ function NavItem({
 
 export function AppSidebar({
   view,
-  userName,
-  userEmail,
   onRouteIntent,
   onAddMock,
 }: {
   view: AppView;
-  userName: string;
-  userEmail: string;
   onRouteIntent: (view: AppView) => void;
   onAddMock: () => void;
 }) {
@@ -333,16 +316,7 @@ export function AppSidebar({
         ))}
       </SidebarContent>
       <SidebarFooter className="border-t border-rule-soft bg-canvas/60">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <UserMenu
-              userName={userName}
-              userEmail={userEmail}
-              onRouteIntent={onRouteIntent}
-            />
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <p className="mx-2 flex items-center gap-1.5 border-t border-rule-soft pt-2 text-[0.625rem] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
+        <p className="mx-2 flex items-center gap-1.5 py-2.5 text-[0.625rem] leading-relaxed text-muted group-data-[collapsible=icon]:hidden">
           <PlainIcon name="calendar" size={11} />
           SSC CGL Tier 2 · dates in IST
         </p>
@@ -352,106 +326,17 @@ export function AppSidebar({
   );
 }
 
-/**
- * Sidebar user banner as a dropdown: account settings, theme toggle, and
- * sign out in one menu. The banner keeps its collapsed-rail behavior (avatar
- * only, tooltip) and opens to the right when the sidebar is icon-collapsed.
- */
-function UserMenu({
-  userName,
-  userEmail,
-  onRouteIntent,
-}: {
-  userName: string;
-  userEmail: string;
-  onRouteIntent: (view: AppView) => void;
-}) {
-  const router = useRouter();
-  const { setOpenMobile, state } = useSidebar();
-  const { resolvedTheme, setTheme } = useTheme();
-  const { busy, signOut } = useAuthActions();
-  const dark = resolvedTheme === "dark";
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <SidebarMenuButton
-          size="lg"
-          tooltip={userName || "My workspace"}
-          aria-label="Account menu"
-          className="gap-2.5 rounded-control data-[state=open]:bg-soft"
-        >
-          <span
-            className="sidebar-avatar grid size-8 shrink-0 place-items-center rounded-full bg-ink text-[0.625rem] font-semibold tracking-wide text-paper"
-            aria-hidden="true"
-          >
-            {initials(userName)}
-          </span>
-          <span
-            className={cn(
-              "grid min-w-0 flex-1 text-left leading-tight",
-              COLLAPSED_TEXT_SPAN,
-            )}
-          >
-            <span className="truncate text-xs font-medium">
-              {userName || "My workspace"}
-            </span>
-            <span className="truncate text-[0.625rem] text-muted">
-              {userEmail || "Private account"}
-            </span>
-          </span>
-          <PlainIcon
-            name="chevronRight"
-            size={13}
-            className="ml-auto shrink-0 rotate-90 text-muted group-data-[collapsible=icon]:hidden"
-          />
-        </SidebarMenuButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        side={state === "collapsed" ? "right" : "top"}
-        align="start"
-        className="min-w-[13rem]"
-      >
-        <DropdownMenuLabel className="normal-case tracking-normal">
-          <span className="block truncate text-xs font-medium text-ink">
-            {userName || "My workspace"}
-          </span>
-          <span className="block truncate text-[0.625rem] font-normal text-muted">
-            {userEmail || "Private account"}
-          </span>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => {
-            onRouteIntent("settings");
-            setOpenMobile(false);
-            router.push(VIEW_HREF.settings);
-          }}
-        >
-          <PlainIcon name="settings" size={15} />
-          Settings
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => setTheme(dark ? "light" : "dark")}
-        >
-          <PlainIcon name={dark ? "sun" : "moon"} size={15} />
-          {dark ? "Light mode" : "Dark mode"}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem danger disabled={busy} onSelect={signOut}>
-          <PlainIcon name="logout" size={15} />
-          {busy ? "Signing out…" : "Sign out"}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 /** Props for {@link AppHeader}. */
 export interface AppHeaderProps {
   view: AppView;
+  userName: string;
+  userEmail: string;
+  userImage: string;
   authEnabled: boolean;
   aiEnabled: boolean;
+  onRouteIntent: (view: AppView) => void;
   onOpenAi: () => void;
+  onOpenSearch: () => void;
 }
 
 /** Shared styles for icon-only action buttons in the header. */
@@ -461,32 +346,28 @@ const iconActionClass =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
 
 /**
- * Top-of-app navigation bar. Contains the sidebar trigger, the current
- * workspace location, and the global action cluster (AI, theme, settings,
- * auth).
- */
-/** Props for {@link AppHeader}. */
-export interface AppHeaderProps {
-  view: AppView;
-  authEnabled: boolean;
-  aiEnabled: boolean;
-  onOpenAi: () => void;
-  onOpenSearch: () => void;
-}
-
-/**
  * Top-of-app navigation bar. Full-bleed: pinned to the top, left, and right
  * of the viewport with no surrounding margin. Only the bottom edge carries a
  * hairline — the other three edges are the viewport itself.
  */
 export function AppHeader({
   view,
+  userName,
+  userEmail,
+  userImage,
   authEnabled,
   aiEnabled,
+  onRouteIntent,
   onOpenAi,
   onOpenSearch,
 }: AppHeaderProps) {
+  const router = useRouter();
   const { label } = VIEW_META[view];
+
+  const openSettings = () => {
+    onRouteIntent("settings");
+    router.push(VIEW_HREF.settings);
+  };
 
   return (
     <header
@@ -545,7 +426,13 @@ export function AppHeader({
 
         <ThemeToggle className="size-8" />
 
-        <AuthControl enabled={authEnabled} />
+        <AuthControl
+          enabled={authEnabled}
+          name={userName}
+          email={userEmail}
+          imageUrl={userImage}
+          onSettings={openSettings}
+        />
       </div>
     </header>
   );

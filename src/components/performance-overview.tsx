@@ -239,7 +239,7 @@ function ScopeTrend({
     const point = trend.points[0]!;
     return (
       <>
-        <div className="flex min-h-[180px] flex-col items-center justify-center rounded-control border border-rule-soft bg-canvas px-5 py-6 text-center">
+        <div className="flex min-h-[150px] flex-col items-center sm:min-h-[180px] justify-center rounded-control border border-rule-soft bg-canvas px-5 py-6 text-center">
           <p className="text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted">
             One result so far
           </p>
@@ -280,7 +280,7 @@ function ScopeTrend({
     <>
       <ChartContainer
         config={config}
-        className="!aspect-auto h-[290px] w-full px-2"
+        className="!aspect-auto h-[240px] w-full px-2 sm:h-[290px]"
       >
         <AreaChart
           data={rows}
@@ -326,7 +326,7 @@ function ScopeTrend({
             axisLine={false}
             tickLine={false}
             tick={{ fontSize: 11, fill: "var(--muted)" }}
-            width={44}
+            width="auto"
           />
           {target != null && (
             <ReferenceLine
@@ -498,7 +498,7 @@ function WhereYouStand({
         <>
           <ChartContainer
             config={{ percentage: { label: "Average score", color: "var(--chart-score)" } }}
-            className="!aspect-auto mx-auto h-[255px] w-full"
+            className="!aspect-auto mx-auto h-[220px] w-full sm:h-[255px]"
           >
             <RadarChart
               data={data}
@@ -859,7 +859,7 @@ function AttemptBreakdown({
       }
       className={className}
     >
-      <div className="grid gap-5 px-4 pb-5 sm:px-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 px-4 pb-4 sm:gap-5 sm:px-5 sm:pb-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         {/* Phones stack the donut above a full-width legend; the side-by-side
             row needs ~356px and clips on 320–360px screens. */}
         <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:gap-6">
@@ -875,7 +875,7 @@ function AttemptBreakdown({
               <p className="font-serif text-xl leading-none tabular text-ink">
                 {rate == null ? "—" : `${n(rate)}%`}
               </p>
-              <p className="mt-1 text-[0.5625rem] uppercase tracking-[0.08em] text-muted">
+              <p className="mt-1 text-[0.625rem] uppercase tracking-[0.08em] text-muted">
                 Overall
               </p>
             </div>
@@ -1066,7 +1066,7 @@ function GroupedScoreBars({
       <div className="px-4 pb-4 sm:px-5">
         <ChartContainer
           config={config}
-          className="!aspect-auto h-[260px] w-full"
+          className="!aspect-auto h-[190px] w-full sm:h-[220px] sm:h-[260px]"
         >
           <BarChart
             data={data}
@@ -1087,7 +1087,7 @@ function GroupedScoreBars({
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: 10, fill: "var(--muted)" }}
-              width={40}
+              width="auto"
             />
             <ChartTooltip
               cursor={{ fill: "var(--soft)" }}
@@ -1170,7 +1170,7 @@ function ScoreDistribution({
       <div className="px-4 pb-4 sm:px-5">
         <ChartContainer
           config={{ count: { label: "Mocks", color: "var(--chart-score)" } }}
-          className="!aspect-auto h-[220px] w-full"
+          className="!aspect-auto h-[190px] w-full sm:h-[220px]"
         >
           <BarChart
             data={buckets}
@@ -1189,7 +1189,7 @@ function ScoreDistribution({
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: 10, fill: "var(--muted)" }}
-              width={32}
+              width="auto"
             />
             <ChartTooltip
               cursor={{ fill: "var(--soft)" }}
@@ -1288,11 +1288,11 @@ function SubjectLines({ analytics }: { analytics: Analytics }) {
       >
         <div className="px-4 pb-4 sm:px-5">
           {accuracyRows.length ? (
-            <ChartContainer config={config} className="!aspect-auto h-[220px] w-full">
+            <ChartContainer config={config} className="!aspect-auto h-[190px] w-full sm:h-[220px]">
               <LineChart data={accuracyRows} margin={{ left: 0, right: 10, top: 8, bottom: 0 }} accessibilityLayer>
                 <CartesianGrid vertical={false} stroke="var(--rule-soft)" />
                 <XAxis dataKey="date" tickFormatter={dateLabel} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} minTickGap={24} />
-                <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} width={40} />
+                <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} width="auto" />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 {renderLines()}
                 <ChartLegend content={<ChartLegendContent />} />
@@ -1309,11 +1309,11 @@ function SubjectLines({ analytics }: { analytics: Analytics }) {
       >
         <div className="px-4 pb-4 sm:px-5">
           {timeRows.length ? (
-            <ChartContainer config={config} className="!aspect-auto h-[220px] w-full">
+            <ChartContainer config={config} className="!aspect-auto h-[190px] w-full sm:h-[220px]">
               <LineChart data={timeRows} margin={{ left: 0, right: 10, top: 8, bottom: 0 }} accessibilityLayer>
                 <CartesianGrid vertical={false} stroke="var(--rule-soft)" />
                 <XAxis dataKey="date" tickFormatter={dateLabel} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} minTickGap={24} />
-                <YAxis tickFormatter={(value) => `${value}m`} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} width={40} />
+                <YAxis tickFormatter={(value) => `${value}m`} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--muted)" }} width="auto" />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 {renderLines()}
                 <ChartLegend content={<ChartLegendContent />} />
@@ -1415,7 +1415,7 @@ function TargetPanel({
         <>
           <ChartContainer
             config={config}
-            className="!aspect-auto mt-2 h-[150px] w-full px-1"
+            className="!aspect-auto mt-2 h-[140px] w-full px-1 sm:h-[150px]"
           >
           <AreaChart
             data={rows}
@@ -1451,7 +1451,7 @@ function TargetPanel({
               axisLine={false}
               tickLine={false}
               tick={{ fontSize: 10, fill: "var(--muted)" }}
-              width={40}
+              width="auto"
             />
             {targetPercent != null && (
               <ReferenceLine
@@ -1601,7 +1601,7 @@ function DeepDive({
         </select>
       </div>
       {current.trend.length > 1 ? (
-      <div className="mt-3 grid md:grid-cols-2 gap-4">
+      <div className="mt-3 grid gap-4 xl:grid-cols-2">
         <div>
           <p className="text-[0.6875rem] muted mb-1">
             Accuracy over attempts ·{" "}
@@ -1615,7 +1615,7 @@ function DeepDive({
             config={{
               accuracy: { label: "Accuracy", color: subjectColors[current.id] },
             }}
-            className="!aspect-auto h-[160px] w-full"
+            className="!aspect-auto h-[150px] w-full sm:h-[160px]"
           >
             <LineChart
               data={accuracyRows}
@@ -1637,7 +1637,7 @@ function DeepDive({
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 10, fill: "var(--muted)" }}
-                width={40}
+                width="auto"
               />
               <ChartTooltip
                 cursor={{ stroke: "var(--rule-soft)" }}
@@ -1688,7 +1688,7 @@ function DeepDive({
           {current.trend.some((point) => point.minutes != null) ? (
             <ChartContainer
               config={{ minutes: { label: "Minutes", color: "var(--chart-time)" } }}
-              className="!aspect-auto h-[160px] w-full"
+              className="!aspect-auto h-[150px] w-full sm:h-[160px]"
             >
               <LineChart
                 data={accuracyRows}
@@ -1709,7 +1709,7 @@ function DeepDive({
                   axisLine={false}
                   tickLine={false}
                   tick={{ fontSize: 10, fill: "var(--muted)" }}
-                  width={40}
+                  width="auto"
                 />
                 <ChartTooltip
                   cursor={{ stroke: "var(--rule-soft)" }}

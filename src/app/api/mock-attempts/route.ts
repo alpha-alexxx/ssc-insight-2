@@ -2,6 +2,7 @@ import { attemptSchema } from "@/lib/domain";
 import { readBody, RequestError } from "@/lib/api";
 import {
   createAttempt,
+  filtersFrom,
   LIST_ATTEMPTS_MAX,
   listAttempts,
 } from "@/lib/repository";
@@ -10,8 +11,13 @@ import { audit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
-export const GET = defineRoute({ kind: "read" }, async ({ user }) => {
-  const items = await listAttempts(user.id);
+export const GET = defineRoute({ kind: "read" }, async ({ request, user }) => {
+  // Filters (type/subject/platform/date-range/search) flow back through the
+  // same attemptWhere builder /history and /compare were always meant to
+  // use; a parameter-less request stays the unfiltered list the dashboard
+  // and the shell's caches depend on.
+  const filters = filtersFrom(request.url);
+  const items = await listAttempts(user.id, filters);
   const headers: Record<string, string> = {};
   if (items.length >= LIST_ATTEMPTS_MAX) {
     headers["X-List-Truncated"] = "true";

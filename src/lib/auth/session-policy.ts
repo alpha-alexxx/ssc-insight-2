@@ -1,4 +1,9 @@
-export type AccountUser = { id: string; name?: string; email?: string };
+export type AccountUser = {
+  id: string;
+  name?: string;
+  email?: string;
+  image?: string | null;
+};
 export class SessionError extends Error {
   constructor(
     public code: "UNAUTHENTICATED" | "AUTH_UNAVAILABLE",

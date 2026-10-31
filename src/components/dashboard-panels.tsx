@@ -62,7 +62,7 @@ export function Panel({
             <h2
               className={
                 dense
-                  ? "font-serif text-[1.0625rem] font-medium leading-tight tracking-[-0.02em]"
+                  ? "panel-title-dense"
                   : cn("panel-title", eyebrow && "mt-0.5")
               }
             >
