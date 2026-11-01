@@ -180,19 +180,18 @@ function DeleteMockButton({
     <AlertDialog.Root>
       <AlertDialog.Trigger asChild>
         <Button variant="destructive" size="sm" disabled={disabled}>
-          Delete mock
+          Move to Trash
         </Button>
       </AlertDialog.Trigger>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="dialog-overlay fixed inset-0 bg-ink/40 z-50" />
         <AlertDialog.Content className="dialog-content fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-paper border border-rule rounded-panel w-[calc(100%-32px)] max-w-md p-6 shadow-pop">
           <AlertDialog.Title className="font-serif text-2xl leading-tight">
-            Delete “{attempt.name}”?
+            Move “{attempt.name}” to Trash?
           </AlertDialog.Title>
           <AlertDialog.Description className="muted text-sm mt-2 leading-relaxed">
-            This permanently removes this result from your tracker. Charts,
-            averages, and insights update immediately. This cannot be undone
-            from the app.
+            The result leaves your charts, averages and insights right away, and
+            stays recoverable in Trash for 15 days.
           </AlertDialog.Description>
           <div className="flex justify-end gap-2 mt-6">
             <AlertDialog.Cancel asChild>
@@ -206,7 +205,7 @@ function DeleteMockButton({
                 size="sm"
                 onClick={() => onDelete(attempt)}
               >
-                Delete permanently
+                Move to Trash
               </Button>
             </AlertDialog.Action>
           </div>

@@ -2,8 +2,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Panel } from "./dashboard-panels";
-import { PlainIcon, DuotoneTile } from "./icon";
-import { Separator } from "./ui/separator";
+import { PlainIcon } from "./icon";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import {
@@ -14,7 +13,7 @@ import {
 import { Swap } from "./motion-swap";
 import { DashboardOverview } from "./dashboard-overview";
 import { AttemptRecordCard } from "./attempt-outcome-card";
-import { PerformanceOverview } from "./performance-overview";
+import { PerformancePreview } from "./performance-preview";
 import { PlanErrorCard } from "./plan/plan-shared";
 import {
   StudyPipelinePanel,
@@ -48,7 +47,6 @@ export function DashboardView({
   attempts,
   target,
   loading,
-  scopeControls,
   coach,
   onOpenAttempt,
   onAdd,
@@ -61,7 +59,6 @@ export function DashboardView({
   attempts: Attempt[];
   target: number | null;
   loading: boolean;
-  scopeControls: ReactNode;
   coach?: ReactNode;
   onOpenAttempt: (attempt: Attempt) => void;
   onAdd: () => void;
@@ -306,51 +303,16 @@ export function DashboardView({
         </div>
       )}
 
-      <section className="mt-8" aria-labelledby="performance-heading">
-        {/* The section opens with a toolbar card: an identity row (duotone
-            tile, serif title, subtitle), a full-bleed hairline, then the
-            control row — scope tabs left, platform/date filters right —
-            everything on paper inside the panel. */}
-        <div className="panel mb-4 sm:mb-6">
-          <div className="flex items-center gap-3 px-4 py-3.5 sm:px-5">
-            <DuotoneTile
-              name="report"
-              tile="accent"
-              className="size-9 shrink-0 sm:size-10"
-            />
-            <div className="min-w-0">
-              <h2 id="performance-heading" className="panel-title">
-                Performance
-              </h2>
-              <p className="mt-0.5 text-[0.6875rem] leading-snug text-muted">
-                Track your mock results and identify areas to improve.
-              </p>
-            </div>
-          </div>
-          <Separator />
-          <div className="px-4 py-3 sm:px-5">{scopeControls}</div>
-        </div>
-        {/* A scope change re-fetches analytics; say so, rather than letting
-            the charts quietly swap under the heading. */}
-        {loading && analytics && (
-          <p
-            role="status"
-            className="mt-3 flex items-center gap-1.5 text-[0.6875rem] text-muted"
-          >
-            <PlainIcon name="refresh" size={12} className="animate-spin" />
-            Updating your results…
-          </p>
-        )}
-        <div
-          className={cn(
-            "transition-opacity duration-150 motion-reduce:transition-none",
-            loading && analytics && "opacity-60",
-          )}
-        >
-          <Swap swapKey={analytics?.scope ?? "none"}>
-            <PerformanceOverview analytics={analytics} target={target} />
-          </Swap>
-        </div>
+      {/* Awareness, not analysis: the four headline figures and a trend
+          line, with the full workspace one click away. The detailed charts
+          live at /performance and are never duplicated here. */}
+      <section className="mt-6" aria-label="Performance preview">
+        <PerformancePreview
+          analytics={analytics}
+          target={target}
+          loading={loading}
+          onAdd={onAdd}
+        />
       </section>
     </div>
   );

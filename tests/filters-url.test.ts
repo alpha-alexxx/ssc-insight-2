@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  DEFAULT_SCOPE,
   defaultListState,
   mirrorsWorkspaceState,
   parseWorkspaceState,
@@ -34,7 +35,7 @@ test("workspace url state round-trips through serialize and parse", () => {
 test("default values keep the URL bare", () => {
   const url = serializeWorkspaceState("/dashboard", {
     filters: { type: "all", subject: "all", platform: "all", search: "" },
-    scope: "full",
+    scope: DEFAULT_SCOPE,
     list: defaultListState,
   });
   assert.equal(url, "/dashboard");
@@ -43,7 +44,7 @@ test("default values keep the URL bare", () => {
 test("paged list state round-trips and non-defaults serialize", () => {
   const state = {
     filters: {},
-    scope: "full" as const,
+    scope: DEFAULT_SCOPE,
     list: { page: 3, pageSize: 50, sort: "score", dir: "asc" } as const,
   };
   const url = serializeWorkspaceState("/history", state);
@@ -64,7 +65,7 @@ test("malformed deep-link params fall back to defaults per field", () => {
   assert.equal(state.filters.type, undefined);
   assert.equal(state.filters.from, undefined);
   assert.equal(state.filters.platform, "Testbook");
-  assert.equal(state.scope, "full");
+  assert.equal(state.scope, "all");
 });
 
 test("over-long platform and search values are dropped, not errors", () => {
@@ -76,22 +77,21 @@ test("over-long platform and search values are dropped, not errors", () => {
 test("parse tolerates empty and absent query strings", () => {
   assert.deepEqual(parseWorkspaceState(""), {
     filters: {},
-    scope: "full",
+    scope: DEFAULT_SCOPE,
     list: defaultListState,
     ids: [],
   });
-  assert.deepEqual(parseWorkspaceState("?scope=all"), {
-    filters: {},
-    scope: "all",
-    list: defaultListState,
-    ids: [],
-  });
+  // "all" is the default, so it is absent from a clean URL and parsed back
+  // only when explicitly present.
+  assert.equal(parseWorkspaceState("?scope=all").scope, DEFAULT_SCOPE);
+  assert.equal(parseWorkspaceState("?scope=sectional").scope, "sectional");
 });
 
 test("planner/Add Mock routes are excluded from the filter URL mirror", () => {
   assert.equal(mirrorsWorkspaceState("/dashboard"), true);
   assert.equal(mirrorsWorkspaceState("/history"), true);
   assert.equal(mirrorsWorkspaceState("/compare"), true);
+  assert.equal(mirrorsWorkspaceState("/performance"), true);
   assert.equal(mirrorsWorkspaceState("/add"), false);
   assert.equal(mirrorsWorkspaceState("/calendar"), false);
   assert.equal(mirrorsWorkspaceState("/plan/2026-10-27"), false);
@@ -108,6 +108,7 @@ test("Add Mock return targets are same-app planner/result routes only", () => {
   assert.equal(safeWorkspaceReturnTo("/add"), null);
   // A comparison can be returned to after logging a mock from it.
   assert.equal(safeWorkspaceReturnTo("/compare"), "/compare");
+  assert.equal(safeWorkspaceReturnTo("/performance"), "/performance");
   assert.equal(safeWorkspaceReturnTo("/compare?ids=abc123,def456"), "/compare?ids=abc123,def456");
 });
 
@@ -115,7 +116,7 @@ test("a compare selection round-trips and is capped at four", () => {
   const ids = ["aaa111", "bbb222", "ccc333", "ddd444"];
   const url = serializeWorkspaceState("/compare", {
     filters: {},
-    scope: "full",
+    scope: DEFAULT_SCOPE,
     list: defaultListState,
     ids,
   });
@@ -136,7 +137,7 @@ test("a compare selection round-trips and is capped at four", () => {
   assert.equal(
     serializeWorkspaceState("/history", {
       filters: {},
-      scope: "full",
+      scope: DEFAULT_SCOPE,
       list: defaultListState,
       ids,
     }),

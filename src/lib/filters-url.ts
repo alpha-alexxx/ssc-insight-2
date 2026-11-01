@@ -53,6 +53,9 @@ const lenientSortSchema = z.enum(ATTEMPT_SORT_KEYS).optional().catch(undefined);
 const lenientDirSchema = z.enum(["asc", "desc"]).optional().catch(undefined);
 
 /** Server-paged list state mirrored alongside the filters. */
+/** The scope a clean URL means. `/performance` opens on every mock type. */
+export const DEFAULT_SCOPE: DashboardScope = "all";
+
 export type WorkspaceListState = {
   page: number;
   pageSize: PageSize;
@@ -96,7 +99,10 @@ export function mirrorsWorkspaceState(pathname: string): boolean {
   return (
     pathname === "/dashboard" ||
     pathname === "/history" ||
-    pathname === "/compare"
+    pathname === "/compare" ||
+    // The analytical workspace mirrors its scope and filters, so a filtered
+    // analysis is shareable and survives a reload.
+    pathname === "/performance"
   );
 }
 
@@ -119,6 +125,7 @@ export function safeWorkspaceReturnTo(value: string | null): string | null {
     url.pathname === "/my-tasks" ||
     url.pathname === "/dashboard" ||
     url.pathname === "/history" ||
+    url.pathname === "/performance" ||
     // A comparison is a place, not a transient mode: logging a mock from it
     // must be able to return to it.
     url.pathname === "/compare";
@@ -139,8 +146,8 @@ export function parseWorkspaceState(search: string): WorkspaceUrlState {
   if (parsed.from) filters.from = parsed.from;
   if (parsed.to) filters.to = parsed.to;
   const scope = dashboardScopeSchema
-    .catch("full")
-    .parse(params.get("scope") ?? "full");
+    .catch(DEFAULT_SCOPE)
+    .parse(params.get("scope") ?? DEFAULT_SCOPE);
   const list: WorkspaceListState = {
     page: lenientPageSchema.parse(params.get("page")) ?? defaultListState.page,
     pageSize:
@@ -167,7 +174,9 @@ export function serializeWorkspaceState(
   if (filters.search) params.set("search", filters.search);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
-  if (scope !== "full") params.set("scope", scope);
+  // Neither default is worth a query param: "full" is /performance's initial
+  // scope and "all" is the dashboard's fixed one.
+  if (scope !== DEFAULT_SCOPE) params.set("scope", scope);
   if (list.page > 1) params.set("page", String(list.page));
   if (list.pageSize !== 10) params.set("pageSize", String(list.pageSize));
   if (list.sort !== "date") params.set("sort", list.sort);

@@ -103,11 +103,26 @@ export function maintenanceRetryAfter(env: EnvLike = process.env): number {
 }
 
 /**
+ * The scheduled-maintenance paths (`/api/cron/**`).
+ *
+ * A cron invocation authenticates with its own shared secret, not a browser
+ * session, so the normal page guard must not intercept it — a redirect to the
+ * landing would be recorded as a failed run. This is a routing decision only:
+ * the route handler compares the bearer token itself, and nothing here grants
+ * access to anything.
+ */
+export function isCronPath(pathname: string): boolean {
+  return pathname === "/api/cron" || pathname.startsWith("/api/cron/");
+}
+
+/**
  * Paths that stay reachable during maintenance: the maintenance page itself,
  * the health probe (LBs must be able to see the app is in maintenance),
- * the auth flow (a user mid sign-in must not be trapped), and the landing —
- * which is the only place to start sign-in, so gating it would leave no way
- * back in. The workspace itself stays gated.
+ * the auth flow (a user mid sign-in must not be trapped), the landing — which
+ * is the only place to start sign-in, so gating it would leave no way back in
+ * — and the scheduled jobs, which have no session to fall back on and whose
+ * whole purpose is to run while nobody is looking. The workspace itself stays
+ * gated.
  */
 export function bypassesMaintenance(pathname: string): boolean {
   return (
@@ -116,6 +131,7 @@ export function bypassesMaintenance(pathname: string): boolean {
     pathname === "/api/health" ||
     pathname.startsWith("/api/health/") ||
     pathname.startsWith("/api/auth/") ||
+    isCronPath(pathname) ||
     pathname === "/auth/complete" ||
     pathname.startsWith("/auth/complete/") ||
     pathname === "/"

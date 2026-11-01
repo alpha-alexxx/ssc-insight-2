@@ -45,6 +45,8 @@ test("Prisma mapping round-trips dates, nullable metrics, legacy overrides and s
     userId: "test-user",
     id: "0e3ff340-17b2-42b2-b537-d858eb6fa947",
     schemaVersion: 1,
+    // Live row: the trash column exists on every attempt row.
+    deletedAt: null,
     createdAt: new Date("2026-10-24T00:00:00.123Z"),
     updatedAt: new Date("2026-10-24T01:00:00.456Z"),
     subjects: data.subjects.create.map((subject) => ({
@@ -120,6 +122,8 @@ test("Postgres filters preserve IST inclusive dates, subject relation and litera
     search: "100%_test\\value",
   });
   assert.deepEqual(where, {
+    // The trash boundary is part of every attempt filter.
+    deletedAt: null,
     type: "sectional",
     subjects: { some: { subjectId: "quant" } },
     platform: "RBE",
@@ -135,7 +139,8 @@ test("Postgres filters preserve IST inclusive dates, subject relation and litera
   });
   assert.deepEqual(
     attemptWhere({ type: "all", subject: "all", platform: "all" }),
-    {},
+    // Even with no filters, a trashed attempt is never in scope.
+    { deletedAt: null },
   );
 });
 

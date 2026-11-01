@@ -286,6 +286,61 @@ Run `typecheck`, `lint`, and `test` before calling a change done; CI runs all th
 - Vercel deployment uses the pooled URL; the backup import cap is 4 MB because Vercel request bodies are about 4.5 MB.
 - Do not add scheduled backups/reminders; backups are manual by product decision.
 
+## Trash and data recovery
+
+Deleting supported records is a **soft delete**. `src/lib/trash-core.ts` is the client-safe
+policy layer; `src/lib/trash.ts` is the server service; `/trash` is the only surface that
+lists or restores deleted work.
+
+- **Scope is four kinds**: `attempt`, `task`, `exam`, `group`. Their tables carry
+  `deletedAt TIMESTAMPTZ(3)` with an `@@index([userId, deletedAt])` (`PersonalTask` already
+  had the column from `20261029000000_personal_todos`).
+- **No `TrashEntry` table, no stored `expiresAt`, no `deletionBatchId`.** Expiry is derived
+  (`deletedAt + TRASH_RETENTION_MS`). A stored copy could disagree with the source, and no
+  trashed parent has independently trashed children, so batching buys nothing.
+- **One retention constant.** `TRASH_RETENTION_DAYS` in `trash-core.ts` feeds the UI copy,
+  the list cutoff, the restore check and the cleanup job. Never restate `15` or a day in
+  milliseconds in a component.
+- **Every read filters `deletedAt: null`.** The attempt boundary is `attemptWhere()` in
+  `attempt-persistence.ts`, which covers analytics, history, compare, the calendar and the
+  plan matcher at once. The ESLint rule
+  `MemberExpression[property.name='mockAttempt']` enforces the boundary at lint time;
+  `repository.ts`, `trash.ts` and `search.ts` are the only exemptions, and `search.ts` is a
+  reviewed one (keyset pagination) that applies the filter itself. The single deliberate
+  unfiltered read is the exam-delete attempt count in `api/exams/route.ts`, which must see
+  trashed attempts too — it carries an inline disable with that reason.
+- **Every restore and purge predicate carries `deletedAt: { not: null }`.** That is what
+  stops a crafted id from touching a live row, and it is why delete/restore/purge of an
+  already-trashed or live record respectively answers 404 rather than acting twice.
+- **Exam pruning happens at purge, never at trash.** Deleting a custom exam sets `deletedAt`
+  and moves the scope to another enabled tier; `enabledTiers` and `targets` are left intact
+  so restore is lossless. `pruneTargetsForExam` (in `target-settings.ts`, pure and tested)
+  runs only when the exam is permanently removed, and it keeps a structure default as long
+  as any surviving tier still carries that paper.
+- **A trashed exam keeps its `enabledTiers` keys, and `PUT /api/settings` must tolerate
+  them.** `tierKeyResolves` only knows the live catalog, so the settings write accepts a key
+  naming a trashed exam as a preserved reservation. Do not "simplify" that away: it is what
+  keeps the scope switcher and Settings saveable while an exam sits in Trash.
+- **Name uniqueness spans live and trashed** for custom exams and task groups. That is what
+  makes restore conflict-free. Create/rename return a specific 409 naming Trash instead of a
+  raw `P2002`.
+- **Backups never carry Trash.** `exportBackup` filters live rows only. Import restores a
+  trashed exam or group it collides with rather than duplicating it, and clamps an incoming
+  `deletedAt` (`clampImportedDeletedAt`) so an older file cannot import already-expired
+  rows. Replace mode hard-deletes live mocks and leaves Trash untouched — it is the one
+  sanctioned exception to "nothing is destroyed immediately" and is gated by the mandatory
+  safety download.
+- **Expiry is enforced by the API, not the scheduler.** `listTrash` excludes expired rows and
+  `restoreTrash` rejects them with 409. `GET /api/cron/trash-cleanup` (bearer `CRON_SECRET`,
+  503 when unset, listed in `isCronPath`/`bypassesMaintenance` and passed through by the
+  proxy) only reclaims storage, drained in batches with per-kind failure isolation.
+- **`/my-tasks` has no Trash.** The task list API rejects `view=trash`; deleted tasks are
+  recovered from `/trash` only. The same holds for `PersonalTodos`, which backs the dashboard
+  column and the calendar's personal layer.
+- **Migration order is load-bearing**: apply `20261103000000_trash` before deploying the
+  revision. New code against an un-migrated database fails every attempt read; an app
+  rollback after the migration makes trashed rows live again to the old code.
+
 ## Documentation map
 
 Change behavior in this order: update the implementation, then the relevant of `PRODUCT.md` (behavior), `DESIGN.md` (visual/chart rules), `README.md` (setup/API/verification). Keep `CLAUDE.md` and `AGENTS.md` focused on architecture and invariants rather than duplicating every product rule, and update both together when an invariant changes.

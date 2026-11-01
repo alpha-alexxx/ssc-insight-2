@@ -41,7 +41,6 @@ export type TaskListResponse = {
     upcoming: number;
     all: number;
     needsdate: number;
-    trash: number;
     completed: number;
     pending: number;
     inProgress: number;

@@ -12,7 +12,6 @@ import {
   SlidersHorizontal,
   Sparkles,
   Trash2,
-  RotateCcw,
   Pencil,
   Zap,
 } from "lucide-react";
@@ -71,7 +70,6 @@ type View =
   | "upcoming"
   | "all"
   | "needsdate"
-  | "trash"
   | "completed";
 const VIEWS: { id: View; label: string }[] = [
   { id: "day", label: "Selected day" },
@@ -81,7 +79,6 @@ const VIEWS: { id: View; label: string }[] = [
   { id: "all", label: "All" },
   { id: "completed", label: "Completed" },
   { id: "needsdate", label: "Needs date" },
-  { id: "trash", label: "Trash" },
 ];
 
 /** Personal task categories — mirrors personalTaskCategories in
@@ -929,18 +926,16 @@ export function PersonalTodos({
               ))}
             </div>
             <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
-              {view !== "trash" && (
-                <Button
-                  type="button"
-                  variant={selectMode ? "default" : "outline"}
-                  size="sm"
-                  aria-pressed={selectMode}
-                  onClick={() => toggleSelectMode()}
-                >
-                  <ListChecks size={13} /> Select
-                </Button>
-              )}
-              {view !== "trash" && (data?.total ?? 0) > 0 && (
+              <Button
+                type="button"
+                variant={selectMode ? "default" : "outline"}
+                size="sm"
+                aria-pressed={selectMode}
+                onClick={() => toggleSelectMode()}
+              >
+                <ListChecks size={13} /> Select
+              </Button>
+              {(data?.total ?? 0) > 0 && (
                 <Button
                   type="button"
                   variant="outline"
@@ -1006,28 +1001,24 @@ export function PersonalTodos({
               )}
             >
               <h3 className="font-serif text-lg">
-                {view === "trash"
-                  ? "Trash is empty"
-                  : view === "needsdate"
-                    ? "Every todo has a date"
-                    : search
-                      ? "No matching todos"
-                      : dashboardColumn
-                        ? "No personal tasks for this day"
-                        : "A clear page for your work"}
+                {view === "needsdate"
+                  ? "Every todo has a date"
+                  : search
+                    ? "No matching todos"
+                    : dashboardColumn
+                      ? "No personal tasks for this day"
+                      : "A clear page for your work"}
               </h3>
               <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-muted">
-                {view === "trash"
-                  ? "Deleted todos appear here and can be restored with their subtasks."
-                  : view === "needsdate"
-                    ? "Older tasks without a date will appear here. Assign a date to bring them into your planner."
-                    : search
-                      ? "Try another search or choose a different view."
-                      : dashboardColumn
-                        ? "Use the quick-add field above, or open the full task workspace for more options."
-                        : "Add a title above to begin your checklist, or ask AI to prepare a draft for review."}
+                {view === "needsdate"
+                  ? "Older tasks without a date will appear here. Assign a date to bring them into your planner."
+                  : search
+                    ? "Try another search or choose a different view."
+                    : dashboardColumn
+                      ? "Use the quick-add field above, or open the full task workspace for more options."
+                      : "Add a title above to begin your checklist, or ask AI to prepare a draft for review."}
               </p>
-              {!search && view !== "trash" && view !== "needsdate" && !compact && (
+              {!search && view !== "needsdate" && !compact && (
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   <Button size="sm" onClick={() => setCreating(true)}>
                     <Plus size={14} /> Add your first task
@@ -1050,7 +1041,7 @@ export function PersonalTodos({
             </div>
           ) : (
             <div className="space-y-5">
-              {selectMode && view !== "trash" && (
+              {selectMode && (
                 <div className="flex flex-wrap items-center gap-2 border border-rule-soft bg-canvas px-3 py-2">
                   <span className="text-xs font-medium tabular-nums text-ink">
                     {visibleSelected.length} selected
@@ -1138,7 +1129,7 @@ export function PersonalTodos({
                         )}
                       >
                         <div className="flex items-start gap-3">
-                          {selectMode && !todo.deletedAt && (
+                          {selectMode && (
                             <input
                               type="checkbox"
                               className="mt-1"
@@ -1148,21 +1139,19 @@ export function PersonalTodos({
                               onChange={() => toggleSelected(todo.id)}
                             />
                           )}
-                          {!todo.deletedAt && (
-                            <input
-                              type="checkbox"
-                              className="mt-1"
-                              aria-label={`Complete ${todo.title}`}
-                              checked={todo.status === "completed"}
-                              disabled={busy}
-                              onChange={(e) =>
-                                void mutate(`/api/todos/${todo.id}`, "PATCH", {
-                                  version: todo.version,
-                                  completed: e.target.checked,
-                                })
-                              }
-                            />
-                          )}
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            aria-label={`Complete ${todo.title}`}
+                            checked={todo.status === "completed"}
+                            disabled={busy}
+                            onChange={(e) =>
+                              void mutate(`/api/todos/${todo.id}`, "PATCH", {
+                                version: todo.version,
+                                completed: e.target.checked,
+                              })
+                            }
+                          />
                           <div className="min-w-0 flex-1">
                             {dashboardColumn ? (
                               <button
@@ -1200,8 +1189,7 @@ export function PersonalTodos({
                               </span>
                               {todo.dueDate &&
                                 todo.dueDate < istTodayIso() &&
-                                todo.status !== "completed" &&
-                                !todo.deletedAt && (
+                                todo.status !== "completed" && (
                                   <span className="text-danger">Overdue</span>
                                 )}
                               {todo.subtasks.length > 0 && (
@@ -1232,60 +1220,37 @@ export function PersonalTodos({
                           </div>
                           {!dashboardColumn && (
                           <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
-                            {todo.deletedAt ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={busy}
-                                onClick={() =>
-                                  void mutate(
-                                    `/api/todos/${todo.id}`,
-                                    "PATCH",
-                                    {
-                                      version: todo.version,
-                                      restore: true,
-                                    },
-                                  )
-                                }
-                              >
-                                <RotateCcw size={14} />
-                                Restore
-                              </Button>
-                            ) : (
-                              <>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  aria-label={`Edit ${todo.title}`}
-                                  disabled={busy}
-                                  onClick={() => setEditing(todo)}
-                                >
-                                  <Pencil size={15} />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  aria-label={`Reschedule ${todo.title}`}
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setRescheduling(todo);
-                                    setNewDate(todo.dueDate ?? date);
-                                  }}
-                                >
-                                  <CalendarClock size={15} />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  aria-label={`Move ${todo.title} to Trash`}
-                                  disabled={busy}
-                                  onClick={() => setConfirmTrash(todo)}
-                                >
-                                  <Trash2 size={15} />
-                                </Button>
-                              </>
-                            )}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Edit ${todo.title}`}
+                              disabled={busy}
+                              onClick={() => setEditing(todo)}
+                            >
+                              <Pencil size={15} />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Reschedule ${todo.title}`}
+                              disabled={busy}
+                              onClick={() => {
+                                setRescheduling(todo);
+                                setNewDate(todo.dueDate ?? date);
+                              }}
+                            >
+                              <CalendarClock size={15} />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Move ${todo.title} to Trash`}
+                              disabled={busy}
+                              onClick={() => setConfirmTrash(todo)}
+                            >
+                              <Trash2 size={15} />
+                            </Button>
                           </div>
                           )}
                         </div>
@@ -1296,7 +1261,7 @@ export function PersonalTodos({
                                 <label className="check-row text-xs">
                                   <input
                                     type="checkbox"
-                                    disabled={busy || Boolean(todo.deletedAt)}
+                                    disabled={busy}
                                     checked={sub.completed}
                                     onChange={(e) =>
                                       void mutate(

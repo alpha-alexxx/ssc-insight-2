@@ -27,6 +27,10 @@ import {
   COLLAPSED_TEXT_SPAN,
 } from "./ui/sidebar";
 import { istTodayIso } from "@/lib/plan/view-model";
+import { VIEW_HREF, type AppView } from "@/lib/routes";
+
+export { PATH_VIEW, VIEW_HREF, VIEW_PATH, viewForPathname } from "@/lib/routes";
+export type { AppView } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,31 +39,10 @@ import { cn } from "@/lib/utils";
  * Sheet; the shell keeps route intent, auth, and view labels.
  */
 
-export type AppView =
-  | "dashboard"
-  | "calendar"
-  | "tasks"
-  | "plan"
-  | "history"
-  | "compare"
-  | "add"
-  | "settings";
-
 /** Plan-day route for "today" (IST) — computed per render, not at module load. */
 export function planHref(dateIso?: string): `/${string}` {
   return `/plan/${dateIso ?? istTodayIso()}`;
 }
-
-export const VIEW_HREF: Record<AppView, `/${string}`> = {
-  dashboard: "/dashboard",
-  calendar: "/calendar",
-  tasks: "/my-tasks",
-  plan: "/plan",
-  history: "/history",
-  compare: "/compare",
-  add: "/add",
-  settings: "/settings",
-};
 
 export const VIEW_META: Record<
   AppView,
@@ -71,7 +54,9 @@ export const VIEW_META: Record<
   plan: { label: "Daily plan", icon: "layers" },
   history: { label: "Mock history", icon: "history" },
   compare: { label: "Compare mocks", icon: "compare" },
+  performance: { label: "Performance", icon: "report" },
   add: { label: "Log a mock", icon: "add" },
+  trash: { label: "Trash", icon: "trash" },
   settings: { label: "Settings", icon: "settings" },
 };
 
@@ -161,6 +146,7 @@ export const NAV_GROUPS: {
     items: [
       { view: "history", label: "Mock history", href: VIEW_HREF.history },
       { view: "compare", label: "Compare mocks", href: VIEW_HREF.compare },
+      { view: "performance", label: "Performance", href: VIEW_HREF.performance },
     ],
   },
 ];
@@ -331,6 +317,23 @@ export function AppSidebar({
         ))}
       </SidebarContent>
       <SidebarFooter className="border-t border-rule-soft bg-canvas/60">
+        {/*
+          Trash sits with the account rather than in a nav group: it is not a
+          place you work, it is where deleted work from every module waits.
+          Reusing NavItem keeps the collapsed-rail tooltip, the active tint and
+          the mobile-close behavior identical to the grouped links.
+        */}
+        <SidebarMenu>
+          <NavItem
+            item={{
+              view: "trash",
+              label: "Trash",
+              href: VIEW_HREF.trash,
+            }}
+            active={view === "trash"}
+            onRouteIntent={onRouteIntent}
+          />
+        </SidebarMenu>
         <ActiveExamFooterNote />
       </SidebarFooter>
       <SidebarRail />

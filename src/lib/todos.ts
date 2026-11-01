@@ -25,7 +25,7 @@ async function groupCheck(
   userId: string,
   id: string | null | undefined,
 ) {
-  if (id && !(await tx.todoGroup.findFirst({ where: { id, userId } })))
+  if (id && !(await tx.todoGroup.findFirst({ where: { id, userId, deletedAt: null } })))
     throw new RequestError("Group not found.", 404);
 }
 export async function createTodo(tx: Tx, userId: string, input: unknown) {
@@ -106,6 +106,9 @@ function parseTodoScope(userId: string, params: URLSearchParams) {
     throw new RequestError("Choose a valid date.", 400);
   const view = params.get("view") || "day";
   const search = (params.get("search") || "").slice(0, 200);
+  // "trash" is deliberately absent: /trash is the single recovery surface, so
+  // no list view can scan deleted rows. An old link carrying ?view=trash gets
+  // the same 400 every other unknown view does.
   if (
     ![
       "day",
@@ -113,7 +116,6 @@ function parseTodoScope(userId: string, params: URLSearchParams) {
       "overdue",
       "upcoming",
       "all",
-      "trash",
       "needsdate",
       "completed",
     ].includes(view)
@@ -121,9 +123,7 @@ function parseTodoScope(userId: string, params: URLSearchParams) {
     throw new RequestError("Unknown todo view.", 400);
   const clauses = [
     Prisma.sql`"userId" = ${userId}`,
-    view === "trash"
-      ? Prisma.sql`"deletedAt" IS NOT NULL`
-      : Prisma.sql`"deletedAt" IS NULL`,
+    Prisma.sql`"deletedAt" IS NULL`,
   ];
   if (search)
     clauses.push(Prisma.sql`position(lower(${search}) in lower("title")) > 0`);
@@ -177,7 +177,10 @@ export async function listTodos(userId: string, params: URLSearchParams) {
     db.$queryRaw<{ total: bigint }[]>(
       Prisma.sql`SELECT count(*) AS total FROM "ssc_insight"."PersonalTask" WHERE ${Prisma.join(clauses, " AND ")}`,
     ),
-    db.todoGroup.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
+    db.todoGroup.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+    }),
     Promise.all([
       db.personalTask.count({ where: { ...active, dueDate: today } }),
       db.personalTask.count({
@@ -196,7 +199,6 @@ export async function listTodos(userId: string, params: URLSearchParams) {
       }),
       db.personalTask.count({ where: active }),
       db.personalTask.count({ where: { ...active, dueDate: null } }),
-      db.personalTask.count({ where: { userId, deletedAt: { not: null } } }),
       db.personalTask.count({ where: { ...active, status: "completed" } }),
       db.personalTask.count({
         where: { ...active, status: { not: "completed" } },
@@ -223,10 +225,9 @@ export async function listTodos(userId: string, params: URLSearchParams) {
       upcoming: counts[2],
       all: counts[3],
       needsdate: counts[4],
-      trash: counts[5],
-      completed: counts[6],
-      pending: counts[7],
-      inProgress: counts[8],
+      completed: counts[5],
+      pending: counts[6],
+      inProgress: counts[7],
     },
   };
 }
@@ -242,14 +243,13 @@ export async function trashTodosById(userId: string, ids: string[]) {
 }
 /** Bulk soft-delete of everything matching the list query (view + search +
  * filters). Reuses listTodos' clause builder so the confirm count and the
- * deleted set always agree; trash view is rejected (restore instead). */
+ * deleted set always agree. Every clause already excludes deleted rows, so a
+ * scope trash can never re-stamp one that is already in Trash. */
 export async function trashTodosByScope(
   userId: string,
   params: URLSearchParams,
 ) {
-  const { view, clauses } = parseTodoScope(userId, params);
-  if (view === "trash")
-    throw new RequestError("Use restore in Trash instead.", 400);
+  const { clauses } = parseTodoScope(userId, params);
   const rows = await database().$executeRaw(
     Prisma.sql`UPDATE "ssc_insight"."PersonalTask"
       SET "deletedAt" = now(), "version" = "version" + 1, "updatedAt" = now()

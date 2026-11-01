@@ -7,7 +7,7 @@ import { useCallback, useState } from "react";
  * ssc.palette / ssc.style) so a refresh restores where the user was. Search
  * is deliberately transient — it is a query, not a place. */
 
-export type TaskViewTab = "myday" | "upcoming" | "all" | "completed" | "trash";
+export type TaskViewTab = "myday" | "upcoming" | "all" | "completed";
 export type TaskLayout = "list" | "board";
 export type TaskStatusFilter = "all" | "todo" | "in_progress" | "completed";
 export type TaskSort = "priority" | "date" | "newest" | "title";
@@ -35,7 +35,7 @@ type StoredState = {
   filters: TaskFilters;
 };
 
-const TABS: TaskViewTab[] = ["myday", "upcoming", "all", "completed", "trash"];
+const TABS: TaskViewTab[] = ["myday", "upcoming", "all", "completed"];
 const LAYOUTS: TaskLayout[] = ["list", "board"];
 const STATUS_FILTERS: TaskStatusFilter[] = [
   "all",

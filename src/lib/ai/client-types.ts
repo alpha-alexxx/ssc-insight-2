@@ -91,6 +91,7 @@ export const AI_VIEWS = [
   "plan",
   "history",
   "compare",
+  "performance",
   "settings",
 ] as const;
 export type AiView = (typeof AI_VIEWS)[number];

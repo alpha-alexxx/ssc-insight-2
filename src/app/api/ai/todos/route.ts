@@ -43,7 +43,7 @@ export const POST = defineRoute(
         take: 101,
       }),
       db.todoGroup.findMany({
-        where: { userId: user.id },
+        where: { userId: user.id, deletedAt: null },
         select: { id: true, name: true },
         take: 100,
       }),

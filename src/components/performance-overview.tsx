@@ -34,6 +34,7 @@ import {
   targetColor,
 } from "@/lib/chart-theme";
 import { Panel, EmptyChart } from "./dashboard-panels";
+import { ScoreBand } from "./performance/score-band";
 import {
   type DashboardScope,
   type SectionId,
@@ -53,6 +54,24 @@ import { mockTypeLabel, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const dateLabel = shortDate;
+
+/**
+ * The paper maximum a target is expressed against.
+ *
+ * `target.maxScore` can be null when the scope resolved no paper (empty
+ * account, unresolvable tier). Callers that need a number use the observed
+ * maximum of the points they are already drawing, which is the same paper
+ * those points came from.
+ */
+function paperMax(
+  analytics: Analytics,
+  points: { maxScore: number }[] = [],
+): number | null {
+  if (analytics.target.maxScore != null) return analytics.target.maxScore;
+  return points.length
+    ? Math.max(...points.map((point) => point.maxScore))
+    : null;
+}
 const typeLabel = mockTypeLabel;
 const scopeCopy: Record<
   DashboardScope,
@@ -416,7 +435,7 @@ function ScopeTrend({
         Showing {trend.points.length} recent result
         {trend.points.length === 1 ? "" : "s"}
       </p>
-      {target != null && (
+      {target != null && targetMax != null && (
         <p className="pb-1 text-center text-[0.625rem] muted">
           Dashed line: your target,{" "}
           {n((target / 100) * targetMax)} / {targetMax} marks
@@ -615,165 +634,6 @@ function WhereYouStand({
           row.resultCount,
         ])}
       />
-    </div>
-  );
-}
-/* ---------- Score band ----------
- * The section's opening statement: one ink-ruled strip of serif figures that
- * re-reads with every scope/filter change. Marks lead on the full-mock scope
- * (the 390-mark paper is the exam's own unit); percentages lead everywhere
- * else. Deltas are always percentage points against the previous result.
- */
-function ScoreBand({
-  analytics,
-  target,
-}: {
-  analytics: Analytics;
-  target: number | null;
-}) {
-  const { scope, summary, trend } = analytics;
-  const points = trend.points;
-  const targetMax = analytics.target.fullMockMaxScore;
-  const isFull = scope === "full";
-  const latest = points.at(-1) ?? null;
-  const previous = points.at(-2) ?? null;
-  const latestDelta =
-    latest && previous ? latest.percentage - previous.percentage : null;
-  const averagePercentage = points.length
-    ? points.reduce((total, point) => total + point.percentage, 0) /
-      points.length
-    : null;
-  const averageMarks = points.length
-    ? points.reduce((total, point) => total + point.score, 0) / points.length
-    : null;
-  const best = points.length
-    ? points.reduce(
-        (best, point) => (point.score > best.score ? point : best),
-        points[0]!,
-      )
-    : null;
-  const targetPercent = targetPercentage(target, targetMax);
-  const targetGap =
-    latest && targetPercent != null ? latest.percentage - targetPercent : null;
-  const deltaTone = (delta: number | null) =>
-    delta == null
-      ? "is-flat"
-      : delta > 0.05
-        ? "is-up"
-        : delta < -0.05
-          ? "is-down"
-          : "is-flat";
-  const marks = (value: number) => (
-    <>
-      {n(value)}
-      <span className="text-sm font-normal text-muted">
-        {" "}
-        / {targetMax}
-      </span>
-    </>
-  );
-  return (
-    <div className={cn("score-band", target != null && "is-five")}>
-      <div>
-        <p className="metric-label">Latest</p>
-        <p className="metric-figure">
-          <span className="metric-value tabular">
-            {latest ? (isFull ? marks(latest.score) : `${n(latest.percentage)}%`) : "—"}
-          </span>
-          {latestDelta != null && (
-            <span className={cn("metric-delta", deltaTone(latestDelta))}>
-              {latestDelta > 0 ? "+" : ""}
-              {n(latestDelta)} pts
-            </span>
-          )}
-        </p>
-        <p className="metric-hint truncate">
-          {latest
-            ? `${dateLabel(latest.date)} · ${
-                isFull ? `${n(latest.percentage)}%` : latest.seriesLabel
-              }`
-            : "Log a mock to begin"}
-        </p>
-      </div>
-      <div>
-        <p className="metric-label">Average</p>
-        <p className="metric-figure">
-          <span className="metric-value tabular">
-            {averagePercentage != null
-              ? isFull
-                ? marks(averageMarks!)
-                : `${n(averagePercentage)}%`
-              : "—"}
-          </span>
-        </p>
-        <p className="metric-hint truncate">
-          {points.length
-            ? isFull
-              ? `${n(averagePercentage)}% avg · ${n(analytics.sourceAttemptCount)} mocks`
-              : `across ${n(analytics.sourceAttemptCount)} mocks`
-            : "no results yet"}
-        </p>
-      </div>
-      <div>
-        <p className="metric-label">Best</p>
-        <p className="metric-figure">
-          <span className="metric-value tabular">
-            {best
-              ? isFull
-                ? marks(best.score)
-                : `${n(best.percentage)}%`
-              : "—"}
-          </span>
-        </p>
-        <p className="metric-hint truncate">
-          {best
-            ? isFull
-              ? `${n(best.percentage)}% · ${dateLabel(best.date)}`
-              : dateLabel(best.date)
-            : "no results yet"}
-        </p>
-      </div>
-      <div>
-        <p className="metric-label">Accuracy</p>
-        <p className="metric-figure">
-          <span className="metric-value tabular">
-            {summary.weightedAccuracy != null
-              ? `${n(summary.weightedAccuracy)}%`
-              : "—"}
-          </span>
-        </p>
-        <p className="metric-hint truncate">
-          {summary.questions
-            ? `${n(summary.correct)} of ${n(summary.questions)} correct`
-            : "no questions recorded"}
-        </p>
-      </div>
-      {target != null && (
-        <div>
-          <p className="metric-label">Target</p>
-          <p className="metric-figure">
-            <span
-              className={cn(
-                "metric-value tabular",
-                targetGap == null
-                  ? undefined
-                  : targetGap >= 0
-                    ? "text-positive"
-                    : "text-danger",
-              )}
-            >
-              {targetGap == null
-                ? "—"
-                : `${targetGap > 0 ? "+" : ""}${n(targetGap)} pts`}
-            </span>
-          </p>
-          <p className="metric-hint truncate">
-            {isFull
-              ? `target ${n(target)} / ${targetMax}`
-              : `target ${n(targetPercent ?? 0)}%`}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -1340,7 +1200,7 @@ function TargetPanel({
 }) {
   const uid = useId().replace(/:/g, "");
   const snapshots = analytics.target.snapshots;
-  const targetMax = analytics.target.fullMockMaxScore;
+  const targetMax = paperMax(analytics);
   const latest = snapshots.at(-1);
   const previous = snapshots.at(-2);
   const targetPercent = targetPercentage(target, targetMax);

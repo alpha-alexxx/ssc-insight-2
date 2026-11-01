@@ -18,13 +18,15 @@ import {
 import { PlainIcon, DuotoneTile } from "./icon";
 import { DashboardClock } from "./dashboard-clock";
 import { CommandPalette } from "./command-palette";
-import { AppFrame, VIEW_HREF, VIEW_META, type AppView } from "./app-shell";
+import { AppFrame, VIEW_META } from "./app-shell";
+import { VIEW_HREF, viewForPathname, type AppView } from "@/lib/routes";
 import { CompareView, type CompareReference } from "./compare-view";
-import { DateRangeFilter } from "./date-range-filter";
 import { HistoryPanel } from "./history-panel";
+import { ScopeFilters } from "./scope-filters";
 import { MockDetailDialog } from "./mock-detail-dialog";
 import { AddMockView } from "./add-mock-view";
 import { DashboardView } from "./dashboard-view";
+import { PerformanceView } from "./performance/performance-view";
 import { AiCoachCard } from "./ai-coach-card";
 import { AiChatSheet, type LogMockPayload } from "./ai-chat-sheet";
 import { PageHeader } from "./page-header";
@@ -45,6 +47,7 @@ import { CalendarView } from "./plan/calendar-view";
 import { PlanDayView } from "./plan/plan-day-view";
 import { PlanWeekView } from "./plan/plan-week-view";
 import { SettingsView } from "./settings/settings-view";
+import { TrashView } from "./trash/trash-view";
 import { ToastProvider, useToast } from "./toast";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import { useThemePrefs, viewTransition } from "./theme-style-provider";
@@ -62,21 +65,14 @@ import {
 } from "@/lib/queries/attempts";
 import { analyticsKeys } from "@/lib/queries/analytics";
 import { BACKUP_MAX_BYTES } from "@/lib/backup";
-import {
-  SUBJECTS,
-  subjectIds,
-  type Attempt,
-  type DashboardScope,
-  type Filters,
-} from "@/lib/domain";
-import { formatNumber as n } from "@/lib/domain";
+import { type Attempt, type Filters } from "@/lib/domain";
 import { longDate, shortDate, isIsoDate } from "@/lib/format";
 import {
   parseWorkspaceState,
   safeWorkspaceReturnTo,
 } from "@/lib/filters-url";
-import { cn } from "@/lib/utils";
 import { istTodayIso } from "@/lib/plan/view-model";
+import { AI_VIEWS } from "@/lib/ai/client-types";
 import type { AiScreenContext, AiView } from "@/lib/ai/client-types";
 import type { PlanTaskView } from "@/lib/plan/view-model";
 import { Dialog } from "radix-ui";
@@ -102,24 +98,6 @@ import { Dialog } from "radix-ui";
 
 /** Route path → shell view. Unknown paths fall back to the dashboard;
  * /plan/<date> is a dynamic route matched by prefix. */
-const PATH_VIEW: Record<string, AppView> = {
-  "/dashboard": "dashboard",
-  "/calendar": "calendar",
-  "/my-tasks": "tasks",
-  "/add": "add",
-  "/history": "history",
-  "/compare": "compare",
-  "/settings": "settings",
-};
-
-function viewForPathname(pathname: string): AppView {
-  // The bare `/plan` renders the day view for a moment while the shell
-  // rewrites it to `/plan/<today>`; treating it as the dashboard would flash
-  // the wrong surface first.
-  if (pathname === "/plan" || pathname.startsWith("/plan/")) return "plan";
-  return PATH_VIEW[pathname] ?? "dashboard";
-}
-
 export function WorkspaceShell({
   authEnabled = false,
   userEmail = "",
@@ -230,6 +208,12 @@ function WorkspaceShellInner({
     pageSize,
     sort: "date",
     dir: "desc",
+    // The comparison's "filtered average" is computed over the whole filtered
+    // set, not just the visible page, so it needs the KPI stats block. This
+    // used to come from the always-on analytics query; analytics is now
+    // requested only on the analytical surfaces, so the paged endpoint owns
+    // it rather than a fallback that would silently go null.
+    withStats: true,
     enabled: view === "compare",
   });
   const ai = useAiWorkspace();
@@ -389,7 +373,7 @@ function WorkspaceShellInner({
         // Drop the deleted record's detail cache entry without refetching.
         queryClient.removeQueries({ queryKey: attemptKeys.detail(a.id) });
         clearCoach();
-        toast.success("Mock deleted");
+        toast.success("Moved to Trash", "Recoverable for 15 days");
         await refreshAfterMutation();
       } catch (e) {
         toast.error(
@@ -584,11 +568,8 @@ function WorkspaceShellInner({
    * target would be meaningless.
    */
   const compareAveragePercentage =
-    historyList.data?.stats?.avgScorePct ??
-    analytics?.summary.averagePercentage ??
-    null;
-  const compareAverageCount =
-    historyList.data?.stats?.totalMocks ?? analytics?.pointCount ?? null;
+    compareList.data?.stats?.avgScorePct ?? null;
+  const compareAverageCount = compareList.data?.stats?.totalMocks ?? null;
   const compareReference = useMemo<CompareReference>(
     () => ({
       targetFor: (attempt) => {
@@ -640,7 +621,12 @@ function WorkspaceShellInner({
   // name and (when relevant) an ISO date — never titles, notes, or IDs.
   const aiScreenContext = useMemo<AiScreenContext | null>(() => {
     if (view === "add") return null;
-    const aiView: AiView = view;
+    // A view the coach has no orientation for simply sends none. Narrowing
+    // through the shared list (rather than asserting a cast) is what makes
+    // a new workspace view a compile-time question instead of a runtime
+    // 400 from the chat route's schema.
+    if (!(AI_VIEWS as readonly string[]).includes(view)) return null;
+    const aiView = view as AiView;
     const date =
       view === "dashboard"
         ? istTodayIso()
@@ -774,7 +760,11 @@ function WorkspaceShellInner({
           {/* px-3 on phones is deliberate: at 375px the 2×2 metric strip needs
               every pixel for "Personal overdue" before it ellipsizes. */}
           <div className="workspace-content mx-auto w-full max-w-[1560px] px-3 py-4 sm:px-5 md:py-5">
-            {noScope && view !== "settings" && <EmptyScopeNotice />}
+            {/* Trash is account-level, not exam-scoped: an account with no
+                enabled tier must still be able to recover its deleted work. */}
+            {noScope && view !== "settings" && view !== "trash" && (
+              <EmptyScopeNotice />
+            )}
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={view === "add" ? "add" : view}
@@ -902,6 +892,12 @@ function WorkspaceShellInner({
                         description="Target, appearance, account data, and the private workspace."
                       />
                     )}
+                    {view === "trash" && (
+                      <PageHeader
+                        title="Trash"
+                        description="Deleted mocks, tasks, custom exams and groups stay recoverable here for 15 days."
+                      />
+                    )}
                     {(error || listError) && (
                       <div
                         role="alert"
@@ -991,6 +987,8 @@ function WorkspaceShellInner({
                         backup={backup}
                         onOpenReplace={() => backup.setReplaceOpen(true)}
                       />
+                    ) : view === "trash" ? (
+                      <TrashView />
                     ) : view === "dashboard" ? (
                       <DashboardView
                         planApi={planApi}
@@ -1000,17 +998,6 @@ function WorkspaceShellInner({
                         target={target}
                         loading={loading}
                         coach={coachNode}
-                        scopeControls={
-                          <ScopeFilters
-                            view={view}
-                            scope={scope}
-                            setScope={setScope}
-                            filters={filters}
-                            setFilters={updateFilters}
-                            changeFilter={changeFilter}
-                            platforms={platforms}
-                          />
-                        }
                         onOpenAttempt={openDetail}
                         onAdd={add}
                         onViewAll={viewAllHistory}
@@ -1019,11 +1006,31 @@ function WorkspaceShellInner({
                           router.push(`/plan/${date}`);
                         }}
                       />
+                    ) : view === "performance" ? (
+                      <PerformanceView
+                        analytics={analytics}
+                        target={target}
+                        loading={loading}
+                        controls={
+                          <ScopeFilters
+                            mode="scope"
+                            scope={scope}
+                            setScope={setScope}
+                            filters={filters}
+                            setFilters={updateFilters}
+                            changeFilter={changeFilter}
+                            platforms={platforms}
+                            onReset={clearWorkspaceFilters}
+                          />
+                        }
+                        onOpenAttempt={openDetail}
+                        onAdd={add}
+                      />
                     ) : (
                       <>
                         <div className="mb-4">
                           <ScopeFilters
-                            view={view}
+                            mode="type"
                             scope={scope}
                             setScope={setScope}
                             filters={filters}
@@ -1153,7 +1160,8 @@ function WorkspaceShellInner({
                   </p>
                   <div className="p-3 bg-danger-soft border border-danger rounded-control text-xs">
                     Keep the downloaded safety backup until you have verified
-                    the imported data. This cannot be undone from the app.
+                    the imported data. This cannot be undone from the app. Your
+                    Trash is not affected.
                   </div>
                 </div>
               )}
@@ -1204,138 +1212,6 @@ function WorkspaceShellInner({
         />
       </div>
     </MotionConfig>
-  );
-}
-
-/** Scope tabs + platform/subject/tier/date filters, shared by the views. */
-function ScopeFilters({
-  view,
-  scope,
-  setScope,
-  filters,
-  setFilters,
-  changeFilter,
-  platforms,
-}: {
-  view: AppView;
-  scope: DashboardScope;
-  setScope: (scope: DashboardScope) => void;
-  filters: Filters;
-  /** Function-form-only filter writer; resets the paged lists' pages. */
-  setFilters: (updater: (prev: Filters) => Filters) => void;
-  changeFilter: (key: keyof Filters, value: string) => void;
-  platforms: string[];
-}) {
-  const scope_ = useExamScope();
-  const activeExam = scope_.exams
-    ? scope_.exams.builtIn.find((exam) => exam.id === scope_.activeExamId)
-    : null;
-  const tiers = activeExam?.tiers ?? [];
-  return (
-    <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
-      {/* The four scope options share one row from sm up; on phones they
-          become a 2×2 pill grid (.scope-tabs) so every option stays visible
-          with no scrolling and no ragged wrap point. */}
-      <div
-        role="group"
-        aria-label="Analytical scope"
-        className="segment-group scope-tabs w-full sm:w-auto"
-      >
-        {(
-          [
-            { id: "full", label: "Full mocks", icon: "file" },
-            { id: "subject", label: "Subject wise", icon: "book" },
-            { id: "sectional", label: "Sectional wise", icon: "layers" },
-            { id: "all", label: "All mocks", icon: "history" },
-          ] as const
-        ).map((t) => {
-          const active =
-            view === "dashboard"
-              ? scope === t.id
-              : (filters.type ?? "all") === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              aria-pressed={active}
-              className="segment"
-              onClick={() =>
-                view === "dashboard"
-                  ? setScope(t.id as DashboardScope)
-                  : changeFilter("type", t.id)
-              }
-            >
-              <PlainIcon
-                name={t.icon}
-                size={14}
-                className={active ? "" : "text-muted"}
-              />
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-      {/* Filters close the control group: one full-width row per filter on
-          phones. A 2-up grid was the earlier choice, but a 16px field font
-          plus the chevron padding no longer fits "All platforms" in half of
-          a 375px panel — stacking keeps the label readable and the target
-          full width. Right-aligned inline from sm up. */}
-      <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:ml-auto sm:flex sm:w-auto sm:justify-end">
-        <select
-          aria-label="Filter by platform"
-          className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[11.5rem]"
-          value={filters.platform ?? "all"}
-          onChange={(e) => changeFilter("platform", e.target.value)}
-        >
-          <option value="all">All platforms</option>
-          {platforms.map((p) => (
-            <option key={p}>{p}</option>
-          ))}
-        </select>
-        {view !== "dashboard" && (
-          <select
-            aria-label="Filter by subject"
-            className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[11.5rem]"
-            value={filters.subject ?? "all"}
-            onChange={(e) => changeFilter("subject", e.target.value)}
-          >
-            <option value="all">All subjects</option>
-            {subjectIds.map((id) => (
-              <option key={id} value={id}>
-                {SUBJECTS[id].short}
-              </option>
-            ))}
-          </select>
-        )}
-        {tiers.length > 1 && view !== "dashboard" && (
-          <select
-            aria-label="Filter by tier"
-            className="w-full min-w-0 truncate rounded-control py-[9px] pl-3 pr-7 text-xs sm:w-auto sm:max-w-[11.5rem]"
-            value={filters.tier ?? "all"}
-            onChange={(e) => changeFilter("tier", e.target.value)}
-          >
-            <option value="all">All tiers</option>
-            {tiers.map((tier) => (
-              <option key={tier.id} value={tier.id}>
-                {tier.label}
-              </option>
-            ))}
-          </select>
-        )}
-        <div
-          className={cn(
-            "min-w-0 [&>button]:w-full sm:[&>button]:w-auto",
-            view !== "dashboard" && "max-sm:col-span-2",
-          )}
-        >
-          <DateRangeFilter
-            from={filters.from ?? ""}
-            to={filters.to ?? ""}
-            onChange={(patch) => setFilters((f) => ({ ...f, ...patch }))}
-          />
-        </div>
-      </div>
-    </div>
   );
 }
 

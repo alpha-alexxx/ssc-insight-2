@@ -8,8 +8,13 @@ import { useOverlayFocus } from "../use-overlay-viewport";
 import type { GroupWithCount } from "./types";
 
 /**
- * Create, rename, and remove groups in one dialog. Removing a group keeps
- * its tasks (they become Ungrouped) — the copy says so before the action.
+ * Create, rename, and remove groups in one dialog.
+ *
+ * Removing a group is a move to Trash, not a delete: the group holds its name
+ * for 15 days (that is what makes restoring it conflict-free), its tasks keep
+ * their membership, and in the meantime they read as Ungrouped because the
+ * group list only shows live groups. The copy says all of that before the
+ * action.
  */
 export function GroupsManagerDialog({
   open,
@@ -187,7 +192,7 @@ export function GroupsManagerDialog({
                         disabled={busy}
                         onClick={() => void remove(group.id)}
                       >
-                        Remove group
+                        Move to Trash
                       </Button>
                       <Button
                         variant="ghost"
@@ -196,6 +201,11 @@ export function GroupsManagerDialog({
                       >
                         Keep
                       </Button>
+                      <p className="basis-full text-[0.6875rem] leading-relaxed text-muted">
+                        Recoverable from Trash for 15 days; restoring it brings
+                        its tasks back into the group. Until then they stay
+                        ungrouped and are never deleted.
+                      </p>
                     </>
                   ) : (
                     <>

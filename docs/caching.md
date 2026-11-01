@@ -29,6 +29,8 @@ whenever a data source's policy changes.
 | AI status (`/api/ai/status`) | per-user (quota usage) | per AI request | `private, no-store`; client loads on mount and after each AI call | refreshed after coach/chat/extract calls | Quota display may lag a request by one refresh; deliberate. |
 | AI coach / chat / extract | per-user | never cached | `private, no-store` (chat is an NDJSON stream) | — | Read-only subsystem; nothing persisted. |
 | Backup export (`GET /api/backup`) | per-user | on attempts change | raw file response, no-store | — | The one envelope exception: returns a downloadable file. |
+| Trash (`/api/trash`, `/api/trash/:kind/:id`) | per-user | on delete/restore/purge | `private, no-store` (default) | — | The list is one server-paged UNION with a grouped count, so search/sort/paging never fetch the whole Trash. Never cached server-side: expiry depends on the current clock, and a cached page would keep offering a row that just aged out. |
+| Trash cleanup (`GET /api/cron/trash-cleanup`) | deployment-wide | daily | not cached | — | Secret-authenticated infrastructure endpoint, exempt from the maintenance gate and the rate limiter. Physical deletion only — logical expiry is enforced by the two rows above. |
 | Health (`/api/health`) | public | constant | not cached by the app; probe freshness controlled by the prober | — | Rate-limit-exempt infrastructure endpoint. |
 | Landing `/` (the only sign-in surface), maintenance | public / auth-adjacent | — | `force-dynamic` server pages; `requireUser()` decides the redirect | — | No caching: an anonymous/signed-in flip must render immediately. `/` also reads `?error` for its failure toast, so a cached document would show a stale or missing message. |
 
@@ -51,6 +53,7 @@ refetches only mounted (active) observers — the same fan-out the old
 | `["todos","tasks"|"list",params]` / `["todos","calendar",range]` | 30 s (default) | every todo mutation invalidates `["todos"]` | Only active observers refetch (the old event fan-out). |
 | `["ai","status"]` | 60 s | invalidated after coach/chat completion | A failure keeps status `null` (AI reads as disabled) — soft-fail. |
 | `["search",q,limit]` (infinite) | 30 s | — | Normalized query is the key; cursor pages accumulate. |
+| `["trash","list",params]` / `["trash","detail",kind,id]` | 30 s (default) | restore, purge and empty invalidate `TRASH_INVALIDATE_SCOPES` — trash, mock-attempts, analytics, todos, plan, exams | `keepPreviousData` holds the current page while filters or paging change. Params are normalized through `trashListParams` so defaults are stripped and the key mirrors the request exactly. |
 
 Defaults for everything else: `staleTime: 30s`, `gcTime: 5min`,
 `refetchOnWindowFocus: false`, one retry that skips 401/403/404/413/415/422 and

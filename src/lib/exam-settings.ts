@@ -253,8 +253,10 @@ export function toCustomExamDef(row: {
 export async function listCustomExams(
   userId: string,
 ): Promise<CustomExamDef[]> {
+  // The single choke point for the exam catalog: a trashed exam is absent from
+  // every consumer (scope resolution, switcher, settings, analytics targets).
   const rows = await database().customExam.findMany({
-    where: { userId },
+    where: { userId, deletedAt: null },
     orderBy: { createdAt: "asc" },
     select: { id: true, name: true, tiers: true },
   });

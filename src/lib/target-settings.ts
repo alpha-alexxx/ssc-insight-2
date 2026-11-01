@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  parseTierKey,
   patternMaxScore,
   structureSignature,
   type CustomExamDef,
@@ -453,4 +454,40 @@ export function resolveWorkspaceTargets(
     byExamPercentile[exam.id] = percentileFor(targets, exam.id);
 
   return { byTier, byExamPercentile, peers };
+}
+
+/**
+ * Remove everything a permanently deleted exam owned: its per-tier overrides,
+ * its percentile goal, and any structure default no surviving tier still
+ * carries.
+ *
+ * `survivingSignatures` is passed in rather than read from the catalog so this
+ * stays a pure function of its inputs — the caller resolves the live catalog
+ * (built-ins plus the account's remaining custom exams) once, and one call can
+ * prune several exams without re-deriving the index per id.
+ *
+ * The structure-default rule is the subtle one: a default is keyed by the
+ * PAPER's shape, not by the exam, so it survives whenever any other tier —
+ * built-in or the user's own — still has that identical paper. Dropping it
+ * because one exam died would silently reset a target the user never touched.
+ */
+export function pruneTargetsForExam(
+  targets: TargetSettings,
+  examId: string,
+  survivingSignatures: ReadonlySet<StructureSignature>,
+): TargetSettings {
+  const tierTargets = Object.fromEntries(
+    Object.entries(targets.tierTargets).filter(
+      ([key]) => parseTierKey(key)?.examId !== examId,
+    ),
+  );
+  const percentiles = Object.fromEntries(
+    Object.entries(targets.percentiles).filter(([key]) => key !== examId),
+  );
+  const tierDefaults = Object.fromEntries(
+    Object.entries(targets.tierDefaults).filter(([signature]) =>
+      survivingSignatures.has(signature),
+    ),
+  );
+  return { ...targets, tierTargets, percentiles, tierDefaults };
 }

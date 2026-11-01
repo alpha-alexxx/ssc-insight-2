@@ -108,6 +108,8 @@ async function searchAttempts(
     const rows = await db.mockAttempt.findMany({
       where: {
         userId,
+        // Trash boundary: search never surfaces a deleted mock.
+        deletedAt: null,
         ...(keysetAfter(keyset, "completedAt") as Prisma.MockAttemptWhereInput),
         ...attemptPhaseWhere(phase, q),
       },
@@ -248,6 +250,7 @@ async function searchGroups(
   const rows = await db.todoGroup.findMany({
     where: {
       userId,
+      deletedAt: null,
       name: { contains: escapeLike(input.q), mode: "insensitive" },
       ...(keysetAfter(cursor, "createdAt") as Prisma.TodoGroupWhereInput),
     },

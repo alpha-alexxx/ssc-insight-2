@@ -59,6 +59,7 @@ Copy `.env.example` for the names, or use Neon's environment pull. Never commit 
 | `AI_MAX_OUTPUT_TOKENS` | Per-call output cap; default `1200` |
 | `AI_TIMEOUT_MS` | Provider timeout below the 60-second route limit; default `45000` |
 | `AI_CREDENTIAL_SECRET` | Encrypts user-entered API keys (AES-256-GCM). 64 hex chars or a ≥32-char passphrase. Blank disables in-app key storage only |
+| `CRON_SECRET` | Bearer token for `/api/cron/trash-cleanup`. Generate with `openssl rand -hex 32`. Blank disables physical Trash cleanup (the endpoint answers 503) and nothing else |
 
 Keep every variable server-side; none needs a `NEXT_PUBLIC_` prefix. The client talks to the same-origin `/api/auth` proxy. Missing or unavailable Auth configuration fails closed; private records are never returned anonymously. Build and client generation do not connect to the database or require live secrets. AI is optional: when `AI_API_KEY` or `AI_MODEL` is blank, the coach is hidden, AI-assisted paste is disabled, and the rest of the tracker works normally.
 
@@ -70,6 +71,15 @@ npm run db:migrate
 ```
 
 `prisma.config.ts` loads Next.js environment files and uses the unpooled connection. Do not run `prisma migrate reset`, target Neon's managed Auth schema, or apply schema changes automatically in arbitrary Vercel builds. Test new SQL migrations on an expiring branch first. Apply reviewed migrations explicitly before deploying the matching app revision.
+
+The Trash migration (`prisma/migrations/20261103000000_trash`) is **additive but order-sensitive**. It also re-stamps any personal task that was already in Trash under the old "kept forever" behavior, so the first cleanup run cannot purge work the user was never told had a deadline.
+
+Apply it **before** deploying the matching app revision:
+
+1. `npm run db:migrate` against the target database (unpooled URL).
+2. Deploy the application.
+
+The reverse order breaks the workspace: new code filters `deletedAt` on every attempt read, so against a database without the column every attempt query fails and the dashboard, history, compare and calendar all error. Rolling the **application** back after the migration is worse — trashed rows become ordinary rows to the old code, so deleted mocks reappear in charts and the old `deleteAttempt` would hard-delete them. Recovery from that state is either `UPDATE "ssc_insight"."MockAttempt" SET "deletedAt" = NULL` (accepting the resurrection) or letting the cleanup job run once the new revision is back.
 
 ## Google sign-in
 
@@ -187,8 +197,24 @@ Routes retain `{data}` / `{error: {code, message}}` response envelopes, validati
 | `/api/ai/models` | POST | Server-side catalog discovery from a draft provider/base URL/key; returns model IDs/names without saving |
 | `/api/ai/test` | POST | With a JSON settings draft: one tiny completion to test before saving; with no request body: tests the resolved saved personal/server configuration. May incur a small provider charge; never saves |
 | `/api/auth/*` | SDK methods | Same-origin Neon Auth proxy |
+| `/api/trash` | GET | Owner-scoped deleted records across all four kinds, with search, type/expiry filters, sort, server-side paging and per-kind counts |
+| `/api/trash/:kind/:id` | GET | One deleted record's read-only detail (server-formatted fields, plus a subject roster for a mock) |
+| `/api/trash/restore` | POST | Restore selected records; per-item outcomes, 409 for anything past its window |
+| `/api/trash/purge` | POST | Permanently delete selected records; per-item outcomes, idempotent |
+| `/api/trash/empty` | POST | Permanently delete this account's whole Trash; requires `{ confirm: true }` |
+| `/api/cron/trash-cleanup` | GET | Scheduled physical removal of expired rows. `Authorization: Bearer $CRON_SECRET`; 503 when unset, 401 on mismatch |
 
 List/analytics filters: `type`, `subject`, `platform`, `from`, `to`, `search`. `type` and `subject` filter Mock history and Compare; dashboard scopes ignore them. Literal substring search escapes PostgreSQL wildcard characters. Date ranges are inclusive IST dates. Domain calculations run on the server; filters run through Prisma.
+
+### Trash and retention
+
+Deleting a mock, a personal task, a custom exam or a task group sets a `deletedAt` column on that row; nothing is destroyed. Every read filters `deletedAt: null`, which is why a deleted mock disappears from history, charts, compare, the calendar and the AI context at once. `deletedAt + 15 days` is the recovery deadline, computed from one constant (`TRASH_RETENTION_DAYS`) rather than stored, so there is no second field to disagree with.
+
+The window is enforced twice, deliberately. `GET /api/trash` hides expired rows and `POST /api/trash/restore` rejects them with 409 — so a record stops being recoverable on time even if the scheduler is broken. `vercel.json` then runs `/api/cron/trash-cleanup` daily to reclaim the storage; a missed run costs disk, never correctness.
+
+Restoring a custom exam is lossless because its tier enablement, per-tier overrides, structure defaults and percentile goal are left alone at delete time and pruned only on permanent deletion. Names are unique across live **and** trashed exams and groups, which is what makes restore conflict-free; the API returns a specific 409 explaining that the name is in Trash rather than a bare constraint error.
+
+`DELETE /api/mock-attempts/:id` on an already-trashed attempt returns 404, matching the rule that a foreign and a nonexistent id look identical.
 
 ## Verification
 
@@ -202,7 +228,9 @@ npm run start
 npm run verify:neon
 ```
 
-`verify:neon` runs against localhost unless `APP_URL` is supplied. It creates explicitly disposable mock records, verifies persisted CRUD/subject replacement, the 245/390 report, Computer exclusion, cross-type analytics, literal filters, v2 backup/merge duplicates/target import, private settings, validation, and anonymous redirects. Its `finally` block removes its records and restores the prior target setting. Set `TEST_SESSION_COOKIE` from a real disposable QA session and run against a QA branch first. Never paste session cookies into chat or commit them. `node scripts/verify-ownership.mjs` additionally requires `TEST_OTHER_SESSION_COOKIE` for a second real account and tests isolation, forged ownership, cross-account v2 merge/target transfer, stale-preview rejection, exports, and revoked sessions. `scripts/verify-backup-transfer.mjs` is a guarded destructive replace check and requires `ALLOW_DESTRUCTIVE_REPLACE=1` plus two disposable accounts.
+`verify:neon` runs against localhost unless `APP_URL` is supplied. It creates explicitly disposable mock records, verifies persisted CRUD/subject replacement, the 245/390 report, Computer exclusion, cross-type analytics, literal filters, v2 backup/merge duplicates/target import, private settings, validation, and anonymous redirects. Its `finally` block removes its records and restores the prior target setting. Set `TEST_SESSION_COOKIE` from a real disposable QA session and run against a QA branch first. Never paste session cookies into chat or commit them. `node scripts/verify-ownership.mjs` additionally requires `TEST_OTHER_SESSION_COOKIE` for a second real account and tests isolation, forged ownership, cross-account v2 merge/target transfer, stale-preview rejection, exports, and revoked sessions. `node scripts/verify-trash.mjs` needs both cookies and covers the whole delete → hide → list → restore → purge lifecycle plus cross-account refusal and cleanup idempotency; add `TEST_CRON_SECRET` to exercise the scheduled run. `scripts/verify-backup-transfer.mjs` is a guarded destructive replace check and requires `ALLOW_DESTRUCTIVE_REPLACE=1` plus two disposable accounts.
+
+None of the scripts may run against a production account: each creates and destroys records. Run them on an expiring Neon branch.
 
 A passing session endpoint is not proof of Google login. Browser verification must additionally complete Google consent, reload to confirm the session, and sign out. Report Google login as pending if user participation or provider configuration prevents that check.
 

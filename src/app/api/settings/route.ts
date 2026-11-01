@@ -19,6 +19,7 @@ import {
   type TargetEdit,
 } from "@/lib/target-settings";
 import { readBody, RequestError } from "@/lib/api";
+import { database } from "@/lib/db";
 import { defineRoute } from "@/lib/route-handler";
 import { audit } from "@/lib/audit";
 
@@ -129,10 +130,34 @@ export const PUT = defineRoute(
     const input = settingsSchema.parse(await readBody(request));
     const ctx = await loadExamContext(user.id);
 
-    // Every enabled key must resolve to a real exam+tier for this user.
+    /*
+     * Every enabled key must resolve to a real exam+tier for this user — with
+     * one deliberate exception.
+     *
+     * Trashing a custom exam keeps its enablement keys, because that is what
+     * makes restoring it lossless. `tierKeyResolves` only knows the LIVE
+     * catalog, so without the exception below every scope write after a custom
+     * exam is trashed would fail with "Unknown exam tier" — the switcher, the
+     * Settings save, all of them — until the exam was restored or purged.
+     *
+     * A key naming a trashed exam is therefore a preserved reservation: it
+     * stays in the list untouched, and it simply does not resolve to a
+     * pattern while the exam is away (switcher, form and target lists all
+     * iterate the live catalog and skip it).
+     */
+    const trashedExamIds = new Set(
+      (
+        await database().customExam.findMany({
+          where: { userId: user.id, deletedAt: { not: null } },
+          select: { id: true },
+        })
+      ).map((row) => row.id),
+    );
     for (const key of input.enabledTiers) {
-      if (!tierKeyResolves(ctx, key))
-        throw new RequestError(`Unknown exam tier: ${key}`, 400);
+      if (tierKeyResolves(ctx, key)) continue;
+      const examId = parseTierKey(key)?.examId;
+      if (examId && trashedExamIds.has(examId)) continue;
+      throw new RequestError(`Unknown exam tier: ${key}`, 400);
     }
     const enabled = [...new Set(input.enabledTiers)];
 

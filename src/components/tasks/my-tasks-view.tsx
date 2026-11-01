@@ -44,7 +44,6 @@ const TAB_ITEMS: { id: TaskViewTab; label: string }[] = [
   { id: "upcoming", label: "Upcoming" },
   { id: "all", label: "All" },
   { id: "completed", label: "Completed" },
-  { id: "trash", label: "Trash" },
 ];
 
 /** Unfiltered listing that keeps the rail (groups + counts) and the overview
@@ -270,8 +269,7 @@ export function MyTasksView({
         : Boolean(main.data);
 
   const firstRun =
-    !!counts && counts.all === 0 && counts.trash === 0 && !search &&
-    filterCount(filters) === 0;
+    !!counts && counts.all === 0 && !search && filterCount(filters) === 0;
   const hasFilters = filterCount(filters) > 0 || Boolean(search);
 
   // ---- navigation handlers ---------------------------------------------
@@ -430,9 +428,6 @@ export function MyTasksView({
       })),
     });
   }
-  function restore(task: Task) {
-    void patchTask(task, { restore: true }, `“${task.title}” restored`);
-  }
 
   // ---- bulk -------------------------------------------------------------
   async function bulkStatus(next: "completed" | "in_progress") {
@@ -470,19 +465,13 @@ export function MyTasksView({
     const ids = [...selectedOnPage];
     clearSelection();
     if (await trashByIds(ids))
-      toast.success(`${ids.length} ${ids.length === 1 ? "task" : "tasks"} moved to Trash`, "Restore them anytime from Trash.");
-  }
-  async function bulkRestoreSelected() {
-    const ops: ApplyOp[] = [];
-    for (const id of selectedOnPage) {
-      const task = taskById(id);
-      if (task?.deletedAt) ops.push({ type: "restore", id, version: task.version });
-    }
-    clearSelection();
-    await runApplyOps(ops, `${ops.length} ${ops.length === 1 ? "task" : "tasks"} restored`);
+      toast.success(
+        `${ids.length} ${ids.length === 1 ? "task" : "tasks"} moved to Trash`,
+        "Restore from Trash within 15 days.",
+      );
   }
   async function scopeTrash() {
-    const view = boardMode ? "all" : tab === "trash" ? null : tab;
+    const view = boardMode ? "all" : tab;
     if (!view || !confirm || confirm.kind !== "scope") return;
     setBusy(true);
     try {
@@ -498,7 +487,7 @@ export function MyTasksView({
       });
       toast.success(
         `${confirm.count} ${confirm.count === 1 ? "task" : "tasks"} moved to Trash`,
-        "Everything matching the current view and filters. Restore from Trash.",
+        "Everything matching the current view and filters. Restore from Trash within 15 days.",
       );
     } catch (cause) {
       toast.error(
@@ -554,7 +543,6 @@ export function MyTasksView({
       onPostpone={() => postpone(task)}
       onDuplicate={() => void duplicate(task)}
       onTrash={() => setConfirm({ kind: "task", task })}
-      onRestore={tab === "trash" ? () => restore(task) : undefined}
     />
   );
 
@@ -591,16 +579,9 @@ export function MyTasksView({
   useEffect(() => {
     if (quickAddNonce === consumedQuickAddNonce) return;
     consumeQuickAdd();
-    if (tab === "trash") {
-      // Reacting to an external-store event, the same carve-out as the
-      // URL-restore effects in use-workspace-data.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCreating(true);
-      return;
-    }
     quickAddRef.current?.focus();
     quickAddRef.current?.scrollIntoView({ block: "nearest" });
-  }, [consumeQuickAdd, consumedQuickAddNonce, quickAddNonce, tab]);
+  }, [consumeQuickAdd, consumedQuickAddNonce, quickAddNonce]);
 
   // ---- render -----------------------------------------------------------
   const activeEntries = activeFilterEntries(filters);
@@ -616,14 +597,13 @@ export function MyTasksView({
     if (id === "myday") return counts.today + counts.overdue;
     if (id === "upcoming") return counts.upcoming;
     if (id === "all") return counts.all;
-    if (id === "completed") return counts.completed;
-    return counts.trash;
+    return counts.completed;
   };
 
-  const showQuickAdd = !boardMode && tab !== "trash";
+  const showQuickAdd = !boardMode;
   const showSelectToggle = !boardMode && (tabCount(tab) ?? 0) > 0;
-  const scopeAllowed = !myDayMode && tab !== "trash" && !!main.data?.total;
-  const editingTask = editing && !editing.deletedAt ? editing : null;
+  const scopeAllowed = !myDayMode && !!main.data?.total;
+  const editingTask = editing;
 
   const listBody = (() => {
     if (loadError) {
@@ -769,31 +749,27 @@ export function MyTasksView({
         </div>
       );
     }
-    // Upcoming / All / Completed / Trash
+    // Upcoming / All / Completed
     if (mainItems.length === 0) {
       return (
         <TasksEmptyState
           title={
             hasFilters
               ? "No tasks match"
-              : tab === "trash"
-                ? "Trash is empty"
-                : tab === "completed"
-                  ? "Nothing completed yet"
-                  : tab === "upcoming"
-                    ? "Nothing scheduled ahead"
-                    : "No tasks"
+              : tab === "completed"
+                ? "Nothing completed yet"
+                : tab === "upcoming"
+                  ? "Nothing scheduled ahead"
+                  : "No tasks"
           }
           detail={
             hasFilters
               ? "Try a different search, or clear the filters to see everything."
-              : tab === "trash"
-                ? "Deleted tasks appear here and can be restored with their subtasks."
-                : tab === "completed"
-                  ? "Finish a task — by checking it off or cycling its status — and it lands here."
-                  : tab === "upcoming"
-                    ? "Schedule a task for a future date and it will wait here until it's due."
-                    : "Add a task below to get started."
+              : tab === "completed"
+                ? "Finish a task — by checking it off or cycling its status — and it lands here."
+                : tab === "upcoming"
+                  ? "Schedule a task for a future date and it will wait here until it's due."
+                  : "Add a task below to get started."
           }
         >
           {hasFilters ? (
@@ -807,10 +783,6 @@ export function MyTasksView({
             >
               Clear search &amp; filters
             </Button>
-          ) : tab === "trash" ? (
-            <Button size="sm" variant="outline" onClick={() => openTab("myday")}>
-              Back to My Day
-            </Button>
           ) : null}
         </TasksEmptyState>
       );
@@ -820,9 +792,7 @@ export function MyTasksView({
         ? "Upcoming"
         : tab === "all"
           ? "All tasks"
-          : tab === "completed"
-            ? "Completed"
-            : "Trash";
+          : "Completed";
     return (
       <TaskSection
         label={sectionLabel}
@@ -990,7 +960,6 @@ export function MyTasksView({
               <BulkBar
                 selectedCount={selectedOnPage.length}
                 pageTotal={pageIds.size}
-                trashMode={tab === "trash"}
                 busy={busy}
                 scopeTotal={scopeAllowed ? main.data?.total ?? 0 : 0}
                 onSelectAll={() => setSelectedIds(new Set(pageIds))}
@@ -1004,7 +973,6 @@ export function MyTasksView({
                 onTrash={() =>
                   setConfirm({ kind: "selected", count: selectedOnPage.length })
                 }
-                onRestore={() => void bulkRestoreSelected()}
                 onScopeTrash={
                   scopeAllowed
                     ? () =>

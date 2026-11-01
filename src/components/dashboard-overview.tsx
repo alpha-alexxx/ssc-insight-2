@@ -3,6 +3,7 @@ import { type IconName } from "./icon";
 import { MetricCell, MetricStripSkeleton } from "./metric-strip";
 import type { Analytics } from "@/lib/analytics";
 import { formatNumber as n } from "@/lib/domain";
+import { headlineMetrics } from "@/lib/performance-metrics";
 import { shortDate } from "@/lib/format";
 import {
   dayAssignmentStats,
@@ -43,13 +44,13 @@ export function DashboardOverview({
   const todayPlan = plan?.days.find((day) => day.date === today);
   const todayStats = todayPlan ? dayAssignmentStats(todayPlan) : null;
   const stats = plan ? planProgressStats(plan.days) : null;
-  const trend = analytics?.trend.points ?? [];
-  const latest = trend.at(-1) ?? null;
-  const previous = trend.length >= 2 ? trend.at(-2) ?? null : null;
-  /* Score movement between the two most recent mocks in scope: the delta is
-     only shown when both points exist, never fabricated from a single result. */
-  const deltaPts =
-    latest && previous ? latest.percentage - previous.percentage : null;
+  /* The headline figures come from the shared engine, not from a second
+     derivation over trend.points. This cell and the performance page's
+     "Latest" must describe the same result with the same arithmetic; they
+     used to be computed twice and could disagree. */
+  const headline = analytics ? headlineMetrics(analytics) : null;
+  const latest = headline?.latest ?? null;
+  const deltaPts = headline?.delta ?? null;
   const latestDelta =
     deltaPts == null
       ? null

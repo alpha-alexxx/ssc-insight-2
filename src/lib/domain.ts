@@ -419,6 +419,23 @@ export function totals(
   );
   const attempted = sums.correct + sums.incorrect;
   const score = a.scoreOverride ?? sums.score;
+  /* Merit time is the SAME subjects the question count and score were summed
+   * over, so it can be divided by `attempted` honestly.
+   *
+   * `timeSeconds` below deliberately includes qualifying papers (CGL/CHSL
+   * Tier 2 Section III, Computer Knowledge) because that time is really spent,
+   * while `questions`/`score` exclude it because it is not merit. Dividing one
+   * by the other would inflate pace on exactly the papers that have a
+   * qualifying section, so pace reads this field instead — never a mix.
+   *
+   * Null, not zero, when the number cannot be established: an
+   * `overallTimeSeconds` override describes the whole sitting and cannot be
+   * decomposed into merit and qualifying parts, and a partially timed paper
+   * understates any pace derived from it. */
+  const meritTimeSeconds =
+    scoringSubjects.every((s) => s.timeSeconds != null)
+      ? scoringSubjects.reduce((total, s) => total + (s.timeSeconds ?? 0), 0)
+      : null;
   return {
     ...sums,
     score,
@@ -427,6 +444,8 @@ export function totals(
     unattempted: sums.questions - attempted,
     accuracy: attempted ? (sums.correct / attempted) * 100 : null,
     percentage: (score / (sums.questions * a.marking.correct)) * 100,
+    /** Time over the scoring subjects only — the pace denominator. */
+    meritTimeSeconds,
     timeSeconds:
       a.overallTimeSeconds ??
       (a.subjects.every((s) => s.timeSeconds != null)

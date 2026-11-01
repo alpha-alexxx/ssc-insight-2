@@ -75,6 +75,10 @@ model MockAttempt {
   notes              String          @default("") @db.VarChar(5000)
   source             ImportSource    @default(manual)
   schemaVersion      Int             @default(2)
+  // Soft delete: a non-null value moves the attempt to Trash for 15 days.
+  // Every normal read filters `deletedAt: null` (attemptWhere owns that), and
+  // the value is never exported in a backup.
+  deletedAt          DateTime?       @db.Timestamptz(3)
   createdAt          DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime        @updatedAt @db.Timestamptz(3)
   subjects           SubjectResult[]
@@ -83,6 +87,7 @@ model MockAttempt {
   @@index([userId, platform, completedAt])
   @@index([userId, type, completedAt])
   @@index([userId, examId, completedAt])
+  @@index([userId, deletedAt])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "MockAttempt_name_trgm_idx")
   @@index([notes(ops: raw("gin_trgm_ops"))], type: Gin, map: "MockAttempt_notes_trgm_idx")
   @@schema("ssc_insight")
@@ -117,10 +122,14 @@ model CustomExam {
   userId    String
   name      String   @db.VarChar(80)
   tiers     Json
+  // Soft delete: hidden from the catalog while set. Attempts can never
+  // reference a trashed exam (the delete guard counts trashed attempts too).
+  deletedAt DateTime? @db.Timestamptz(3)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@index([userId])
+  @@index([userId, deletedAt])
   @@schema("ssc_insight")
 }
 
@@ -258,9 +267,14 @@ model TodoGroup {
  id String @id @default(uuid())
  userId String
  name String @db.VarChar(80)
+ // Soft delete: tasks keep their groupId so restoring the group restores
+ // membership. The unique name stays taken while trashed, which is what makes
+ // restore conflict-free.
+ deletedAt DateTime? @db.Timestamptz(3)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  tasks PersonalTask[]
  @@unique([userId,name])
+ @@index([userId, deletedAt])
  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "TodoGroup_name_trgm_idx")
  @@schema("ssc_insight")
 }

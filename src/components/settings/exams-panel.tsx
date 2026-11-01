@@ -37,6 +37,7 @@ import {
   type ExamsResponse,
 } from "@/lib/queries/exams";
 import { SUBJECTS, type SubjectId } from "@/lib/domain";
+import { trashKeys } from "@/lib/queries/trash";
 import { cn } from "@/lib/utils";
 import { usePanelDraft } from "./settings-guard";
 
@@ -203,8 +204,10 @@ export function ExamsPanel() {
     try {
       await deleteCustomExamRequest(id);
       await queryClient.invalidateQueries({ queryKey: examsKeys.all });
+      // The exam is now a Trash row; a mounted /trash must show it.
+      await queryClient.invalidateQueries({ queryKey: trashKeys.all });
       setDeleting(null);
-      toast.success("Custom exam removed");
+      toast.success("Moved to Trash", "Recoverable for 15 days");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete the exam");
     } finally {
@@ -377,10 +380,21 @@ export function ExamsPanel() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Move {deleting?.name} to Trash?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Its tiers, targets and percentile goal are removed. This cannot
-              be undone. An exam that still has logged mocks cannot be deleted.
+              It disappears from the catalog and the scope switcher, and stays
+              recoverable in Trash for 15 days. Its tiers, targets and
+              percentile goal come back with it — they are only dropped when it
+              is deleted permanently. An exam that still has logged mocks
+              cannot be deleted.
+              {deleting && exams?.activeExamId === deleting.id ? (
+                <>
+                  {" "}
+                  This is your active exam: your scope moves to another enabled
+                  tier. Restoring it will not switch the scope back.                </>
+              ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -392,7 +406,7 @@ export function ExamsPanel() {
                 if (deleting) void removeCustom(deleting.id);
               }}
             >
-              Delete exam
+              Move to Trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

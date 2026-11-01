@@ -134,6 +134,10 @@ export function attemptData(input: AttemptInput, pattern?: PatternShape) {
 
 export function attemptWhere(filters: Filters): Prisma.MockAttemptWhereInput {
   return {
+    // Trash boundary. Every attempt read funnels through this builder, so a
+    // trashed attempt cannot reach analytics, history, compare, the calendar,
+    // the plan matcher, or the AI context.
+    deletedAt: null,
     ...(filters.examId ? { examId: filters.examId } : {}),
     ...(filters.tier && filters.tier !== "all" ? { tierId: filters.tier } : {}),
     ...(filters.type && filters.type !== "all"

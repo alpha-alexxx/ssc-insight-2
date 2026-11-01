@@ -42,6 +42,7 @@ import {
   type BackupSettings,
 } from "./backup";
 import { normalizeSubtasks } from "./todos-core";
+import { clampImportedDeletedAt } from "./trash-core";
 import { RequestError } from "./api";
 
 /**
@@ -170,7 +171,7 @@ function directOrderBy(
 async function attemptsByIds(userId: string, ids: string[]) {
   if (!ids.length) return [];
   const rows = await database().mockAttempt.findMany({
-    where: { userId, id: { in: ids } },
+    where: { userId, id: { in: ids }, deletedAt: null },
     include: attemptInclude,
   });
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -254,6 +255,8 @@ export async function listAttemptsForAi(
   const rows = await database().mockAttempt.findMany({
     where: {
       userId,
+      // The coach must never reason about a deleted mock.
+      deletedAt: null,
       ...(examId ? { examId } : {}),
       ...(tierId && tierId !== "all" ? { tierId } : {}),
     },
@@ -265,8 +268,10 @@ export async function listAttemptsForAi(
 }
 
 export async function getAttempt(userId: string, id: string) {
-  const row = await database().mockAttempt.findUnique({
-    where: { id, userId },
+  // findFirst, not findUnique: the trash boundary is a non-unique predicate
+  // and a trashed attempt must 404 exactly like a missing one.
+  const row = await database().mockAttempt.findFirst({
+    where: { id, userId, deletedAt: null },
     include: attemptInclude,
   });
   if (!row) throw new RequestError("Mock not found", 404);
@@ -298,7 +303,8 @@ export async function updateAttempt(
   const data = attemptData(input, pattern);
   return toAttempt(
     await database().mockAttempt.update({
-      where: { id, userId },
+      // Extended-where-unique: a trashed attempt is not editable.
+      where: { id, userId, deletedAt: null },
       data: {
         ...data,
         subjects: { deleteMany: {}, create: data.subjects.create },
@@ -308,8 +314,19 @@ export async function updateAttempt(
   );
 }
 
+/**
+ * Soft delete. The row keeps its id and its SubjectResult children, so a
+ * restore is a single column write and no reference can dangle. `updateMany`
+ * with `deletedAt: null` makes a repeat delete a 404 rather than a second
+ * timestamp — the same "foreign and nonexistent ids look alike" rule the rest
+ * of the API follows.
+ */
 export async function deleteAttempt(userId: string, id: string) {
-  await database().mockAttempt.delete({ where: { id, userId } });
+  const result = await database().mockAttempt.updateMany({
+    where: { id, userId, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  if (!result.count) throw new RequestError("Mock not found", 404);
   return { id };
 }
 
@@ -329,7 +346,7 @@ export async function exportBackup(userId: string) {
       const [rows, settings, customExamRows, planTasks, planDays, groups, tasks] =
         await Promise.all([
           tx.mockAttempt.findMany({
-            where: { userId },
+            where: { userId, deletedAt: null },
             include: attemptInclude,
             orderBy: [{ completedAt: "asc" }, { id: "asc" }],
           }),
@@ -351,12 +368,12 @@ export async function exportBackup(userId: string) {
             orderBy: { day: "asc" },
           }),
           tx.todoGroup.findMany({
-            where: { userId },
+            where: { userId, deletedAt: null },
             orderBy: { createdAt: "asc" },
             select: { id: true, name: true },
           }),
           tx.personalTask.findMany({
-            where: { userId },
+            where: { userId, deletedAt: null },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           }),
         ]);
@@ -458,7 +475,9 @@ export async function importBackup(
     async (tx) => {
       const [existingRows, currentSettings] = await Promise.all([
         tx.mockAttempt.findMany({
-          where: { userId },
+          // Dedupe against live rows only: a trashed twin must not block an
+          // import, and a merge never resurrects deleted work.
+          where: { userId, deletedAt: null },
           include: attemptInclude,
         }),
         getTrackerSettings(userId),
@@ -558,7 +577,12 @@ export async function importBackup(
 
       let deleted = 0;
       if (options.mode === "replace") {
-        const result = await tx.mockAttempt.deleteMany({ where: { userId } });
+        // Replace mirrors the file onto LIVE mocks only. Trash is deliberately
+        // untouched: trashing thousands of rows would flood /trash and let a
+        // restore re-create records the imported file already replaced.
+        const result = await tx.mockAttempt.deleteMany({
+          where: { userId, deletedAt: null },
+        });
         deleted = result.count;
       }
 
@@ -581,13 +605,24 @@ export async function importBackup(
       }
 
       // Custom exams ride along with v3 backups; rows the account already
-      // has (same id) are left untouched so re-imports stay idempotent.
+      // has (same id) are left untouched so re-imports stay idempotent. A
+      // trashed row is restored instead: importing attempts that reference it
+      // would otherwise leave them scoped to an exam the catalog no longer
+      // lists.
       if (backup.customExams.length) {
-        const existingIds = await tx.customExam.findMany({
+        const existingRows = await tx.customExam.findMany({
           where: { userId, id: { in: backup.customExams.map((e) => e.id) } },
-          select: { id: true },
+          select: { id: true, deletedAt: true },
         });
-        const have = new Set(existingIds.map((row) => row.id));
+        const have = new Set(existingRows.map((row) => row.id));
+        const trashed = existingRows
+          .filter((row) => row.deletedAt)
+          .map((row) => row.id);
+        if (trashed.length)
+          await tx.customExam.updateMany({
+            where: { userId, id: { in: trashed } },
+            data: { deletedAt: null },
+          });
         const missing = backup.customExams.filter((exam) => !have.has(exam.id));
         if (missing.length)
           await tx.customExam.createMany({
@@ -679,7 +714,10 @@ async function importPlanner(
     await Promise.all([
       tx.planTaskProgress.findMany({ where: { userId } }),
       tx.planDayProgress.findMany({ where: { userId } }),
-      tx.todoGroup.findMany({ where: { userId }, select: { id: true, name: true } }),
+      tx.todoGroup.findMany({
+        where: { userId },
+        select: { id: true, name: true, deletedAt: true },
+      }),
       tx.personalTask.findMany({
         where: { userId },
         select: { id: true, title: true, dueDate: true },
@@ -775,6 +813,9 @@ async function importPlanner(
   }
 
   // Groups restore by name so a file from another account keeps its grouping.
+  // A name held by a TRASHED group is reused, not duplicated: the unique
+  // (userId, name) constraint includes trashed rows, and leaving the group
+  // trashed would silently capture the imported tasks in an invisible group.
   const groupIdByName = new Map(existingGroups.map((g) => [g.name, g.id]));
   const wantedGroups = new Set(
     planner.personalTasks
@@ -782,7 +823,17 @@ async function importPlanner(
       .filter((name): name is string => !!name),
   );
   for (const name of wantedGroups) {
-    if (groupIdByName.has(name)) continue;
+    const existing = groupIdByName.get(name);
+    if (existing) {
+      const row = existingGroups.find((g) => g.id === existing);
+      if (row?.deletedAt) {
+        await tx.todoGroup.update({
+          where: { id: existing },
+          data: { deletedAt: null },
+        });
+      }
+      continue;
+    }
     const created = await tx.todoGroup.create({
       data: { userId, name },
       select: { id: true },
@@ -816,7 +867,9 @@ async function importPlanner(
           ? (groupIdByName.get(incoming.groupName) ?? null)
           : null,
         subtasks: incoming.subtasks,
-        deletedAt: incoming.deletedAt ? new Date(incoming.deletedAt) : null,
+        // A deletion timestamp from an older backup is clamped so the import
+        // cannot create a row that is already past its retention window.
+        deletedAt: clampImportedDeletedAt(incoming.deletedAt),
         version: 1,
       },
     });

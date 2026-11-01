@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   bypassesMaintenance,
   classifyPath,
+  isCronPath,
   maintenanceActive,
   maintenanceRetryAfter,
   newRequestId,
@@ -136,6 +137,36 @@ test("maintenance bypass keeps health, auth flow, landing and the page itself re
   ]) {
     assert.equal(bypassesMaintenance(path), false, `${path} should be gated`);
   }
+});
+
+test("scheduled jobs are reachable without a session, and nothing else is", () => {
+  // A cron run carries a bearer secret, never a browser session. Gating it
+  // would redirect the scheduler to the landing and record a failed run.
+  assert.equal(isCronPath("/api/cron/trash-cleanup"), true);
+  assert.equal(isCronPath("/api/cron"), true);
+  assert.equal(bypassesMaintenance("/api/cron/trash-cleanup"), true);
+  // Prefix matching must not widen into a general API exemption.
+  for (const path of [
+    "/api/cronjobs",
+    "/api/cron-evil",
+    "/apicron",
+    "/dashboard/cron",
+    "/api/trash",
+    "/api/trash/restore",
+  ]) {
+    assert.equal(isCronPath(path), false, `${path} is not a cron path`);
+    assert.equal(
+      bypassesMaintenance(path),
+      false,
+      `${path} must stay gated`,
+    );
+  }
+  // The cron API is still a private API class: the route, not the proxy, is
+  // the authorization boundary.
+  assert.deepEqual(classifyPath("/api/cron/trash-cleanup"), {
+    area: "api",
+    route: "private",
+  });
 });
 
 test("safeNextPath only allows root-relative, protocol-relative-free paths", () => {

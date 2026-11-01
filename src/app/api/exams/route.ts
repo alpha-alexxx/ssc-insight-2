@@ -4,14 +4,13 @@ import {
   invalidateSettings,
   loadExamContext,
   saveTrackerSettings,
-  type TrackerSettingsShape,
+  tierKeyResolves,
 } from "@/lib/exam-settings";
 import {
   BUILT_IN_EXAMS,
   CUSTOM_FIRST_TIER_ID,
   parseTierKey,
   patternMaxScore,
-  structureSignature,
 } from "@/lib/exams";
 import { resolveWorkspaceTargets } from "@/lib/target-settings";
 import { markingSchema } from "@/lib/domain";
@@ -155,6 +154,21 @@ export const POST = defineRoute(
       )
     )
       throw new RequestError("An exam with this name already exists", 400);
+    // A trashed exam keeps its name so restore can never collide. Say so
+    // instead of letting the user hit an invisible wall.
+    const trashed = await database().customExam.findFirst({
+      where: {
+        userId: user.id,
+        deletedAt: { not: null },
+        name: { equals: input.name.trim(), mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (trashed)
+      throw new RequestError(
+        `An exam named “${input.name}” is in Trash. Restore it or delete it permanently first.`,
+        409,
+      );
     const tiers = assignTierIds(input.tiers);
     const row = await database().customExam.create({
       data: {
@@ -176,7 +190,7 @@ export const PUT = defineRoute(
     const input = customExamInputSchema.parse(await readBody(request));
     if (!input.id) throw new RequestError("Custom exam id is required", 400);
     const existing = await database().customExam.findFirst({
-      where: { id: input.id, userId: user.id },
+      where: { id: input.id, userId: user.id, deletedAt: null },
       select: { id: true },
     });
     if (!existing) throw new RequestError("Custom exam not found", 404);
@@ -189,6 +203,20 @@ export const PUT = defineRoute(
       )
     )
       throw new RequestError("An exam with this name already exists", 400);
+    const trashed = await database().customExam.findFirst({
+      where: {
+        userId: user.id,
+        deletedAt: { not: null },
+        id: { not: input.id },
+        name: { equals: input.name.trim(), mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (trashed)
+      throw new RequestError(
+        `An exam named “${input.name}” is in Trash. Restore it or delete it permanently first.`,
+        409,
+      );
     // Renames keep a tier's id stable when the label still matches, so
     // attempts recorded under the old label keep resolving.
     const previous = ctx.customExams.find((exam) => exam.id === input.id);
@@ -197,7 +225,7 @@ export const PUT = defineRoute(
       previous?.tiers.map((t) => ({ id: t.id, label: t.label })),
     );
     await database().customExam.update({
-      where: { id: input.id },
+      where: { id: input.id, userId: user.id, deletedAt: null },
       data: { name: input.name, tiers },
     });
     invalidateSettings(user.id);
@@ -214,11 +242,15 @@ export const DELETE = defineRoute(
       typeof body.id === "string" ? z.string().uuid().parse(body.id) : null;
     if (!id) throw new RequestError("Custom exam id is required", 400);
     const existing = await database().customExam.findFirst({
-      where: { id, userId: user.id },
+      where: { id, userId: user.id, deletedAt: null },
       select: { id: true },
     });
     if (!existing) throw new RequestError("Custom exam not found", 404);
-    // Attempts reference the exam id; deleting it would orphan their scope.
+    // Attempts reference the exam id; a trashed exam would orphan their scope.
+    // Trashed attempts are counted deliberately: purging an attempt does not
+    // re-point it, and restoring one must never resolve to a missing exam.
+    // The one deliberate unfiltered read: live-or-trashed is the whole point.
+    // eslint-disable-next-line no-restricted-syntax
     const attemptCount = await database().mockAttempt.count({
       where: { userId: user.id, examId: id },
     });
@@ -227,20 +259,28 @@ export const DELETE = defineRoute(
         `This exam still has ${attemptCount} logged mock${attemptCount === 1 ? "" : "s"}. Delete or reassign them first.`,
         409,
       );
-    await database().customExam.delete({ where: { id } });
+    // Soft delete. Scope falls back when this was the active exam, but
+    // enabledTiers and targets are left untouched: pruning here would make a
+    // restore lossy. They are pruned when the exam is permanently deleted.
+    await database().customExam.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
     const ctx = await loadExamContext(user.id);
     if (ctx.activeExamId === id) {
-      // Scope fell back to a deleted exam — move to CGL Tier 2 and drop every
-      // target this exam owned (its tier overrides, any default only its
-      // structure used, and its percentile goal).
+      // The fallback must be a tier that is ENABLED and still resolves, or the
+      // next scope save would be rejected for an active tier outside the
+      // enabled set. Prefer any surviving enabled tier; CGL Tier 2 is the
+      // anchor only when nothing else is reachable.
+      const survivor = ctx.enabledTiers.find(
+        (key) =>
+          parseTierKey(key)?.examId !== id && tierKeyResolves(ctx, key),
+      );
+      const parsed = survivor ? parseTierKey(survivor) : null;
       await saveTrackerSettings(user.id, {
         ...ctx,
-        activeExamId: "cgl",
-        activeTierId: "tier2",
-        enabledTiers: ctx.enabledTiers.filter(
-          (key) => !key.startsWith(`${id}:`),
-        ),
-        targets: pruneTargetsForExam(ctx.targets, id),
+        activeExamId: parsed?.examId ?? "cgl",
+        activeTierId: parsed?.tierId ?? "tier2",
       });
     }
     invalidateSettings(user.id);
@@ -249,28 +289,3 @@ export const DELETE = defineRoute(
   },
 );
 
-/** Remove everything a deleted custom exam owned. Structure defaults are
- * only dropped when no surviving tier still carries that signature, so a
- * default shared with a built-in paper is never lost with the custom exam. */
-function pruneTargetsForExam(
-  targets: TrackerSettingsShape["targets"],
-  examId: string,
-): TrackerSettingsShape["targets"] {
-  const tierTargets = Object.fromEntries(
-    Object.entries(targets.tierTargets).filter(
-      ([key]) => parseTierKey(key)?.examId !== examId,
-    ),
-  );
-  const percentiles = Object.fromEntries(
-    Object.entries(targets.percentiles).filter(([key]) => key !== examId),
-  );
-  const surviving = BUILT_IN_EXAMS.flatMap((exam) =>
-    exam.tiers.map((tier) => structureSignature(tier)),
-  );
-  const tierDefaults = Object.fromEntries(
-    Object.entries(targets.tierDefaults).filter(([signature]) =>
-      surviving.includes(signature),
-    ),
-  );
-  return { ...targets, tierTargets, percentiles, tierDefaults };
-}

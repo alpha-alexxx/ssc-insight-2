@@ -53,6 +53,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Trash2,
   TrendingUp,
   X,
   type LucideIcon,
@@ -110,6 +111,7 @@ export type IconName =
   | "file"
   | "fileCheck"
   | "report"
+  | "trash"
   // concepts
   | "target"
   | "book"
@@ -187,6 +189,7 @@ const ICONS: Record<IconName, IconEntry> = {
   download: { lucide: ArrowDownToLine },
   fileCheck: { lucide: FileCheck2 },
   report: { lucide: ChartNoAxesColumnIncreasing },
+  trash: { lucide: Trash2 },
   trend: { lucide: TrendingUp },
   layers: { lucide: Layers3 },
   shield: { lucide: ShieldCheck },

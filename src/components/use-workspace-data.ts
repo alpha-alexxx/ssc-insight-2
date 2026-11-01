@@ -121,15 +121,33 @@ export function useWorkspaceData() {
   // The debounce is the unified 350ms search debounce; useDebouncedValue
   // seeds instantly, so the first load is not delayed.
   const debouncedFilters = useDebouncedValue(filters, 350);
+  // Only the two analytical surfaces consume this payload. Asking on every
+  // view made the calendar and the task workspace pay for charts they never
+  // render; `enabled` keeps the query dormant elsewhere and lets the cache
+  // serve both surfaces from one entry.
+  const analyticsEnabled =
+    pathname === "/dashboard" || pathname === "/performance";
+  // The dashboard's preview is a fixed cross-type read ("what did I last
+  // score, and how is that moving?") so it always asks for "all". /performance
+  // owns the selectable scope. Sharing one `scope` state means the choice
+  // survives navigation; only the request differs.
+  const analyticsScope: DashboardScope =
+    pathname === "/dashboard" ? "all" : scope;
   const analyticsQuery = useQuery(
-    analyticsQueryOptions(scope, debouncedFilters),
+    analyticsQueryOptions(analyticsScope, debouncedFilters, {
+      enabled: analyticsEnabled,
+    }),
   );
   const allAttemptsQuery = useQuery(allAttemptsQueryOptions);
   const analytics = analyticsQuery.data ?? null;
   const allAttempts = allAttemptsQuery.data ?? EMPTY_ATTEMPTS;
-  const loading = analyticsQuery.isPending || allAttemptsQuery.isPending;
+  const loading =
+    (analyticsEnabled && analyticsQuery.isPending) ||
+    allAttemptsQuery.isPending;
   const error =
-    analyticsQuery.error?.message ?? allAttemptsQuery.error?.message ?? "";
+    (analyticsEnabled ? analyticsQuery.error?.message : undefined) ??
+    allAttemptsQuery.error?.message ??
+    "";
 
   /** Post-mutation reload for the shell-owned queries (analytics + the
    * unfiltered attempt list). The paged lists and per-id details are
@@ -187,7 +205,11 @@ export function useWorkspaceData() {
       sort,
       dir,
     };
-    const url = serializeWorkspaceState(pathname, { filters, scope, list });
+    const url = serializeWorkspaceState(pathname, {
+      filters,
+      scope: pathname === "/dashboard" ? "all" : scope,
+      list,
+    });
     if (window.location.pathname + window.location.search !== url)
       window.history.replaceState(null, "", url);
   }, [
@@ -220,6 +242,8 @@ export function useWorkspaceData() {
     filters,
     updateFilters,
     scope,
+    /** The scope the analytics payload was actually requested for. */
+    analyticsScope,
     setScope,
     allAttempts,
     analytics,

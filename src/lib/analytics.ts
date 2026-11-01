@@ -6,10 +6,10 @@ import {
   type PatternSection,
   type SectionId,
   type SubjectId,
-  FULL_MOCK_MAX_SCORE,
   SUBJECTS,
   sectionIds,
   subjectIds,
+  sectionForSubjects,
   subjectStats,
   totals,
 } from "./domain";
@@ -17,10 +17,10 @@ import { sectionsForAttempt } from "./exams";
 const average = (values: number[]) =>
   values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
-// One formatter per process, not one per call — istDateKey runs for every
-// performance point on every analytics request.
-const istDayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" });
-const istDateKey = (date: string) => istDayKey.format(new Date(date));
+/* One shared IST day key. This module used to build its own
+ * Intl.DateTimeFormat, identical to format.istDateKey — two formatters for one
+ * concept is two places to get the boundary wrong. */
+import { istDateKey } from "./format";
 export function filterAttempts(attempts: AnalyticsAttempt[], f: Filters) {
   return attempts.filter(
     (a) =>
@@ -63,7 +63,15 @@ export type PerformancePoint = {
   unattempted: number;
   questions: number;
   accuracy: number | null;
+  /** Wall-clock for the sitting; includes qualifying time. Not a pace input. */
   timeSeconds: number | null;
+  /**
+   * Seconds per attempted question over the SAME subjects the question count
+   * covers. Null when timing is incomplete or came from a whole-sitting
+   * override that cannot be decomposed — never zero, which would read as
+   * instant. See totals().meritTimeSeconds.
+   */
+  paceSeconds: number | null;
   rank: number | null;
   participants: number | null;
   percentile: number | null;
@@ -76,7 +84,16 @@ export type TrendSeries = {
 export type AnswerStack = {
   id: string;
   label: string;
+  /** Points in this group (a full mock contributes one per subject). */
   count: number;
+  /**
+   * Distinct saved attempts behind the group — never `count`.
+   *
+   * A single full mock yields four subject points, so the point count
+   * over-reports the evidence by 4× and is the wrong denominator for any
+   * "based on N results" claim.
+   */
+  attemptCount: number;
   correct: number;
   incorrect: number;
   unattempted: number;
@@ -88,6 +105,10 @@ export type AnswerStack = {
   score: number;
   maxScore: number;
   scorePercentage: number;
+  /** Seconds per attempted question, when timing was recorded. */
+  averageTimeSeconds: number | null;
+  /** How many of `attemptCount` results carried usable timing. */
+  timedCount: number;
   percentile: number | null;
   percentileCount: number;
   centerMetric: "percentile" | "score";
@@ -128,6 +149,19 @@ export type DeepDiveSubject = {
   }[];
 };
 
+/**
+ * Seconds per attempted question, over the same subject set as the count.
+ *
+ * Both halves must describe the same population: `meritTimeSeconds` excludes
+ * qualifying subjects, and so does `attempted`. Dividing wall-clock time
+ * (which includes Computer Knowledge) by merit questions would inflate pace on
+ * exactly the papers with a qualifying section.
+ */
+const paceOf = (meritTimeSeconds: number | null, attempted: number) =>
+  meritTimeSeconds != null && attempted > 0
+    ? meritTimeSeconds / attempted
+    : null;
+
 const comparePoints = (a: PerformancePoint, b: PerformancePoint) =>
   a.date.localeCompare(b.date) ||
   a.sourceAttemptId.localeCompare(b.sourceAttemptId) ||
@@ -160,6 +194,7 @@ function parentPoint(
     questions: t.questions,
     accuracy: t.accuracy,
     timeSeconds: t.timeSeconds,
+    paceSeconds: paceOf(t.meritTimeSeconds, t.attempted),
     rank: attempt.rank ?? null,
     participants: attempt.participants ?? null,
     percentile: attempt.percentile ?? null,
@@ -211,6 +246,12 @@ function derivedSectionPoint(
     timeSeconds: children.every((s) => s.timeSeconds != null)
       ? sum(children.map((s) => s.timeSeconds ?? 0))
       : null,
+    paceSeconds: paceOf(
+      children.every((row) => row.timeSeconds != null)
+        ? sum(children.map((row) => row.timeSeconds ?? 0))
+        : null,
+      attempted,
+    ),
     // A full mock's rank and percentile describe the whole attempt, not a section.
     rank: null,
     participants: null,
@@ -219,24 +260,14 @@ function derivedSectionPoint(
 }
 function explicitSectionPoint(attempt: AnalyticsAttempt): PerformancePoint | null {
   const sections = sectionsForAttempt(attempt.examId, attempt.tierId);
-  const section = sectionForAttemptSubjects(attempt, sections);
+  const section = sectionForSubjects(attempt.subjects, sections);
   return section
     ? parentPoint(attempt, section.id, section.id, section.name)
     : null;
 }
-function sectionForAttemptSubjects(
-  attempt: AnalyticsAttempt,
-  sections: readonly PatternSection[],
-): PatternSection | null {
-  const ids = new Set(attempt.subjects.map((s) => s.subjectId));
-  return (
-    sections.find(
-      (section) =>
-        ids.size === section.subjectIds.length &&
-        section.subjectIds.every((subjectId) => ids.has(subjectId)),
-    ) ?? null
-  );
-}
+/* Uses the shared matcher rather than a private copy: this ran identical
+ * logic to domain.sectionForSubjects, and two implementations of "is this the
+ * same subject set" is how a section silently stops being recognised. */
 function subjectPoints(attempt: AnalyticsAttempt): PerformancePoint[] {
   return attempt.subjects.map((subject) => {
     const stats = subjectStats(subject, attempt.marking);
@@ -261,6 +292,9 @@ function subjectPoints(attempt: AnalyticsAttempt): PerformancePoint[] {
       questions: stats.questions,
       accuracy: stats.accuracy,
       timeSeconds: stats.timeSeconds ?? null,
+      // A subject row is already a single subject, so its own time over its
+      // own attempted questions is exact.
+      paceSeconds: paceOf(stats.timeSeconds ?? null, stats.attempted),
       rank: attempt.rank ?? null,
       participants: attempt.participants ?? null,
       // A full or sectional percentile describes the whole paper, not this
@@ -398,10 +432,25 @@ function stacksFor(
     const percentile = average(
       percentileRows.map((row) => row.percentile!),
     );
+    /* Time is WEIGHTED, not a mean of means: one long mock and one short mock
+     * averaged per-point would let the short one pull the figure around. Total
+     * seconds over total attempted questions is what "how long do I take per
+     * question" actually means. */
+    const timedRows = rows.filter((row) => row.paceSeconds != null);
+    const timedCount = timedRows.length;
+    const averageTimeSeconds =
+      timedCount > 0
+        ? sum(timedRows.map((row) => row.paceSeconds! * row.attempted)) /
+          Math.max(
+            1,
+            sum(timedRows.map((row) => row.attempted)),
+          )
+        : null;
     return {
       id,
       label,
       count: rows.length,
+      attemptCount: new Set(rows.map((row) => row.sourceAttemptId)).size,
       correct,
       incorrect,
       unattempted,
@@ -414,6 +463,8 @@ function stacksFor(
       score,
       maxScore,
       scorePercentage: maxScore > 0 ? (score / maxScore) * 100 : 0,
+      averageTimeSeconds,
+      timedCount,
       percentile,
       percentileCount: percentileRows.length,
       centerMetric:
@@ -493,19 +544,30 @@ function deepDiveFor(
             .filter(({ stats: s }) => s.timeSeconds != null)
             .map(({ stats: s }) => s.timeSeconds!),
         ),
-        trend: stats.map(({ attempt, stats: s }) => ({
-          key: `${attempt.id}:${subjectId}`,
-          date: attempt.completedAt,
-          name: attempt.name,
-          sourceAttemptId: attempt.id,
-          sourceType: attempt.type,
-          score: s.score,
-          maxScore: s.maxScore,
-          percentage: s.percentage,
-          accuracy: s.accuracy,
-          minutes: s.timeSeconds == null ? null : s.timeSeconds / 60,
-          timeSeconds: s.timeSeconds ?? null,
-        })),
+        /* Ascending by attempt date, matching trend.points.
+         *
+         * This used to inherit the repository's DESC order, so the deep-dive
+         * line charts plotted time backwards while every other chart on the
+         * page ran forwards — the same mock sat at opposite ends of two axes. */
+        trend: stats
+          .map(({ attempt, stats: s }) => ({
+            key: `${attempt.id}:${subjectId}`,
+            date: attempt.completedAt,
+            name: attempt.name,
+            sourceAttemptId: attempt.id,
+            sourceType: attempt.type,
+            score: s.score,
+            maxScore: s.maxScore,
+            percentage: s.percentage,
+            accuracy: s.accuracy,
+            minutes: s.timeSeconds == null ? null : s.timeSeconds / 60,
+            timeSeconds: s.timeSeconds ?? null,
+          }))
+          .sort(
+            (a, b) =>
+              a.date.localeCompare(b.date) ||
+              a.sourceAttemptId.localeCompare(b.sourceAttemptId),
+          ),
       },
     ];
   });
@@ -549,23 +611,40 @@ export type TargetReference = {
 export function analyze(
   allAttempts: AnalyticsAttempt[],
   scope: DashboardScope = "all",
-  /** The paper the target is measured against. A bare number keeps the
+  /**
+   * The paper the target is measured against. A bare number keeps the
    * historical call site working; pass a TargetReference for a tier-matched
-   * line. Defaults to the legacy CGL Tier 2 total. */
-  target: number | TargetReference = FULL_MOCK_MAX_SCORE,
+   * line; pass null when nothing resolves.
+   *
+   * There is deliberately NO default. This used to default to the legacy
+   * CGL Tier 2 total (390), so a scope that resolved nothing — a fresh
+   * account, a non-CGL exam, the combined all-tiers view — silently drew its
+   * percentages and its target against the wrong paper's maximum. Omitting it
+   * now means "no reference": the maximum falls back to the largest one the
+   * scope actually contains, and no target line is drawn.
+   */
+  target?: number | TargetReference | null,
 ) {
-  const reference: TargetReference =
-    typeof target == "number"
-      ? {
-          marks: null,
-          maxScore: target,
-          percentage: null,
-          tierLabel: null,
-          comparable: true,
-        }
-      : target;
-  const targetMaxScore = reference.maxScore;
+  const reference: TargetReference | null =
+    target == null
+      ? null
+      : typeof target == "number"
+        ? {
+            marks: null,
+            maxScore: target,
+            percentage: null,
+            tierLabel: null,
+            comparable: true,
+          }
+        : target;
   const points = projectPerformance(allAttempts, scope);
+  /* Without a resolved reference, the honest maximum is the largest one the
+   * scope actually contains — never an assumed paper size. Null when the
+   * scope is empty, so the UI renders "no target" rather than "/390". */
+  const observedMaxScore = points.length
+    ? Math.max(...points.map((point) => point.maxScore))
+    : null;
+  const targetMaxScore = reference?.maxScore ?? observedMaxScore;
   const sourceAttemptIds = [...new Set(points.map((p) => p.sourceAttemptId))];
   const correct = sum(points.map((p) => p.correct));
   const incorrect = sum(points.map((p) => p.incorrect));
@@ -599,11 +678,22 @@ export function analyze(
     },
     target: {
       snapshots,
+      /**
+       * The paper maximum the target is expressed against. Renamed from
+       * `fullMockMaxScore`, which implied the legacy 390 paper; it can be any
+       * tier's maximum now, or null when the scope is empty.
+       */
+      maxScore: targetMaxScore,
+      /**
+       * @deprecated Alias of `maxScore`, kept for the existing readers in
+       * performance-overview. Remove once they are migrated.
+       */
       fullMockMaxScore: targetMaxScore,
-      marks: reference.marks,
-      percentage: reference.percentage,
-      tierLabel: reference.tierLabel,
-      comparable: reference.comparable,
+      marks: reference?.marks ?? null,
+      percentage: reference?.percentage ?? null,
+      tierLabel: reference?.tierLabel ?? null,
+      // No reference means nothing comparable to draw a line against.
+      comparable: reference?.comparable ?? false,
     },
     radial: stacksFor(scope, points),
     whereYouStand: buildWhereYouStand(allAttempts),
@@ -612,8 +702,18 @@ export function analyze(
 }
 export type Analytics = ReturnType<typeof analyze>;
 
-export function targetPercentage(targetScore: number | null, maxScore: number) {
-  return targetScore == null
+/**
+ * A target's share of its paper, in percent.
+ *
+ * Null when either side is unknown: a target with no paper cannot be expressed
+ * as a percentage, and 0 would read as "no target set" all the same while
+ * silently drawing a line at zero.
+ */
+export function targetPercentage(
+  targetScore: number | null,
+  maxScore: number | null,
+) {
+  return targetScore == null || maxScore == null || maxScore <= 0
     ? null
     : (targetScore / maxScore) * 100;
 }

@@ -7,6 +7,7 @@ import {
   UNSAFE_METHODS,
   bypassesMaintenance,
   classifyPath,
+  isCronPath,
   maintenanceActive,
   maintenanceRetryAfter,
   newRequestId,
@@ -201,7 +202,14 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
 
   // ── 4. Ungated endpoints ──────────────────────────────────────────────
   // Health probes and the auth API own their complete request lifecycle.
-  if (cls.area === "api" && (cls.route === "health" || cls.route === "auth")) {
+  // Scheduled jobs authenticate with a shared secret instead of a browser
+  // session, so the session guard below would redirect them to the landing
+  // and the platform would record every run as a failure. The route compares
+  // the token itself; passing through here grants nothing.
+  if (
+    cls.area === "api" &&
+    (cls.route === "health" || cls.route === "auth" || isCronPath(pathname))
+  ) {
     return passThrough();
   }
 

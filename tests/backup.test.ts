@@ -13,6 +13,7 @@ import {
   planImport,
 } from "../src/lib/backup";
 import { migrateLegacyExamTargets } from "../src/lib/target-settings";
+import { clampImportedDeletedAt, isTrashExpired } from "../src/lib/trash-core";
 import type { Attempt, AttemptInput, SubjectResult } from "../src/lib/domain";
 
 const quant: SubjectResult = {
@@ -624,6 +625,25 @@ test("v5 exports no ownership or identity fields with planner work", () => {
   const serialized = JSON.stringify(v5);
   assert.equal(serialized.includes("userId"), false);
   assert.equal(serialized.includes("@gmail.com"), false);
+});
+
+test("a personal task deleted long ago imports with a fresh recovery window", () => {
+  // A v5 file exported before Trash shipped can carry a `deletedAt` older than
+  // the retention window. Importing it verbatim would create a row that is
+  // already expired: invisible in the list, rejected on restore, and purged by
+  // the first cleanup run — the user's task would vanish without ever being
+  // recoverable. The import clamps it instead.
+  const now = Date.parse("2026-11-01T06:30:00.000Z");
+  const stale = "2026-08-01T00:00:00.000Z";
+  const clamped = clampImportedDeletedAt(stale, now);
+  assert.ok(clamped);
+  assert.equal(isTrashExpired(clamped, now), false);
+  // A fresh value is preserved exactly: a re-import must not extend a window
+  // the user is already partway through.
+  const fresh = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+  assert.equal(clampImportedDeletedAt(fresh, now)?.toISOString(), fresh);
+  // A live task stays live.
+  assert.equal(clampImportedDeletedAt(null, now), null);
 });
 
 test("a v4 file with the legacy target map migrates on read", () => {

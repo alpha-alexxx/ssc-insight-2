@@ -3,6 +3,7 @@ import { apiError, readBody } from "@/lib/api";
 import { aiNotConfigured, AiError, aiProviderError } from "@/lib/ai/errors";
 import { encodeNdjson } from "@/lib/ai/ndjson";
 import { chatMessages } from "@/lib/ai/prompts";
+import { AI_VIEWS } from "@/lib/ai/client-types";
 import {
   CONTEXT_TOKEN_ESTIMATE,
   reservationTokens,
@@ -35,15 +36,9 @@ const bodySchema = z
       .max(8),
     context: z
       .object({
-        view: z.enum([
-          "dashboard",
-          "calendar",
-          "tasks",
-          "plan",
-          "history",
-          "compare",
-          "settings",
-        ]),
+        // Derived from the shared list: a hand-maintained copy silently
+        // 400s the moment a new workspace view is added.
+        view: z.enum(AI_VIEWS),
         date: z.iso.date().optional(),
       })
       .optional(),
