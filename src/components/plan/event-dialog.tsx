@@ -85,7 +85,14 @@ export function EventDialog({
                             )}
                             aria-label={`Mark revision ${rt} ${day.revisionDone.includes(String(revisionIndex)) ? "incomplete" : "complete"}`}
                             onClick={() =>
-                              onToggleRevision(day, revisionIndex, true)
+                              // Send the real next value: this used to pass
+                              // `true` unconditionally, so a day revision
+                              // could be ticked but never unticked.
+                              onToggleRevision(
+                                day,
+                                revisionIndex,
+                                !day.revisionDone.includes(String(revisionIndex)),
+                              )
                             }
                             className={cn(
                               "relative mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[3px] border transition-colors after:absolute after:-inset-2.5 after:content-['']",

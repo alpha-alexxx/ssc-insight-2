@@ -4,12 +4,16 @@ import {
   invalidateSettings,
   loadExamContext,
   saveTrackerSettings,
+  type TrackerSettingsShape,
 } from "@/lib/exam-settings";
 import {
   BUILT_IN_EXAMS,
   CUSTOM_FIRST_TIER_ID,
+  parseTierKey,
   patternMaxScore,
+  structureSignature,
 } from "@/lib/exams";
+import { resolveWorkspaceTargets } from "@/lib/target-settings";
 import { markingSchema } from "@/lib/domain";
 import { database } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
@@ -100,9 +104,16 @@ function assignTierIds(
 }
 
 /** The full exam surface for the workspace: built-in catalog, this user's
- * custom exams (with their tiers), and the tier-level scope settings. */
+ * custom exams (with their tiers), the tier-level scope, and every tier's
+ * resolved target (with where it came from). One read feeds the switcher,
+ * the add form, the settings panels and the performance views. */
 export const GET = defineRoute({ kind: "read" }, async ({ user }) => {
   const ctx = await loadExamContext(user.id);
+  const resolved = resolveWorkspaceTargets(
+    ctx.targets,
+    BUILT_IN_EXAMS,
+    ctx.customExams,
+  );
   return {
     data: {
       builtIn: BUILT_IN_EXAMS,
@@ -117,7 +128,11 @@ export const GET = defineRoute({ kind: "read" }, async ({ user }) => {
       activeExamId: ctx.activeExamId,
       activeTierId: ctx.activeTierId,
       enabledTiers: ctx.enabledTiers,
-      examTargets: ctx.examTargets,
+      targets: ctx.targets,
+      preferences: ctx.preferences,
+      resolvedTargets: resolved.byTier,
+      percentiles: resolved.byExamPercentile,
+      targetPeers: resolved.peers,
     },
     cache: { maxAgeSec: 5, swrSec: 30 },
   };
@@ -215,16 +230,17 @@ export const DELETE = defineRoute(
     await database().customExam.delete({ where: { id } });
     const ctx = await loadExamContext(user.id);
     if (ctx.activeExamId === id) {
-      // Scope fell back to a deleted exam — move to CGL Tier 2.
+      // Scope fell back to a deleted exam — move to CGL Tier 2 and drop every
+      // target this exam owned (its tier overrides, any default only its
+      // structure used, and its percentile goal).
       await saveTrackerSettings(user.id, {
+        ...ctx,
         activeExamId: "cgl",
         activeTierId: "tier2",
         enabledTiers: ctx.enabledTiers.filter(
           (key) => !key.startsWith(`${id}:`),
         ),
-        examTargets: Object.fromEntries(
-          Object.entries(ctx.examTargets).filter(([examId]) => examId !== id),
-        ),
+        targets: pruneTargetsForExam(ctx.targets, id),
       });
     }
     invalidateSettings(user.id);
@@ -232,3 +248,29 @@ export const DELETE = defineRoute(
     return { data: { id } };
   },
 );
+
+/** Remove everything a deleted custom exam owned. Structure defaults are
+ * only dropped when no surviving tier still carries that signature, so a
+ * default shared with a built-in paper is never lost with the custom exam. */
+function pruneTargetsForExam(
+  targets: TrackerSettingsShape["targets"],
+  examId: string,
+): TrackerSettingsShape["targets"] {
+  const tierTargets = Object.fromEntries(
+    Object.entries(targets.tierTargets).filter(
+      ([key]) => parseTierKey(key)?.examId !== examId,
+    ),
+  );
+  const percentiles = Object.fromEntries(
+    Object.entries(targets.percentiles).filter(([key]) => key !== examId),
+  );
+  const surviving = BUILT_IN_EXAMS.flatMap((exam) =>
+    exam.tiers.map((tier) => structureSignature(tier)),
+  );
+  const tierDefaults = Object.fromEntries(
+    Object.entries(targets.tierDefaults).filter(([signature]) =>
+      surviving.includes(signature),
+    ),
+  );
+  return { ...targets, tierTargets, percentiles, tierDefaults };
+}

@@ -80,7 +80,7 @@ export const AttemptPagination = memo(function AttemptPagination({
           Showing {from}–{through} of {total} {noun}
         </p>
         <label className="flex items-center gap-1.5 text-xs muted">
-          <span className="hidden sm:inline">Per page</span>
+          <span className="hidden whitespace-nowrap sm:inline">Per page</span>
           <select
             aria-label="Rows per page"
             className="rounded-control py-1 pl-1.5 pr-6 text-xs"

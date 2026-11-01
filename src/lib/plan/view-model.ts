@@ -66,6 +66,11 @@ export type PersonalTaskView = {
   category: string;
   priority: "low" | "normal" | "high";
   status: PlanTaskStatus;
+  /** Checklist children, so a surface can show progress or tick one. */
+  subtasks: { id: string; title: string; completed: boolean }[];
+  groupId: string | null;
+  /** Optimistic-concurrency token; every edit must carry it. */
+  version: number;
   createdAt: string;
 };
 

@@ -21,6 +21,9 @@ function task(overrides: Partial<PersonalTaskView> = {}): PersonalTaskView {
     category: "revision",
     priority: "normal",
     status: "todo",
+    subtasks: [],
+    groupId: null,
+    version: 1,
     createdAt: "2026-10-27T00:00:00.000Z",
     ...overrides,
   };

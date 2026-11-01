@@ -2,14 +2,15 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import type { ExamDef } from "@/lib/exams";
 import type { PatternShape, SubjectId } from "@/lib/domain";
-import type { TrackerSettingsShape } from "@/lib/exam-settings";
+import type { TargetSettings } from "@/lib/target-settings";
 import { ALL_TIERS_ID } from "@/lib/exams";
 
 /**
  * Exams domain: the built-in catalog, the user's custom exams (per-tier
- * patterns), and the tier-level workspace scope (enabled "examId:tierId"
- * keys, active exam+tier, per-exam targets). One query feeds the switcher,
- * the add form, and the settings panel.
+ * patterns), the tier-level workspace scope, and every tier's resolved
+ * target. ONE query owns all of it — the old split between a settings query
+ * and an exams query meant two caches holding the same scope, and a write to
+ * one left the other stale for up to ten minutes.
  */
 
 export type CustomTierDto = {
@@ -26,14 +27,54 @@ export type CustomExamDto = {
   tiers: CustomTierDto[];
 };
 
+/** In-app-only preferences. There is no push, email or background delivery. */
+export type PreferencesDto = {
+  overdueEmphasis: boolean;
+  mockDueToday: boolean;
+  targetGap: boolean;
+  quietHours: { enabled: boolean; start: string; end: string };
+};
+
+/** One tier's resolved target, computed on the server against that tier's
+ * own maximum. `source` says where the number came from. */
+export type EffectiveTargetDto = {
+  marks: number | null;
+  maxScore: number;
+  signature: string;
+  source: "override" | "tier-default" | "none";
+  inheritedFromTierKey: string | null;
+  outOfRange: boolean;
+};
+
 export type ExamsResponse = {
   builtIn: ExamDef[];
   customExams: CustomExamDto[];
   activeExamId: string;
   activeTierId: string;
   enabledTiers: string[];
-  examTargets: Record<string, number | null>;
+  targets: TargetSettings;
+  preferences: PreferencesDto;
+  /** "examId:tierId" → resolved target. */
+  resolvedTargets: Record<string, EffectiveTargetDto>;
+  /** examId → percentile goal. */
+  percentiles: Record<string, number | null>;
+  /** structure signature → every tier key sharing it. */
+  targetPeers: Record<string, string[]>;
 };
+
+/** The scope-only write (PUT /api/settings). Targets are NOT accepted here. */
+export type ScopeInput = {
+  activeExamId: string;
+  activeTierId: string;
+  enabledTiers: string[];
+  preferences?: PreferencesDto;
+};
+
+export type TargetEditInput =
+  | { kind: "inherit"; tierKey: string }
+  | { kind: "override"; tierKey: string; marks: number | null }
+  | { kind: "default"; signature: string; marks: number | null }
+  | { kind: "percentile"; examId: string; percentile: number | null };
 
 export type CustomTierInput = {
   id?: string;
@@ -80,11 +121,22 @@ export async function deleteCustomExamRequest(id: string) {
   });
 }
 
-/** Persist the workspace scope (active exam+tier, enablement, targets). */
-export async function saveScopeRequest(settings: TrackerSettingsShape) {
-  return api<TrackerSettingsShape>("/api/settings", {
+/** Persist the workspace scope (active exam+tier, enablement, preferences).
+ * The response is the FULL fresh workspace, so the single cache is patched
+ * from it and nothing can drift. */
+export async function putScopeRequest(scope: ScopeInput) {
+  return api<ExamsResponse>("/api/settings", {
     method: "PUT",
-    body: JSON.stringify(settings),
+    body: JSON.stringify(scope),
+  });
+}
+
+/** Apply target edits atomically; the server validates each against the
+ * live catalog, so the client never needs to know a maximum. */
+export async function patchTargetsRequest(edits: TargetEditInput[]) {
+  return api<ExamsResponse>("/api/settings", {
+    method: "PATCH",
+    body: JSON.stringify({ edits }),
   });
 }
 
@@ -104,6 +156,8 @@ export function resolvePatternFrom(
       subjects: tier.subjects,
       marking: tier.marking,
       sections: tier.sections,
+      tierLabel: tier.label,
+      durationMinutes: tier.durationMinutes ?? null,
     };
   }
   const custom = response.customExams.find((exam) => exam.id === examId);
@@ -115,24 +169,29 @@ export function resolvePatternFrom(
     subjects: tier.subjects,
     marking: tier.marking,
     sections: [],
+    tierLabel: tier.label,
   };
 }
 
 /** The active tier's pattern; the combined "all" view anchors on the
- * exam's primary tier. */
+ * exam's default (else primary) tier. */
 export function activeExamPattern(response: ExamsResponse): PatternShape | null {
+  const builtIn = response.builtIn.find(
+    (exam) => exam.id === response.activeExamId,
+  );
   const tierId =
     response.activeTierId === ALL_TIERS_ID
-      ? (response.builtIn.find((exam) => exam.id === response.activeExamId)
-          ?.primaryTierId ??
-        response.customExams.find((exam) => exam.id === response.activeExamId)
-          ?.tiers[0]?.id ??
+      ? (builtIn?.defaultTierId ??
+        builtIn?.primaryTierId ??
+        response.customExams.find(
+          (exam) => exam.id === response.activeExamId,
+        )?.tiers[0]?.id ??
         response.activeTierId)
       : response.activeTierId;
   return resolvePatternFrom(response, response.activeExamId, tierId);
 }
 
-/** "SSC CGL · Tier 2" / "My Exam · Mains" for any attempt's exam+tier. */
+/** "SSC CGL · Tier 2 — Paper I" / "My Exam · Mains" for any attempt. */
 export function examTierLabel(
   response: ExamsResponse,
   examId: string,

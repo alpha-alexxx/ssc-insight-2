@@ -96,8 +96,10 @@ function sectionProfile(
   attempts: AnalyticsAttempt[],
   pattern: PatternShape,
 ) {
-  // Sections are tier-specific data (only CGL Tier 2 defines them today);
-  // aggregate only attempts of that tier so mixed-tier totals never mix.
+  // Sections are tier-specific data (only CGL and CHSL Tier 2 define them
+  // today); aggregate only attempts of that tier so mixed-tier totals never
+  // mix. A qualifying section is a gate, not merit, so it is reported only as
+  // a pass/fail readiness note — never folded into the merit section rows.
   const tierAttempts = attempts.filter(
     (attempt) =>
       attempt.examId === pattern.examId && attempt.tierId === pattern.tierId,
@@ -105,7 +107,9 @@ function sectionProfile(
   const rows = tierAttempts.flatMap((attempt) =>
     attempt.subjects.map((subject) => ({ attempt, subject })),
   );
-  return pattern.sections.map((section) => {
+  return pattern.sections
+    .filter((section) => !section.qualifying)
+    .map((section) => {
     const matching = rows.filter(({ subject }) =>
       section.subjectIds.includes(subject.subjectId),
     );

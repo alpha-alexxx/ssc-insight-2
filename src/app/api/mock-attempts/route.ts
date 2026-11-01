@@ -7,7 +7,6 @@ import {
   listAttemptsPaged,
 } from "@/lib/repository";
 import { loadExamContext, requirePattern } from "@/lib/exam-settings";
-import { patternMaxScore } from "@/lib/exams";
 import { defineRoute } from "@/lib/route-handler";
 import { audit } from "@/lib/audit";
 

@@ -19,7 +19,7 @@ import { PlainIcon, DuotoneTile } from "./icon";
 import { DashboardClock } from "./dashboard-clock";
 import { CommandPalette } from "./command-palette";
 import { AppFrame, VIEW_HREF, VIEW_META, type AppView } from "./app-shell";
-import { CompareView } from "./compare-view";
+import { CompareView, type CompareReference } from "./compare-view";
 import { DateRangeFilter } from "./date-range-filter";
 import { HistoryPanel } from "./history-panel";
 import { MockDetailDialog } from "./mock-detail-dialog";
@@ -43,14 +43,18 @@ import { useInvalidateTodos } from "./use-todos-data";
 import { planKeys } from "@/lib/queries/plan";
 import { CalendarView } from "./plan/calendar-view";
 import { PlanDayView } from "./plan/plan-day-view";
-import { SettingsPanels } from "./settings-panels";
+import { PlanWeekView } from "./plan/plan-week-view";
+import { SettingsView } from "./settings/settings-view";
 import { ToastProvider, useToast } from "./toast";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import { useThemePrefs, viewTransition } from "./theme-style-provider";
 import { useUiStore, type AiChatTab } from "@/stores/ui-store";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
-import { type TrackerSettings, settingsKeys, updateSettingsRequest } from "@/lib/queries/settings";
+import {
+  examsKeys,
+  patchTargetsRequest,
+} from "@/lib/queries/exams";
 import { ExamScopeProvider, useExamScope } from "./exam-context";
 import {
   attemptKeys,
@@ -67,7 +71,10 @@ import {
 } from "@/lib/domain";
 import { formatNumber as n } from "@/lib/domain";
 import { longDate, shortDate, isIsoDate } from "@/lib/format";
-import { safeWorkspaceReturnTo } from "@/lib/filters-url";
+import {
+  parseWorkspaceState,
+  safeWorkspaceReturnTo,
+} from "@/lib/filters-url";
 import { cn } from "@/lib/utils";
 import { istTodayIso } from "@/lib/plan/view-model";
 import type { AiScreenContext, AiView } from "@/lib/ai/client-types";
@@ -106,7 +113,10 @@ const PATH_VIEW: Record<string, AppView> = {
 };
 
 function viewForPathname(pathname: string): AppView {
-  if (pathname.startsWith("/plan/")) return "plan";
+  // The bare `/plan` renders the day view for a moment while the shell
+  // rewrites it to `/plan/<today>`; treating it as the dashboard would flash
+  // the wrong surface first.
+  if (pathname === "/plan" || pathname.startsWith("/plan/")) return "plan";
   return PATH_VIEW[pathname] ?? "dashboard";
 }
 
@@ -191,13 +201,13 @@ function WorkspaceShellInner({
     changeSort,
     target,
     targetInput,
-    setTargetInput,
     loading,
     error,
     refresh,
     reloadSettings,
   } = useWorkspaceData();
   const examScope = useExamScope();
+  const { activeExamId, activeTierId } = examScope;
   // Nothing enabled yet: the workspace guides the user to the exams panel
   // instead of rendering empty views, and /add never resolves a pattern.
   const noScope =
@@ -233,10 +243,27 @@ function WorkspaceShellInner({
   } = ai.coach;
   const [editing, setEditing] = useState<Attempt>();
   const [detail, setDetail] = useState<Attempt | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(() => {
+    // A shared comparison is restored from `?ids=` on first mount, before
+    // anything renders — the selection is the page's content, not a filter.
+    if (typeof window === "undefined") return [];
+    return parseWorkspaceState(window.location.search).ids ?? [];
+  });
   // Full objects for the compare selection, hydrated per id so selections
   // made anywhere (detail dialog, another picker page) still land.
   const selectedResults = useAttemptsByIds(selected);
+  // Keep `?ids=` in step so a comparison survives a reload and can be shared.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (view !== "compare") return;
+    const params = new URLSearchParams(window.location.search);
+    if (selected.length) params.set("ids", selected.join(","));
+    else params.delete("ids");
+    const query = params.toString();
+    const url = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    if (window.location.pathname + window.location.search !== url)
+      window.history.replaceState(null, "", url);
+  }, [selected, view]);
   const [busy, setBusy] = useState(false);
   // Global shell UI state lives in the Zustand store (stores/ui-store.ts):
   // palette visibility, the AI drawer flag/tab, the planner date, and the
@@ -248,21 +275,40 @@ function WorkspaceShellInner({
   const aiChatTab = useUiStore((s) => s.aiChatTab);
   const plannerDate = useUiStore((s) => s.plannerDate);
   const setPlannerDate = useUiStore((s) => s.setPlannerDate);
+
+  // The bare `/plan` path has no date of its own, so it resolves to today in
+  // IST and replaces the entry in place. A redirect in the route file cannot
+  // do this: the (workspace) layout discards `children`, so the page never
+  // renders. `replaceState` (not push) keeps Back from bouncing.
+  useEffect(() => {
+    if (pathname !== "/plan") return;
+    const today = istTodayIso();
+    setPlannerDate(today);
+    window.history.replaceState(null, "", `/plan/${today}`);
+  }, [pathname, setPlannerDate]);
   // The hidden file input lives in this component's JSX; the import hook
   // only touches it inside callbacks.
   const fileRef = useRef<HTMLInputElement>(null);
 
   // A deep-linked /plan/<date> is authoritative for that view without a
   // state-syncing effect. Calendar selection supplies the fallback date.
+  // /plan/week/<date> resolves the same way so the week view is a real,
+  // shareable address rather than a mode inside the day page.
   const pathPlanDate = useMemo(() => {
-    if (!pathname.startsWith("/plan/")) return null;
+    const prefix = pathname.startsWith("/plan/week/")
+      ? "/plan/week/"
+      : pathname.startsWith("/plan/")
+        ? "/plan/"
+        : null;
+    if (!prefix) return null;
     try {
-      const value = decodeURIComponent(pathname.slice("/plan/".length));
+      const value = decodeURIComponent(pathname.slice(prefix.length));
       return isIsoDate(value) ? value : null;
     } catch {
       return null;
     }
   }, [pathname]);
+  const isWeekView = pathname.startsWith("/plan/week/");
   const effectivePlannerDate = pathPlanDate ?? plannerDate;
 
   /** Plain route change — keeps in-progress state (editing, selection). */
@@ -416,22 +462,33 @@ function WorkspaceShellInner({
     setBusy(true);
     try {
       const value = targetInput.trim() ? Number(targetInput) : null;
-      // The target is per exam: merge into the existing examTargets map and
-      // PUT the full scope shape. Write-through: the PUT response is the
-      // fresh settings payload, so the cache updates without a refetch.
-      const current = queryClient.getQueryData<TrackerSettings>(
-        settingsKeys.current(),
-      );
-      const fresh = await updateSettingsRequest({
-        activeExamId: current?.activeExamId ?? "cgl",
-        activeTierId: current?.activeTierId ?? "tier2",
-        enabledTiers: current?.enabledTiers ?? [],
-        examTargets: {
-          ...(current?.examTargets ?? {}),
-          [current?.activeExamId ?? "cgl"]: value,
-        },
-      });
-      queryClient.setQueryData(settingsKeys.current(), fresh);
+      // The target belongs to a TIER, not an exam: the active scope's tier
+      // is the one the user is looking at, so the edit is anchored there and
+      // the server validates it against that tier's own maximum.
+      const tierKey =
+        activeTierId === "all"
+          ? (() => {
+              // The combined view edits the exam's anchor tier.
+              const exam = examScope.exams?.builtIn.find(
+                (e) => e.id === activeExamId,
+              );
+              const anchor =
+                exam?.defaultTierId ??
+                exam?.primaryTierId ??
+                examScope.exams?.customExams.find(
+                  (e) => e.id === activeExamId,
+                )?.tiers[0]?.id;
+              return anchor ? `${activeExamId}:${anchor}` : null;
+            })()
+          : `${activeExamId}:${activeTierId}`;
+      if (!tierKey) {
+        toast.error("Choose an exam tier first", "Enable a tier in Settings.");
+        return false;
+      }
+      const fresh = await patchTargetsRequest([
+        { kind: "override", tierKey, marks: value },
+      ]);
+      queryClient.setQueryData(examsKeys.current(), fresh);
       toast.success("Target updated");
       return true;
     } catch (e) {
@@ -443,7 +500,14 @@ function WorkspaceShellInner({
     } finally {
       setBusy(false);
     }
-  }, [queryClient, targetInput, toast]);
+  }, [
+    activeExamId,
+    activeTierId,
+    examScope.exams,
+    queryClient,
+    targetInput,
+    toast,
+  ]);
 
   // A backup import (merge or replace) can change every data domain at
   // once — mocks, plan progress, personal tasks — so the commit revalidates
@@ -501,6 +565,43 @@ function WorkspaceShellInner({
   const compared = useMemo(
     () => collectSelectedAttempts(selectedResults),
     [selectedResults],
+  );
+  /** Compare rows stage the selection and take the user to the comparison,
+   * so a row action in History has a visible destination. */
+  const compareFromRow = useCallback(
+    (a: Attempt) => {
+      setSelected((ids) =>
+        ids.includes(a.id) ? ids : ids.length < 4 ? [...ids, a.id] : ids,
+      );
+      go("compare");
+    },
+    [go],
+  );
+  /**
+   * The target shown beside a compared mock must be the target for THAT
+   * mock\u2019s own paper, resolved from the exam payload rather than inferred
+   * from the active scope \u2014 comparing a CGL Tier 1 mock against a Tier 2
+   * target would be meaningless.
+   */
+  const compareAveragePercentage =
+    historyList.data?.stats?.avgScorePct ??
+    analytics?.summary.averagePercentage ??
+    null;
+  const compareAverageCount =
+    historyList.data?.stats?.totalMocks ?? analytics?.pointCount ?? null;
+  const compareReference = useMemo<CompareReference>(
+    () => ({
+      targetFor: (attempt) => {
+        const target = examScope.targetForTier(
+          `${attempt.examId}:${attempt.tierId}`,
+        );
+        if (!target?.marks) return null;
+        return { marks: target.marks, maxScore: target.maxScore };
+      },
+      averagePercentage: compareAveragePercentage,
+      averageCount: compareAverageCount,
+    }),
+    [compareAverageCount, compareAveragePercentage, examScope],
   );
   const platforms = useMemo(
     () => [...new Set(allAttempts.map((a) => a.platform))].sort(),
@@ -601,6 +702,11 @@ function WorkspaceShellInner({
     [go],
   );
   const clearCompare = useCallback(() => setSelected([]), []);
+  /** Restores the record list to "everything": the action the filtered-empty
+   * state advertises. */
+  const clearWorkspaceFilters = useCallback(() => {
+    updateFilters(() => ({ type: "all" }));
+  }, [updateFilters]);
   const toggleCompare = useCallback(
     (id: string) =>
       setSelected((ids) =>
@@ -838,26 +944,36 @@ function WorkspaceShellInner({
                         onSelectedDateChange={setPlannerDate}
                       />
                     ) : view === "tasks" ? (
-                      <MyTasksView />
+                      <MyTasksView planApi={planApi} />
                     ) : view === "plan" ? (
-                      <PlanDayView
-                        date={decodeURIComponent(
-                          pathname.slice("/plan/".length),
-                        )}
-                        planApi={planApi}
-                        attempts={allAttempts}
-                        onAddMock={addMockForDate}
-                        onOpenAttempt={openDetail}
-                      />
+                      isWeekView ? (
+                        <PlanWeekView
+                          date={pathPlanDate ?? effectivePlannerDate}
+                          planApi={planApi}
+                          onOpenDay={(next) => {
+                            setPlannerDate(next);
+                            router.push(`/plan/${next}`);
+                          }}
+                        />
+                      ) : (
+                        <PlanDayView
+                          // The route segment is already decoded by Next; a
+                          // second decodeURIComponent threw on a stray "%" and
+                          // took the whole shell down. The memo above validates
+                          // the date and falls back to the planner date.
+                          date={pathPlanDate ?? effectivePlannerDate}
+                          planApi={planApi}
+                          attempts={allAttempts}
+                          onAddMock={addMockForDate}
+                          onOpenAttempt={openDetail}
+                        />
+                      )
                     ) : view === "settings" ? (
-                      <SettingsPanels
-                        target={target}
-                        targetInput={targetInput}
-                        setTargetInput={setTargetInput}
-                        saveTarget={saveTarget}
-                        busy={busy}
+                      <SettingsView
                         userName={userName}
                         userEmail={userEmail}
+                        saveTarget={saveTarget}
+                        busy={busy}
                         onDownload={(format) => void download(format)}
                         onChooseFile={() => fileRef.current?.click()}
                         fileInput={
@@ -872,24 +988,7 @@ function WorkspaceShellInner({
                             }
                           />
                         }
-                        backupName={backup.backupName}
-                        preview={backup.preview}
-                        importMode={backup.importMode}
-                        changeImportMode={backup.changeImportMode}
-                        applyTarget={backup.applyTarget}
-                        changeApplyTarget={backup.changeApplyTarget}
-                        safetyDownloaded={backup.safetyDownloaded}
-                        onDownloadSafety={() =>
-                          void backup.downloadSafetyBackup()
-                        }
-                        onReset={backup.resetImport}
-                        onCommit={() => void backup.commitImport(false)}
-                        settingsChange={
-                          backup.preview != null &&
-                          backup.applyTarget &&
-                          backup.preview.settings.available &&
-                          backup.preview.settings.changed
-                        }
+                        backup={backup}
                         onOpenReplace={() => backup.setReplaceOpen(true)}
                       />
                     ) : view === "dashboard" ? (
@@ -950,6 +1049,8 @@ function WorkspaceShellInner({
                           <CompareView
                             data={compareList.data}
                             isFetching={compareList.isFetching}
+                            error={compareList.isError ? compareList.error : null}
+                            onRetry={() => void compareList.refetch()}
                             onPageChange={setComparePage}
                             onPageSizeChange={setPageSize}
                             compared={compared}
@@ -957,11 +1058,17 @@ function WorkspaceShellInner({
                             onToggle={toggleCompare}
                             onClear={clearCompare}
                             onOpen={openDetail}
+                            reference={compareReference}
                           />
                         ) : (
                           <HistoryPanel
                             data={historyList.data}
                             isFetching={historyList.isFetching}
+                            error={historyList.isError ? historyList.error : null}
+                            onRetry={() => {
+                              clearWorkspaceFilters();
+                              void historyList.refetch();
+                            }}
                             sort={{ key: sort, dir }}
                             onSort={changeSort}
                             onPageChange={setPage}
@@ -970,6 +1077,8 @@ function WorkspaceShellInner({
                             onSearch={searchFilter}
                             onOpen={openDetail}
                             onAdd={add}
+                            onCompare={compareFromRow}
+                            accountTotal={allAttempts.length}
                           />
                         )}
                       </>

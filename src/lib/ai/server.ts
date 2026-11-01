@@ -2,12 +2,13 @@ import "server-only";
 import { listAttemptsForAi } from "../repository";
 import { buildAiContext } from "./context";
 import {
-  activeShape,
+  activeResolved,
   loadExamContext,
-  resolvePrimary,
-  targetForExam,
+  targetForTier,
 } from "../exam-settings";
+import { patternShape } from "../exam-pattern";
 import type { PatternShape } from "../domain";
+import { RequestError } from "../api";
 import type { AiConfig } from "./config-core";
 
 export type AiBundle = {
@@ -17,28 +18,42 @@ export type AiBundle = {
 };
 
 /**
- * AI context is scoped to the active exam (the workspace scope). Target math
- * anchors on the primary tier; per-attempt scoring uses each attempt's own
- * marking snapshot.
+ * AI context is scoped to the active exam AND tier. Target math anchors on
+ * whatever tier the workspace is actually showing, so a CPO workspace is
+ * described as CPO Paper I — never as the CGL Tier 2 paper the old fallback
+ * silently substituted.
  */
 export async function loadAiBundle(userId: string): Promise<AiBundle> {
   const ctx = await loadExamContext(userId);
+  const resolved = activeResolved(ctx);
   // The combined "all" view leaves the tier open; concrete tiers scope both
   // the attempt list and the prompt's pattern.
-  const tierId =
-    ctx.activeTierId === "all" ? undefined : ctx.activeTierId;
-  const attempts = await listAttemptsForAi(userId, ctx.activeExamId, tierId);
-  const primary = resolvePrimary(ctx, ctx.activeExamId);
-  const examName = primary?.examName ?? "SSC CGL";
+  const tierId = resolved ? resolved.tier.id : undefined;
+  const attempts = await listAttemptsForAi(
+    userId,
+    ctx.activeExamId,
+    ctx.activeTierId === "all" ? undefined : tierId,
+  );
+
+  if (!resolved) {
+    // Nothing enabled yet: the AI surface fails closed with an actionable
+    // message rather than inventing a paper to reason about.
+    throw new RequestError(
+      "Enable at least one exam tier in Settings before using the coach.",
+      400,
+    );
+  }
+
+  const target = targetForTier(ctx, resolved.examId, resolved.tier.id);
   return {
     context: buildAiContext(
       attempts,
-      targetForExam(ctx, ctx.activeExamId),
-      activeShape(ctx),
-      examName,
+      target?.marks ?? null,
+      patternShape(resolved),
+      resolved.examName,
     ),
-    shape: activeShape(ctx),
-    examName,
+    shape: patternShape(resolved),
+    examName: resolved.examName,
   };
 }
 

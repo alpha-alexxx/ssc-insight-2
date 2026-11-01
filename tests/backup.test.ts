@@ -12,6 +12,7 @@ import {
   parseImportRequest,
   planImport,
 } from "../src/lib/backup";
+import { migrateLegacyExamTargets } from "../src/lib/target-settings";
 import type { Attempt, AttemptInput, SubjectResult } from "../src/lib/domain";
 
 const quant: SubjectResult = {
@@ -89,7 +90,8 @@ const SETTINGS = {
   activeExamId: "cgl",
   activeTierId: "tier2",
   enabledTiers: ["cgl:tier2"],
-  examTargets: { cgl: 320 },
+  // A legacy per-exam target is pinned to the tier it was measured on.
+  targets: migrateLegacyExamTargets({ cgl: 320 }),
 };
 const backup = buildBackup(
   [subject, full],
@@ -107,8 +109,13 @@ test("v2 backup includes complete records, target, and metadata but no ownership
     subjectResults: 5,
     firstCompletedAt: "2026-10-05T00:00:00.000Z",
     lastCompletedAt: "2026-10-09T00:00:00.000Z",
+    // Planner counts ride along so a preview can say what a restore adds.
+    planTasks: 0,
+    planDays: 0,
+    personalTasks: 0,
+    todoGroups: 0,
   });
-  assert.equal(backup.settings.examTargets.cgl, 320);
+  assert.equal(backup.settings.targets.tierTargets["cgl:tier2"], 320);
   assert.deepEqual(backup.warnings, []);
   assert.deepEqual(
     backup.attempts.map((row) => row.id),
@@ -122,10 +129,10 @@ test("v2 backup includes complete records, target, and metadata but no ownership
 
 test("v2 parse strips provenance identifiers and preserves user fields", () => {
   const parsed = parseBackup(JSON.parse(JSON.stringify(backup)));
-  assert.equal(parsed.version, 4);
+  assert.equal(parsed.version, 5);
   assert.equal(parsed.legacy, false);
   assert.equal(parsed.hasSettings, true);
-  assert.equal(parsed.settings?.examTargets.cgl, 320);
+  assert.equal(parsed.settings?.targets.tierTargets["cgl:tier2"], 320);
   assert.equal(parsed.attempts.length, 2);
   assert.equal(parsed.attempts[0].source, "manual");
   assert.equal(parsed.attempts[1].source, "paste");
@@ -186,8 +193,8 @@ test("legacy v1 backups remain importable without settings", () => {
 
 test("unsupported, malformed, and invalid-record backups fail cleanly", () => {
   assert.throws(
-    () => parseBackup({ ...backup, formatVersion: 5 }),
-    /format version 5/,
+    () => parseBackup({ ...backup, formatVersion: 6 }),
+    /format version 6/,
   );
   assert.throws(
     () => parseBackup({ format: "other", formatVersion: 4 }),
@@ -224,7 +231,7 @@ test("target and attempt limits are validated", () => {
       ...backup,
       formatVersion: 2,
       settings: { targetScore: 0 },
-    }).settings?.examTargets.cgl,
+    }).settings?.targets.tierTargets["cgl:tier2"],
     0,
   );
   assert.equal(
@@ -232,7 +239,7 @@ test("target and attempt limits are validated", () => {
       ...backup,
       formatVersion: 2,
       settings: { targetScore: 390 },
-    }).settings?.examTargets.cgl,
+    }).settings?.targets.tierTargets["cgl:tier2"],
     390,
   );
   assert.throws(
@@ -293,7 +300,13 @@ test("v3 backups map exam-level scope onto tier keys", () => {
     activeExamId: "cpo",
     activeTierId: "paper1",
     enabledTiers: ["cgl:tier2", "cpo:paper1"],
-    examTargets: { cgl: 320 },
+    // The legacy per-exam target pins to its frozen primary tier.
+    targets: {
+      version: 2,
+      percentiles: {},
+      tierDefaults: {},
+      tierTargets: { "cgl:tier2": 320 },
+    },
   });
   assert.deepEqual(parsed.customExams[0].tiers, [
     {
@@ -330,7 +343,7 @@ test("parseImportRequest supports new and legacy requests", () => {
   assert.equal(legacy.options.preview, true);
   const topLevelV4 = parseImportRequest({ ...backup, preview: true });
   assert.equal(topLevelV4.options.legacyRequest, false);
-  assert.equal(topLevelV4.backup.version, 4);
+  assert.equal(topLevelV4.backup.version, 5);
   assert.throws(
     () =>
       parseImportRequest({
@@ -514,4 +527,140 @@ test("ownership fields cannot survive a v2 parse", () => {
   assert.equal(serialized.includes("other-user"), false);
   assert.equal(serialized.includes("other@example.com"), false);
   assert.equal(serialized.includes("userId"), false);
+});
+
+/* ---------------- format 5: targets, preferences, planner ---------------- */
+
+const PLANNER = {
+  planTasks: [
+    {
+      taskKey: "d3:0",
+      completed: true,
+      score: 210,
+      percentile: 78.5,
+      wrong: 6,
+      unattempted: 4,
+      rev1: true,
+      rev2: false,
+      rev3: false,
+      notes: "Lost marks on DI",
+    },
+  ],
+  planDays: [
+    {
+      day: 3,
+      checklistDone: ["attempt-tests", "analyse-errors"],
+      revisionDone: ["0"],
+      dayNotes: "Slow in geometry",
+    },
+  ],
+  todoGroups: [{ name: "Quant" }],
+  personalTasks: [
+    {
+      title: "Revise profit & loss",
+      notes: null,
+      dueDate: "2026-10-30",
+      url: "https://example.com/formulas",
+      category: "revision",
+      priority: "high",
+      status: "in_progress",
+      groupName: "Quant",
+      subtasks: [{ id: "s1", title: "Formula sheet", completed: true }],
+      deletedAt: null,
+      createdAt: "2026-10-28T00:00:00.000Z",
+    },
+  ],
+};
+
+const v5 = buildBackup(
+  [subject, full],
+  {
+    ...SETTINGS,
+    targets: {
+      version: 2,
+      percentiles: { cgl: 95 },
+      tierDefaults: {},
+      tierTargets: { "cgl:tier2": 320, "cgl:tier1": null },
+    },
+    preferences: {
+      overdueEmphasis: true,
+      mockDueToday: false,
+      targetGap: true,
+      quietHours: { enabled: true, start: "22:00", end: "07:00" },
+    },
+  },
+  [],
+  new Date("2026-10-25T10:00:00.000Z"),
+  PLANNER,
+);
+
+test("v5 carries planner work and target settings through a round trip", () => {
+  assert.equal(v5.formatVersion, 5);
+  assert.deepEqual(v5.summary, {
+    attempts: 2,
+    subjectResults: 5,
+    firstCompletedAt: "2026-10-05T00:00:00.000Z",
+    lastCompletedAt: "2026-10-09T00:00:00.000Z",
+    planTasks: 1,
+    planDays: 1,
+    personalTasks: 1,
+    todoGroups: 1,
+  });
+
+  const parsed = parseBackup(JSON.parse(JSON.stringify(v5)));
+  assert.equal(parsed.version, 5);
+  assert.deepEqual(parsed.planner.planTasks[0], PLANNER.planTasks[0]);
+  assert.deepEqual(parsed.planner.planDays[0], PLANNER.planDays[0]);
+  assert.deepEqual(parsed.planner.personalTasks[0], PLANNER.personalTasks[0]);
+  assert.equal(parsed.settings?.targets.percentiles.cgl, 95);
+  // An explicit null override (deliberately no target) survives, distinct
+  // from an absent key (which means "inherit").
+  assert.equal(parsed.settings?.targets.tierTargets["cgl:tier1"], null);
+  assert.equal(parsed.settings?.preferences?.mockDueToday, false);
+  assert.equal(parsed.settings?.preferences?.quietHours.start, "22:00");
+});
+
+test("v5 exports no ownership or identity fields with planner work", () => {
+  const serialized = JSON.stringify(v5);
+  assert.equal(serialized.includes("userId"), false);
+  assert.equal(serialized.includes("@gmail.com"), false);
+});
+
+test("a v4 file with the legacy target map migrates on read", () => {
+  // Strip the v5 additions back to the v4 shape the app wrote before this
+  // change: tier-level scope plus the pre-v2 per-exam marks map.
+  const v4 = {
+    format: BACKUP_FORMAT,
+    formatVersion: 4,
+    exportedAt: v5.exportedAt,
+    summary: {
+      attempts: 2,
+      subjectResults: 5,
+      firstCompletedAt: "2026-10-05T00:00:00.000Z",
+      lastCompletedAt: "2026-10-09T00:00:00.000Z",
+    },
+    settings: {
+      activeExamId: "cgl",
+      activeTierId: "tier2",
+      enabledTiers: ["cgl:tier2"],
+      examTargets: { cgl: 320 },
+    },
+    customExams: [],
+    attempts: v5.attempts,
+    warnings: [],
+  };
+  const parsed = parseBackup(v4);
+  assert.equal(parsed.version, 4);
+  // The legacy value pins to the tier it was measured against.
+  assert.equal(parsed.settings?.targets.tierTargets["cgl:tier2"], 320);
+  // A v4 file has no planner block, and that reads as an empty one.
+  assert.deepEqual(parsed.planner.planTasks, []);
+  assert.deepEqual(parsed.planner.personalTasks, []);
+});
+
+test("a backup from a newer format is refused, not guessed at", () => {
+  assert.throws(
+    () => parseBackup({ ...v5, formatVersion: 6 }),
+    /format version 6/,
+  );
 });

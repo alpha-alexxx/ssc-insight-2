@@ -18,6 +18,7 @@ import { addIsoDays, istTodayIso } from "@/lib/plan/view-model";
 import { longDate, weekdayDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PersonalCalendar } from "../plan/personal-calendar";
+import { usePlanData } from "../use-plan-data";
 import { OverviewStrip } from "./overview-strip";
 import { QuickAddBar } from "./quick-add-bar";
 import { TaskToolbar, filterCount } from "./task-toolbar";
@@ -28,6 +29,7 @@ import { TaskEditor } from "./task-editor";
 import { GroupsManagerDialog } from "./groups-manager";
 import { AiPlanSheet } from "./ai-plan-sheet";
 import { TasksEmptyState } from "./tasks-empty-state";
+import { PlanRail } from "./plan-rail";
 import {
   activeFilterEntries,
   useTasksViewState,
@@ -68,7 +70,13 @@ type RescheduleState =
   | { mode: "bulk" }
   | null;
 
-export function MyTasksView() {
+export function MyTasksView({
+  planApi,
+}: {
+  /** The shell mounts the plan once; this surface only reads it, so plan
+   * work stays on the plan surfaces. */
+  planApi: ReturnType<typeof usePlanData>;
+}) {
   const today = istTodayIso();
   const toast = useToast();
   const overlayFocus = useOverlayFocus();
@@ -1051,6 +1059,7 @@ export function MyTasksView() {
         </main>
 
         <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1">
+          <PlanRail plan={planApi.plan} today={today} />
           <section className="panel p-4" aria-label="Task calendar">
             <PersonalCalendar
               selected={dayDetail ?? today}

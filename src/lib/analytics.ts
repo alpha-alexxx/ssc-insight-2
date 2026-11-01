@@ -172,6 +172,11 @@ function derivedSectionPoint(
 ): PerformancePoint | null {
   const section = sections.find((s) => s.id === sectionId);
   if (!section) return null;
+  // A qualifying section (CGL/CHSL Section III, Computer Knowledge) is a
+  // pass/fail gate, not merit: it must never produce a sectional point, or a
+  // full mock would contribute a third point and the merit series would mix
+  // a qualifying paper into comparable section trends.
+  if (section.qualifying) return null;
   const children = attempt.subjects.filter((subject) =>
     section.subjectIds.includes(subject.subjectId),
   );
@@ -522,13 +527,44 @@ function targetSnapshots(points: PerformancePoint[]): TargetSnapshot[] {
       pointCount: rows.length,
     }));
 }
+/**
+ * The target a chart is measured against, resolved on the server for the
+ * SAME tier the analytics were scoped to. Keeping marks and their maximum
+ * together is what stops a target set on a 100-mark paper being drawn
+ * against a 390-mark axis (or vice versa). `label` names the tier so the UI
+ * can say which paper the line describes.
+ */
+export type TargetReference = {
+  marks: number | null;
+  maxScore: number;
+  /** Percentage of the paper, or null when no marks target is set. */
+  percentage: number | null;
+  /** The tier the reference was resolved on ("Tier 2 — Paper I"). */
+  tierLabel: string | null;
+  /** Below 1 means the paper mixes maxima, so one reference line is not
+   * meaningful (e.g. the combined all-tiers view). */
+  comparable: boolean;
+};
+
 export function analyze(
   allAttempts: AnalyticsAttempt[],
   scope: DashboardScope = "all",
-  /** Max of the pattern the target score is set against; the active exam's
-   * primary tier. Defaults to the legacy CGL Tier 2 total. */
-  targetMaxScore: number = FULL_MOCK_MAX_SCORE,
+  /** The paper the target is measured against. A bare number keeps the
+   * historical call site working; pass a TargetReference for a tier-matched
+   * line. Defaults to the legacy CGL Tier 2 total. */
+  target: number | TargetReference = FULL_MOCK_MAX_SCORE,
 ) {
+  const reference: TargetReference =
+    typeof target == "number"
+      ? {
+          marks: null,
+          maxScore: target,
+          percentage: null,
+          tierLabel: null,
+          comparable: true,
+        }
+      : target;
+  const targetMaxScore = reference.maxScore;
   const points = projectPerformance(allAttempts, scope);
   const sourceAttemptIds = [...new Set(points.map((p) => p.sourceAttemptId))];
   const correct = sum(points.map((p) => p.correct));
@@ -564,6 +600,10 @@ export function analyze(
     target: {
       snapshots,
       fullMockMaxScore: targetMaxScore,
+      marks: reference.marks,
+      percentage: reference.percentage,
+      tierLabel: reference.tierLabel,
+      comparable: reference.comparable,
     },
     radial: stacksFor(scope, points),
     whereYouStand: buildWhereYouStand(allAttempts),

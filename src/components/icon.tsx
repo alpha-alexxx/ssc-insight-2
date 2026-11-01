@@ -26,6 +26,7 @@ import {
 import {
   Activity,
   AlertCircle,
+  Bell,
   ArrowDownRight,
   ArrowDownToLine,
   ArrowLeft,
@@ -115,6 +116,7 @@ export type IconName =
   | "trend"
   | "clock"
   | "timer"
+  | "bell"
   | "calendar"
   | "award"
   | "layers"
@@ -155,6 +157,7 @@ const ICONS: Record<IconName, IconEntry> = {
   target: { duo: Target },
   book: { duo: Book },
   clock: { duo: Clock },
+  bell: { lucide: Bell },
   timer: { duo: Clock },
   calendar: { duo: Calendar },
   award: { duo: Award },

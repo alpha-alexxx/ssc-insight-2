@@ -1,36 +1,20 @@
-import { queryOptions } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+"use client";
+
+import { useQueryClient } from "@tanstack/react-query";
+import { examsKeys } from "@/lib/queries/exams";
 
 /**
- * Settings domain: the workspace scope — active exam, enabled exams, and
- * one target score per exam (against that exam's primary tier maximum).
- * One resource, one key; the mutation writes the fresh value into the
- * cache, so reads never need background refetching.
+ * Settings no longer has its own cache. The workspace scope, the exam
+ * catalog, the target envelope and the resolved per-tier targets are ONE
+ * server payload (`/api/exams`), read through `examsKeys.current()`.
+ *
+ * The old parallel `["settings"]` cache held the same scope, so a write to
+ * one left the other stale for up to ten minutes. It is gone; every
+ * settings surface reads this one.
  */
 
-export type TrackerSettings = {
-  activeExamId: string;
-  /** Tier id of the active exam, or "all" for the combined view. */
-  activeTierId: string;
-  /** Enabled selectable tiers as "examId:tierId" keys. */
-  enabledTiers: string[];
-  examTargets: Record<string, number | null>;
-};
-
-export const settingsKeys = {
-  all: ["settings"] as const,
-  current: () => [...settingsKeys.all, "current"] as const,
-};
-
-export const settingsQueryOptions = queryOptions({
-  queryKey: settingsKeys.current(),
-  staleTime: 10 * 60_000,
-  queryFn: ({ signal }) => api<TrackerSettings>("/api/settings", { signal }),
-});
-
-export async function updateSettingsRequest(settings: TrackerSettings) {
-  return api<TrackerSettings>("/api/settings", {
-    method: "PUT",
-    body: JSON.stringify(settings),
-  });
+/** Invalidate the settings/exam payload (backup import, custom-exam CRUD). */
+export function useInvalidateSettings() {
+  const client = useQueryClient();
+  return () => client.invalidateQueries({ queryKey: examsKeys.all });
 }

@@ -21,7 +21,7 @@ The database is **PostgreSQL on Neon**, accessed only through Prisma 7.10.1 and 
 - Branch: `production`
 - Existing site: https://sscinsight-lovat.vercel.app/
 
-The original Neon migration started with empty application tables. The private-account migration assigns the two existing shared mocks to the verified `ankitinter9@gmail.com` Auth identity; see [release notes](docs/private-accounts.md). Firebase records and configuration remain untouched; no Firebase records are copied automatically. Existing version-1 JSON backups remain importable; new exports use the portable version-2 format with the target score.
+The original Neon migration started with empty application tables. The private-account migration assigns the two existing shared mocks to the verified `ankitinter9@gmail.com` Auth identity; see [release notes](docs/private-accounts.md). Firebase records and configuration remain untouched; no Firebase records are copied automatically. Legacy JSON backups (versions 1–4) remain importable; new exports use format version 5, which adds the versioned target envelope, in-app preferences and all planner work.
 
 ## Run locally
 
@@ -106,15 +106,15 @@ Redeploy after environment changes. Configure the optional `AI_*` variables in t
 
 ## Tracker behavior
 
-- Full mocks: Quant 30, Reasoning 30, English 45, GA 25; 390 marks. Optional Computer is separate from the 390-mark statistics.
+- Exam patterns come from `src/lib/exams.ts`, transcribed from the official ssc.gov.in notices: CGL (Tier 1 and the Tier 2 papers), CHSL, MTS, CPO, GD Constable, Stenographer and Selection Post, plus user-defined custom exams. Counts, maxima and marking are per TIER, not global. For example CGL Tier 2 Paper I is Quant 30, Reasoning 30, English 45, GA 25 (+ qualifying Computer 20) for 390 merit marks.
 - Section I: Quant + Reasoning, 180 marks. Section II: English + GA, 210 marks. Subject and sectional practice support shorter custom counts.
-- Correct/incorrect counts calculate scores live at +3/-1. Three time blocks sum to the overall time; omitted blocks become zero. Legacy score/time overrides remain compatible with existing backups.
+- Correct/incorrect counts calculate scores live at the tier's own marking (+3/−1 on CGL Tier 2, +2/−0.5 on Tier 1, −0.25 penalties on CPO and Steno, and no negative marking in MTS Session I). Three time blocks sum to the overall time; omitted blocks become zero. Legacy score/time overrides remain compatible with existing backups.
 - Completion dates and filters use IST. Platform presets include Testbook, RBE, Oliveboard, Pundits, Test Ranking, and Others with a custom input.
 - Paste Report extracts supported fields locally and always opens an editable review form.
 - Dashboard tabs are analytical scopes, not database type filters: Full Mocks projects saved full mocks; Subject Wise projects every subject result from full, sectional, and subject mocks; Sectional Wise projects explicit sectionals plus Section I/II derived from each full mock; All Mocks projects each saved attempt exactly once. Date, platform, and search filters apply to every scope.
 - A full mock is never counted again as four subject rows or two section rows in All Mocks. Derived sections sum their child results and do not inherit the parent score override, rank, percentile, or overall time.
 - Where you stand is one global subject radar built from all mock types. Make every attempt count uses responsive outcome cards for every scope: one aggregate Full Mocks card, one card per populated subject or section, and parent attempts grouped by mock type for All Mocks. Each card shows attempts/questions, a score-centered answer-distribution ring, Correct/Incorrect/Unattempted counts and shares, aggregate marks/max, accuracy, and only genuinely reported percentile data; it never copies parent percentiles into subjects or derived sections. Subject deep dive is available on every tab except Subject Wise.
-- One target score out of 390 is configured under Settings and applied as a percentage reference on every scope.
+- Targets are configured under Settings → Targets and are three distinct things: a **percentile goal per exam** (a reported goal the app never computes), a **marks target per tier** validated against that tier's own maximum, and **structure defaults** shared only between tiers with the identical paper. A tier target inherits a default or overrides it, and can be reset to inherited.
 - Accuracy is total correct divided by total attempted. Full averages exclude Computer. Unknown metrics display a dash; negative marks remain visible.
 - Compare two to four mocks.
 
@@ -149,10 +149,10 @@ The additive migration `prisma/migrations/20261029000000_personal_todos` extends
 
 ## Backup and account transfer
 
-- **JSON backup (format version 2)** is the portable, restorable file. It includes every mock and subject result, notes, rank/participants/percentile, score/time overrides, completion dates, source, the target score, and a summary/manifest. It contains no email, `userId`, or auth credentials.
+- **JSON backup (format version 5)** is the portable, restorable file. It includes every mock and subject result, notes, rank/participants/percentile, score/time overrides, completion dates, source, the exam scope, the target envelope, in-app preferences, custom exams, and all planner work (plan task progress, day progress, personal tasks and groups). It contains no email, `userId`, or auth credentials.
 - **CSV** is a separate read-only per-subject export for spreadsheets. It cannot be imported.
 - Import into the currently signed-in account. **Merge** preserves existing records, skips exact duplicates, and reports content conflicts. **Replace** deletes all current mocks and mirrors the backup after an explicit safety-backup download and confirmation naming the signed-in account.
-- The target is applied only when checked; a backup with no target can clear the current target only through an explicit clear option. Legacy v1 backups are attempts-only, so no target is applied.
+- Scope and targets are applied only when checked. Planner work is always merged and never destructive: a completed item never becomes incomplete, and Replace deletes mocks only. Legacy v1 backups are attempts-only, so no settings are applied.
 - Imported records receive new IDs and bookkeeping timestamps; `completedAt` and `source` are preserved. All writes are one transaction, so a failure leaves the destination unchanged.
 - The import limit is 4 MB (10,000 attempts) to stay within the deployment request-body limit. Export warns when a file is too large or contains records that cannot validate; such a file may not be importable.
 - A different Google account is a new Neon Auth workspace, so export/import is the supported move. A same-identity email change keeps the workspace and needs no import. Neon Auth tables stay read-only; the app never reassigns ownership server-side.
@@ -171,8 +171,8 @@ Routes retain `{data}` / `{error: {code, message}}` response envelopes, validati
 | `/api/mock-attempts` | GET, POST | Filter/list; add |
 | `/api/mock-attempts/:id` | GET, PUT, DELETE | Inspect; edit; confirmed deletion |
 | `/api/analytics` | GET | Scope projection (`view=full\|subject\|sectional\|all`), radar profile, target snapshots |
-| `/api/settings` | GET, PUT | Private target score out of 390 |
-| `/api/backup` | GET, POST | GET v2 JSON backup or read-only CSV; POST merge/replace preview and atomic commit |
+| `/api/settings` | GET, PUT, PATCH | Workspace scope (`PUT`) and target edits (`PATCH { edits }`), each validated against the live catalog |
+| `/api/backup` | GET, POST | GET a v5 JSON backup or read-only CSV; POST merge/replace preview and atomic commit |
 | `/api/todos` | GET, POST | Paginated/filterable personal todos and aggregate counts/groups; create a dated todo |
 | `/api/todos/:id` | PATCH, DELETE | Version-checked edits, completion/subtasks, restoration, or soft deletion to Trash |
 | `/api/todos/groups` | GET, POST | List/create private reusable groups |

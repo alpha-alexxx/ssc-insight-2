@@ -138,16 +138,21 @@ export function AppFrame({
   );
 }
 
+/**
+ * Navigation groups. The plan entry's href is deliberately NOT baked in here:
+ * a module-level `planHref()` froze yesterday's IST date into the sidebar for
+ * as long as the tab stayed open. `navGroups()` resolves it per render.
+ */
 export const NAV_GROUPS: {
   label: string;
-  items: { view: AppView; label: string; href: string }[];
+  items: { view: AppView; label: string; href: string | (() => string) }[];
 }[] = [
   {
     label: "Study planner",
     items: [
       { view: "dashboard", label: "Dashboard", href: VIEW_HREF.dashboard },
       { view: "calendar", label: "Study calendar", href: VIEW_HREF.calendar },
-      { view: "plan", label: "Today's plan", href: planHref() },
+      { view: "plan", label: "Today's plan", href: planHref },
       { view: "tasks", label: "My tasks", href: VIEW_HREF.tasks },
     ],
   },
@@ -280,7 +285,15 @@ export function AppSidebar({
                 {group.items.map((item) => (
                   <NavItem
                     key={item.view}
-                    item={item}
+                    /* The href may be a function so a date-bearing route
+                       (today's plan) stays current without a reload. */
+                    item={{
+                      ...item,
+                      href:
+                        typeof item.href === "function"
+                          ? item.href()
+                          : item.href,
+                    }}
                     active={view === item.view}
                     onRouteIntent={onRouteIntent}
                   />

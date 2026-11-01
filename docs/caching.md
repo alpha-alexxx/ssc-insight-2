@@ -13,7 +13,7 @@ whenever a data source's policy changes.
 | --- | --- | --- |
 | `Cache-Control: private, no-store` | every `/api/*` response by default (`ok()` in `src/lib/api.ts`) | Baseline for personalized data: no browser/proxy storage. |
 | `Cache-Control: private, max-age=N, stale-while-revalidate=M` | opt-in per GET via `okCached()` (`cache:` option in `defineRoute` results) | Allows non-app consumers (QA scripts, future prefetch) to reuse/stale-serve private responses briefly. |
-| In-process LRU (`src/lib/cache.ts`) | `getSettings`/`saveSettings` in `src/lib/repository.ts` | Saves one DB roundtrip per settings read; 60 s TTL, write-through on save. |
+| In-process LRU (`src/lib/cache.ts`) | `getTrackerSettings`/`saveTrackerSettings` in `src/lib/exam-settings.ts` | Saves one DB roundtrip per scope read; 60 s TTL, write-through on save. |
 | Client `fetch(..., { cache: "no-store" })` | `api()` in `src/lib/api-client.ts` | The workspace always fetches fresh at the HTTP layer so post-mutation refreshes are correct. |
 | TanStack Query cache (in-memory) | `src/lib/query-client.ts`, mounted by `components/query-provider.tsx` | The client-side reuse layer: dedupes identical requests, caches per resource with per-resource `staleTime`, aborts superseded requests, and garbage-collects unused entries. Never persisted; dies with the workspace session. |
 | React request memoization | automatic (Next.js) | Deduplicates identical reads within one server request. |
@@ -25,7 +25,7 @@ whenever a data source's policy changes.
 | --- | --- | --- | --- | --- | --- |
 | Mock attempts (list, detail) | per-user | on user mutation | HTTP `private, max-age=0, swr=2`; client fetches `no-store` | n/a (client never reuses) | Mutations invalidate the `["mock-attempts"]` key family in the client query cache; no stale window at the HTTP layer. |
 | Analytics projections (`/api/analytics`) | per-user | on attempts change | HTTP `private, max-age=0, swr=5`; client `no-store` | n/a | Derived server-side per request; never persisted. |
-| TrackerSettings (target) | per-user | explicit user action | Server LRU 60 s TTL, write-through; HTTP `private, max-age=5, swr=30` | `saveSettings` write-through; `invalidateSettings()` for out-of-band writes (backup import) | A second tab can lag up to 60 s behind a target change; acceptable for a single-user preference. Per-process cache — multi-instance deployments would need shared storage (documented in `cache.ts`). |
+| `/api/exams` + `/api/settings` (scope, targets, preferences) | per-user | explicit user action | Server LRU 60 s TTL, write-through; HTTP `private, max-age=5, swr=30` | `saveTrackerSettings` write-through; `invalidateSettings()` for out-of-band writes (backup import, custom-exam CRUD) | One payload carries the scope AND every resolved target, so a target can never disagree with its own maximum. A second tab can lag up to 60 s; acceptable for a single-user preference. Per-process cache — multi-instance deployments would need shared storage (documented in `cache.ts`). |
 | AI status (`/api/ai/status`) | per-user (quota usage) | per AI request | `private, no-store`; client loads on mount and after each AI call | refreshed after coach/chat/extract calls | Quota display may lag a request by one refresh; deliberate. |
 | AI coach / chat / extract | per-user | never cached | `private, no-store` (chat is an NDJSON stream) | — | Read-only subsystem; nothing persisted. |
 | Backup export (`GET /api/backup`) | per-user | on attempts change | raw file response, no-store | — | The one envelope exception: returns a downloadable file. |
@@ -42,7 +42,7 @@ refetches only mounted (active) observers — the same fan-out the old
 
 | Query key | staleTime | Revalidated by | Notes |
 | --- | --- | --- | --- |
-| `["settings","current"]` | 10 min | write-through on save; invalidate on backup import | The target changes only through explicit user actions. |
+| `["exams","current"]` | 10 min | `setQueryData` from every write response; invalidate on backup import and custom-exam CRUD | The single settings/exam payload — scope, targets envelope, resolved per-tier targets, preferences. There is deliberately no second `["settings"]` key. |
 | `["plan","current"]` | 10 min | optimistic `onMutate` patch; invalidate on failure and backup import | One entry; calendar/day/dashboard all read it. |
 | `["mock-attempts","full"]` | 30 s (default) | attempt mutations (`attemptKeys.all`) | Unfiltered lookup list for joins/duplicate checks. |
 | `["mock-attempts","list",params]` | 30 s (default) | attempt mutations | `keepPreviousData` holds the previous page while filters/page change. |

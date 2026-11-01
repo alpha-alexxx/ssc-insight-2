@@ -13,5 +13,10 @@ export const subjectColors: Record<SubjectId, string> = {
 export const sectionColors: Record<SectionId, string> = {
   section1: "var(--chart-section-1)",
   section2: "var(--chart-section-2)",
+  // Section III is the qualifying Computer Knowledge test on CGL/CHSL
+  // Tier 2 — it reuses the Computer hue so it reads as the same material,
+  // and Section IV exists for tiers that declare it (none today).
+  section3: "var(--chart-computer)",
+  section4: "var(--chart-average)",
 };
 export const targetColor = "var(--chart-target)";

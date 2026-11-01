@@ -69,15 +69,28 @@ export const markingSchema = z
   })
   .strict();
 
-/** Canonical section ids (chart colors and legacy data key off them). */
-export type SectionId = "section1" | "section2";
-export const sectionIds = ["section1", "section2"] as const;
+/** Canonical section ids (chart colors and legacy data key off them).
+ * CGL and CHSL Tier 2 both run a numbered Section III (Computer Knowledge),
+ * so the vocabulary has to reach past the original two-way Section I/II split.
+ * A tier only ever produces points for the sections it actually declares. */
+export type SectionId = "section1" | "section2" | "section3" | "section4";
+export const sectionIds = [
+  "section1",
+  "section2",
+  "section3",
+  "section4",
+] as const;
 /** A section split of one tier pattern. */
 export type PatternSection = {
   id: SectionId;
   name: string;
   description: string;
   subjectIds: readonly SubjectId[];
+  /** Sectional timer, when the paper runs one. */
+  durationMinutes?: number;
+  /** A qualifying section (CGL/CHSL Section III) is tracked but excluded from
+   * merit aggregates, mirroring how qualifying subjects are treated. */
+  qualifying?: boolean;
 };
 
 /** The subjects of one tier, with their per-subject question counts and
@@ -88,14 +101,19 @@ export type PatternSubjects = readonly {
   qualifying: boolean;
 }[];
 
-/** The slice of a resolved tier pattern (src/lib/exams.ts) that the scoring
- * and validation layer consumes. */
+/** The slice of a resolved tier pattern (src/lib/exam-pattern.ts) that the
+ * scoring and validation layer consumes. */
 export type PatternShape = {
   examId: string;
   tierId: string;
   subjects: PatternSubjects;
   marking: Marking;
   sections: readonly PatternSection[];
+  /** The tier's own label ("Tier 2 — Paper I"), so prompts and backup samples
+   * can name a custom tier instead of falling back to its raw id. */
+  tierLabel?: string;
+  /** Objective duration, when the catalog states one. */
+  durationMinutes?: number | null;
 };
 
 export function sectionForSubjects(

@@ -174,7 +174,10 @@ function PaletteBody({
           label: item.label,
           keywords: [VIEW_META[item.view].label, group.label],
           icon: VIEW_META[item.view].icon,
-          run: () => router.push(item.href),
+          run: () =>
+            router.push(
+              typeof item.href === "function" ? item.href() : item.href,
+            ),
         },
       });
     }

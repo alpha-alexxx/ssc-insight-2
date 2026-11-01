@@ -24,7 +24,11 @@ test("workspace url state round-trips through serialize and parse", () => {
   };
   const url = serializeWorkspaceState("/history", state);
   assert.equal(url, "/history?type=full&subject=quant&platform=Testbook&search=mock+12&from=2026-01-01&to=2026-02-01&scope=sectional");
-  assert.deepEqual(parseWorkspaceState(url.slice(url.indexOf("?"))), state);
+  // A restored state always carries the (empty) compare selection.
+  assert.deepEqual(parseWorkspaceState(url.slice(url.indexOf("?"))), {
+    ...state,
+    ids: [],
+  });
 });
 
 test("default values keep the URL bare", () => {
@@ -44,7 +48,10 @@ test("paged list state round-trips and non-defaults serialize", () => {
   };
   const url = serializeWorkspaceState("/history", state);
   assert.equal(url, "/history?page=3&pageSize=50&sort=score&dir=asc");
-  assert.deepEqual(parseWorkspaceState(url.slice(url.indexOf("?"))), state);
+  assert.deepEqual(parseWorkspaceState(url.slice(url.indexOf("?"))), {
+    ...state,
+    ids: [],
+  });
 });
 
 test("malformed list params fall back to defaults per field", () => {
@@ -71,11 +78,13 @@ test("parse tolerates empty and absent query strings", () => {
     filters: {},
     scope: "full",
     list: defaultListState,
+    ids: [],
   });
   assert.deepEqual(parseWorkspaceState("?scope=all"), {
     filters: {},
     scope: "all",
     list: defaultListState,
+    ids: [],
   });
 });
 
@@ -97,6 +106,42 @@ test("Add Mock return targets are same-app planner/result routes only", () => {
   assert.equal(safeWorkspaceReturnTo("//evil.example/calendar"), null);
   assert.equal(safeWorkspaceReturnTo("/settings"), null);
   assert.equal(safeWorkspaceReturnTo("/add"), null);
+  // A comparison can be returned to after logging a mock from it.
+  assert.equal(safeWorkspaceReturnTo("/compare"), "/compare");
+  assert.equal(safeWorkspaceReturnTo("/compare?ids=abc123,def456"), "/compare?ids=abc123,def456");
+});
+
+test("a compare selection round-trips and is capped at four", () => {
+  const ids = ["aaa111", "bbb222", "ccc333", "ddd444"];
+  const url = serializeWorkspaceState("/compare", {
+    filters: {},
+    scope: "full",
+    list: defaultListState,
+    ids,
+  });
+  assert.equal(url, "/compare?ids=aaa111,bbb222,ccc333,ddd444");
+  assert.deepEqual(parseWorkspaceState(url.slice(url.indexOf("?"))).ids, ids);
+
+  // A fifth id is ignored; a shared link cannot widen the comparison.
+  const tooMany = parseWorkspaceState("?ids=aaa111,bbb222,ccc333,ddd444,eee555");
+  assert.deepEqual(tooMany.ids, ids);
+
+  // Malformed entries are dropped, and duplicates collapse.
+  assert.deepEqual(
+    parseWorkspaceState("?ids=aaa111,!!,aaa111,bbb222").ids,
+    ["aaa111", "bbb222"],
+  );
+
+  // The selection is only serialized on /compare — it means nothing elsewhere.
+  assert.equal(
+    serializeWorkspaceState("/history", {
+      filters: {},
+      scope: "full",
+      list: defaultListState,
+      ids,
+    }),
+    "/history",
+  );
 });
 
 test("shared strict schema (analytics API contract) rejects bad params, allows empty dates", () => {

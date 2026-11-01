@@ -1,5 +1,5 @@
 import { mutateTodo } from "../todos";
-import { safeTodoUrl } from "../todos-core";
+import { normalizeSubtasks, safeTodoUrl } from "../todos-core";
 import "server-only";
 import { z } from "zod";
 import { database } from "@/lib/db";
@@ -247,6 +247,9 @@ function toView(row: {
   category: string;
   priority: string;
   status: string;
+  subtasks: unknown;
+  groupId: string | null;
+  version: number;
   createdAt: Date;
 }): PersonalTaskView {
   return {
@@ -258,6 +261,9 @@ function toView(row: {
     category: row.category,
     priority: (row.priority as PersonalTaskView["priority"]) ?? "normal",
     status: (row.status as PlanTaskStatus) ?? "todo",
+    subtasks: normalizeSubtasks(row.subtasks),
+    groupId: row.groupId ?? null,
+    version: row.version,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -305,11 +311,16 @@ export async function updatePersonalTask(
   // A cleared link input arrives as "" (valid per safeHttpUrl); persist the
   // absence of a link as NULL so empty strings never accumulate.
   if (patch.url === "") patch.url = null;
+  // Send the STATUS, not a derived boolean. The old code mapped every status
+  // to `completed`, so "in progress" collapsed to "todo" and reopening a
+  // completed task ran the cascade that clears every subtask tick. Passing
+  // the status goes through the same path as PATCH /api/todos/[id], so a task
+  // behaves identically whichever surface edits it.
   const row = await database().$transaction((tx) =>
     mutateTodo(tx, userId, id, {
       ...patch,
       version: existing.version,
-      ...(status ? { completed: status === "completed" } : {}),
+      ...(status ? { status } : {}),
     }),
   );
   return toView(row);

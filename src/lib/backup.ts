@@ -6,49 +6,138 @@ import {
   type AttemptInput,
 } from "./domain";
 import type { CustomExamDef } from "./exams";
+import {
+  EMPTY_TARGETS,
+  migrateLegacyExamTargets,
+  targetSettingsSchema,
+  type TargetSettings,
+} from "./target-settings";
 
 export const BACKUP_FORMAT = "ssc-insight-backup";
-/** 4 = tier-level scope: settings carry "examId:tierId" enablement keys and
- * custom exams hold per-tier patterns. 3 = exam-level scope (attempts already
- * carried exam/tier). 2 = pre-multi-exam (single CGL Tier 2). */
-export const BACKUP_FORMAT_VERSION = 4;
+/** 5 = planner data (plan progress, day progress, personal tasks, groups),
+ * the versioned target envelope and in-app preferences. 4 = tier-level scope.
+ * 3 = exam-level scope (attempts already carried exam/tier). 2 =
+ * pre-multi-exam (single CGL Tier 2). 1 = legacy attempts-only. */
+export const BACKUP_FORMAT_VERSION = 5;
 export const BACKUP_MAX_BYTES = 4 * 1024 * 1024;
 export const BACKUP_REQUEST_MAX_BYTES = BACKUP_MAX_BYTES + 256 * 1024;
 export const BACKUP_MAX_ATTEMPTS = 10_000;
 export const BACKUP_INSERT_CHUNK_SIZE = 500;
 export const BACKUP_SAMPLE_LIMIT = 5;
 export type ImportMode = "merge" | "replace";
+
+/** In-app-only preferences travel with the account so a restore keeps them. */
+export type BackupPreferences = {
+  overdueEmphasis: boolean;
+  mockDueToday: boolean;
+  targetGap: boolean;
+  quietHours: { enabled: boolean; start: string; end: string };
+};
+
 export type BackupSettings = {
   activeExamId: string;
   activeTierId: string;
   /** "examId:tierId" keys. */
   enabledTiers: string[];
-  examTargets: Record<string, number | null>;
+  /** Percentile goals, structure defaults and per-tier overrides. */
+  targets: TargetSettings;
+  preferences?: BackupPreferences;
 };
+
+/* ---------------- planner data (format 5) ---------------- */
+
+export type BackupPlanTaskProgress = {
+  taskKey: string;
+  completed: boolean;
+  score: number | null;
+  percentile: number | null;
+  wrong: number | null;
+  unattempted: number | null;
+  rev1: boolean;
+  rev2: boolean;
+  rev3: boolean;
+  notes: string | null;
+};
+
+export type BackupPlanDayProgress = {
+  day: number;
+  checklistDone: string[];
+  revisionDone: string[];
+  dayNotes: string | null;
+};
+
+export type BackupTodoGroup = { name: string };
+
+export type BackupSubtask = { id: string; title: string; completed: boolean };
+
+export type BackupPersonalTask = {
+  /** Stable within the file; children may reference a parent group name. */
+  title: string;
+  notes: string | null;
+  dueDate: string | null;
+  url: string | null;
+  category: string;
+  priority: string;
+  status: string;
+  /** Group NAME (not id) so the import can re-create groups per account. */
+  groupName: string | null;
+  subtasks: BackupSubtask[];
+  /** Trashed tasks are included so a restore does not resurrect them. */
+  deletedAt: string | null;
+  createdAt: string;
+};
+
+export type BackupPlanner = {
+  planTasks: BackupPlanTaskProgress[];
+  planDays: BackupPlanDayProgress[];
+  todoGroups: BackupTodoGroup[];
+  personalTasks: BackupPersonalTask[];
+};
+
+export const EMPTY_PLANNER: BackupPlanner = {
+  planTasks: [],
+  planDays: [],
+  todoGroups: [],
+  personalTasks: [],
+};
+
 export type BackupSummary = {
   attempts: number;
   subjectResults: number;
   firstCompletedAt: string | null;
   lastCompletedAt: string | null;
+  /** Planner row counts, so a preview can state what restoring adds. */
+  planTasks?: number;
+  planDays?: number;
+  personalTasks?: number;
+  todoGroups?: number;
 };
-export type BackupV4 = {
+
+export type BackupV5 = {
   format: typeof BACKUP_FORMAT;
   formatVersion: typeof BACKUP_FORMAT_VERSION;
   exportedAt: string;
   summary: BackupSummary;
   settings: BackupSettings;
   customExams: CustomExamDef[];
+  planner: BackupPlanner;
   attempts: Attempt[];
   warnings: string[];
 };
+
+/** Kept as the exported name the rest of the app already imports. */
+export type BackupV4 = BackupV5;
+
 export type ParsedBackup = {
-  /** 4 = current; 3 = exam-level scope; 2 = pre-multi-exam; 1 = legacy. */
-  version: 1 | 2 | 3 | 4;
+  /** 5 = current; 4 = tier-level scope; 3 = exam-level scope; 2 =
+   * pre-multi-exam; 1 = legacy. */
+  version: 1 | 2 | 3 | 4 | 5;
   legacy: boolean;
   exportedAt: string | null;
   summary: BackupSummary | null;
   settings: BackupSettings | null;
   customExams: CustomExamDef[];
+  planner: BackupPlanner;
   hasSettings: boolean;
   attempts: AttemptInput[];
   warnings: string[];
@@ -77,7 +166,7 @@ export type SettingsPreview = {
 };
 export type BackupPreview = {
   mode: ImportMode;
-  formatVersion: 1 | 2 | 3 | 4;
+  formatVersion: 1 | 2 | 3 | 4 | 5;
   legacy: boolean;
   exportedAt: string | null;
   total: number;
@@ -88,6 +177,17 @@ export type BackupPreview = {
   existingTargetCount: number;
   willDelete: number;
   settings: SettingsPreview;
+  /** Planner rows in the file, so the preview states what a restore adds. */
+  planner: {
+    planTasks: number;
+    planDays: number;
+    personalTasks: number;
+    todoGroups: number;
+    /** Existing planner rows in this account (replace keeps them). */
+    existingPlanTasks: number;
+    existingPlanDays: number;
+    existingPersonalTasks: number;
+  };
   samples: {
     skippedDuplicates: string[];
     conflicts: string[];
@@ -102,6 +202,12 @@ export type ImportResult = {
   conflicts: number;
   deleted: number;
   settings: { applied: boolean };
+  planner: {
+    planTasks: number;
+    planDays: number;
+    personalTasks: number;
+    todoGroups: number;
+  };
 };
 
 export class BackupError extends Error {
@@ -116,16 +222,87 @@ const summarySchema = z.object({
   subjectResults: z.number().int().nonnegative(),
   firstCompletedAt: z.iso.datetime().nullable(),
   lastCompletedAt: z.iso.datetime().nullable(),
+  planTasks: z.number().int().nonnegative().optional(),
+  planDays: z.number().int().nonnegative().optional(),
+  personalTasks: z.number().int().nonnegative().optional(),
+  todoGroups: z.number().int().nonnegative().optional(),
 });
+/** Legacy (v3/v4) per-exam marks map, kept only for reading old files. */
 const examTargetsSchema = z.record(
   z.string().min(1).max(40),
   z.number().min(0).max(100_000).nullable(),
 );
+const preferencesSchema = z
+  .object({
+    overdueEmphasis: z.boolean(),
+    mockDueToday: z.boolean(),
+    targetGap: z.boolean(),
+    quietHours: z.object({
+      enabled: z.boolean(),
+      start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+      end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    }),
+  })
+  .strict();
 const backupSettingsSchema = z.object({
+  activeExamId: z.string().min(1).max(40),
+  activeTierId: z.string().min(1).max(40),
+  enabledTiers: z.array(z.string().min(3).max(81)).max(120),
+  targets: targetSettingsSchema,
+  preferences: preferencesSchema.optional(),
+});
+/** v4 settings shape: tier-level scope + the pre-v2 per-exam marks map. */
+const v4SettingsSchema = z.object({
   activeExamId: z.string().min(1).max(40),
   activeTierId: z.string().min(1).max(40),
   enabledTiers: z.array(z.string().min(3).max(81)).max(20),
   examTargets: examTargetsSchema,
+});
+
+const planTaskProgressSchema = z.object({
+  taskKey: z.string().min(1).max(20),
+  completed: z.boolean().default(false),
+  score: z.number().finite().nullable().default(null),
+  percentile: z.number().finite().min(0).max(100).nullable().default(null),
+  wrong: z.number().int().nonnegative().nullable().default(null),
+  unattempted: z.number().int().nonnegative().nullable().default(null),
+  rev1: z.boolean().default(false),
+  rev2: z.boolean().default(false),
+  rev3: z.boolean().default(false),
+  notes: z.string().max(2000).nullable().default(null),
+});
+const planDayProgressSchema = z.object({
+  day: z.number().int().positive().max(3650),
+  checklistDone: z.array(z.string().max(120)).max(50).default([]),
+  revisionDone: z.array(z.string().max(40)).max(50).default([]),
+  dayNotes: z.string().max(2000).nullable().default(null),
+});
+const subtaskSchema = z.object({
+  id: z.string().min(1).max(64),
+  title: z.string().min(1).max(200),
+  completed: z.boolean().default(false),
+});
+const personalTaskSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  notes: z.string().max(2000).nullable().default(null),
+  dueDate: z.iso.date().nullable().default(null),
+  url: z.string().max(2048).nullable().default(null),
+  category: z.string().max(40).default("other"),
+  priority: z.string().max(20).default("normal"),
+  status: z.string().max(20).default("todo"),
+  groupName: z.string().max(80).nullable().default(null),
+  subtasks: z.array(subtaskSchema).max(50).default([]),
+  deletedAt: z.iso.datetime().nullable().default(null),
+  createdAt: z.iso.datetime(),
+});
+const plannerSchema = z.object({
+  planTasks: z.array(planTaskProgressSchema).max(5000).default([]),
+  planDays: z.array(planDayProgressSchema).max(1000).default([]),
+  todoGroups: z
+    .array(z.object({ name: z.string().trim().min(1).max(80) }))
+    .max(200)
+    .default([]),
+  personalTasks: z.array(personalTaskSchema).max(5000).default([]),
 });
 const customTierSchema = z.object({
   id: z.string().min(1).max(40),
@@ -237,12 +414,24 @@ const backupAttemptsWithBounds = z
     });
   });
 
-const backupV4Schema = z.object({
+const backupV5Schema = z.object({
   format: z.literal(BACKUP_FORMAT),
   formatVersion: z.literal(BACKUP_FORMAT_VERSION),
   exportedAt: z.iso.datetime(),
   summary: summarySchema,
   settings: backupSettingsSchema,
+  customExams: z.array(customExamSchema).max(20).default([]),
+  planner: plannerSchema.default(EMPTY_PLANNER),
+  attempts: backupAttemptsWithBounds,
+  warnings: z.array(z.string().max(500)).max(20).default([]),
+});
+/** v4 imports: tier-level scope with the pre-v2 per-exam marks map. */
+const backupV4ImportSchema = z.object({
+  format: z.literal(BACKUP_FORMAT),
+  formatVersion: z.literal(4),
+  exportedAt: z.iso.datetime(),
+  summary: summarySchema,
+  settings: v4SettingsSchema,
   customExams: z.array(customExamSchema).max(20).default([]),
   attempts: backupAttemptsWithBounds,
   warnings: z.array(z.string().max(500)).max(20).default([]),
@@ -349,7 +538,8 @@ export function buildBackup(
   settings: BackupSettings,
   customExams: CustomExamDef[],
   exportedAt = new Date(),
-): BackupV4 {
+  planner: BackupPlanner = EMPTY_PLANNER,
+): BackupV5 {
   const ordered = [...attempts].sort(
     (a, b) =>
       a.completedAt.localeCompare(b.completedAt) || a.id.localeCompare(b.id),
@@ -366,11 +556,22 @@ export function buildBackup(
     format: BACKUP_FORMAT,
     formatVersion: BACKUP_FORMAT_VERSION,
     exportedAt: exportedAt.toISOString(),
-    summary: computedSummary(ordered),
+    summary: { ...computedSummary(ordered), ...plannerCounts(planner) },
     settings,
     customExams,
+    planner,
     attempts: ordered,
     warnings,
+  };
+}
+
+/** Row counts for the summary/preview. */
+export function plannerCounts(planner: BackupPlanner) {
+  return {
+    planTasks: planner.planTasks.length,
+    planDays: planner.planDays.length,
+    personalTasks: planner.personalTasks.length,
+    todoGroups: planner.todoGroups.length,
   };
 }
 
@@ -385,16 +586,38 @@ export function parseBackup(input: unknown): ParsedBackup {
         `This backup uses format version ${version}. Update the app before importing it.`,
       );
     try {
-      if (version === 4) {
-        const parsed = backupV4Schema.parse(input);
+      if (version === 5) {
+        const parsed = backupV5Schema.parse(input);
         assertSummary(parsed.summary, parsed.attempts);
         return {
-          version: 4,
+          version: 5,
           legacy: false,
           exportedAt: parsed.exportedAt,
           summary: parsed.summary,
           settings: parsed.settings,
           customExams: parsed.customExams,
+          planner: parsed.planner,
+          hasSettings: true,
+          attempts: parsed.attempts,
+          warnings: parsed.warnings,
+        };
+      }
+      if (version === 4) {
+        const parsed = backupV4ImportSchema.parse(input);
+        assertSummary(parsed.summary, parsed.attempts);
+        // The pre-v2 per-exam marks map pins to the tier it was measured
+        // against, so no target silently changes ceiling.
+        return {
+          version: 4,
+          legacy: false,
+          exportedAt: parsed.exportedAt,
+          summary: parsed.summary,
+          settings: {
+            ...parsed.settings,
+            targets: migrateLegacyExamTargets(parsed.settings.examTargets),
+          },
+          customExams: parsed.customExams,
+          planner: EMPTY_PLANNER,
           hasSettings: true,
           attempts: parsed.attempts,
           warnings: parsed.warnings,
@@ -422,7 +645,7 @@ export function parseBackup(input: unknown): ParsedBackup {
             enabledTiers: parsed.settings.enabledExams.map(
               (examId) => `${examId}:${primaryById[examId] ?? "main"}`,
             ),
-            examTargets: parsed.settings.examTargets,
+            targets: migrateLegacyExamTargets(parsed.settings.examTargets),
           },
           customExams: parsed.customExams.map((exam) => ({
             id: exam.id,
@@ -436,6 +659,7 @@ export function parseBackup(input: unknown): ParsedBackup {
               },
             ],
           })),
+          planner: EMPTY_PLANNER,
           hasSettings: true,
           attempts: parsed.attempts,
           warnings: parsed.warnings,
@@ -454,11 +678,13 @@ export function parseBackup(input: unknown): ParsedBackup {
           activeExamId: "cgl",
           activeTierId: "tier2",
           enabledTiers: ["cgl:tier2"],
-          examTargets: parsed.settings.targetScore != null
-            ? { cgl: parsed.settings.targetScore }
-            : {},
+          targets:
+            parsed.settings.targetScore != null
+              ? migrateLegacyExamTargets({ cgl: parsed.settings.targetScore })
+              : { ...EMPTY_TARGETS },
         },
         customExams: [],
+        planner: EMPTY_PLANNER,
         hasSettings: true,
         attempts: backfillLegacyQualifying(parsed.attempts),
         warnings: parsed.warnings,
@@ -488,6 +714,7 @@ export function parseBackup(input: unknown): ParsedBackup {
       summary: null,
       settings: null,
       customExams: [],
+      planner: EMPTY_PLANNER,
       hasSettings: false,
       attempts: backfillLegacyQualifying(parsed.attempts),
       warnings: [],

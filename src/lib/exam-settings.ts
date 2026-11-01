@@ -7,7 +7,9 @@ import type {
 } from "./exams";
 import {
   ALL_TIERS_ID,
+  BUILT_IN_EXAMS,
   CUSTOM_FIRST_TIER_ID,
+  builtInExam,
   patternMaxScore,
   patternShape,
   parseTierKey,
@@ -16,6 +18,15 @@ import {
 import type { PatternShape } from "./domain";
 import { LruCache } from "./cache";
 import { RequestError } from "./api";
+import {
+  EMPTY_TARGETS,
+  buildSignatureIndex,
+  effectiveTarget,
+  parseTargetSettings,
+  percentileFor,
+  type EffectiveTarget,
+  type TargetSettings,
+} from "./target-settings";
 
 /**
  * Server-side exam context: the per-user workspace scope (TrackerSettings)
@@ -27,14 +38,36 @@ import { RequestError } from "./api";
  * active context is one tier — or ALL_TIERS_ID for an exam's combined view.
  */
 
+/** In-app-only preferences. There is no push, email or background delivery
+ * anywhere in this app, so every flag here drives an on-screen signal. */
+export type ReminderPreferences = {
+  /** Emphasise overdue personal tasks in the shell. */
+  overdueEmphasis: boolean;
+  /** Show a "mock scheduled today" note on the plan surfaces. */
+  mockDueToday: boolean;
+  /** Keep a quiet gap-to-target note visible on performance views. */
+  targetGap: boolean;
+  /** Suppress transient toasts during the quiet window. */
+  quietHours: { enabled: boolean; start: string; end: string };
+};
+
+export const DEFAULT_PREFERENCES: ReminderPreferences = {
+  overdueEmphasis: true,
+  mockDueToday: true,
+  targetGap: true,
+  quietHours: { enabled: false, start: "22:00", end: "07:00" },
+};
+
 export type TrackerSettingsShape = {
   activeExamId: string;
   /** Tier id of the active exam, or ALL_TIERS_ID for the combined view. */
   activeTierId: string;
   /** Enabled selectable tiers as "examId:tierId" keys. */
   enabledTiers: string[];
-  /** Target score per EXAM id (against its primary tier maximum). */
-  examTargets: Record<string, number | null>;
+  /** Versioned target envelope — percentiles, structure defaults, overrides. */
+  targets: TargetSettings;
+  /** In-app reminder preferences. */
+  preferences: ReminderPreferences;
 };
 
 export const DEFAULT_SETTINGS: TrackerSettingsShape = {
@@ -43,7 +76,8 @@ export const DEFAULT_SETTINGS: TrackerSettingsShape = {
   // New accounts pick their exams — the workspace stays in an empty state
   // until the Exams settings panel has something enabled.
   enabledTiers: [],
-  examTargets: {},
+  targets: { ...EMPTY_TARGETS },
+  preferences: { ...DEFAULT_PREFERENCES },
 };
 
 /** Per-user settings cache. One row per user, read on every page load,
@@ -62,15 +96,33 @@ function parseTierKeys(value: unknown): string[] {
     : [];
 }
 
-function parseExamTargets(value: unknown): Record<string, number | null> {
+
+/** Read preferences defensively — an unknown key or a bad value falls back
+ * to the default rather than disabling the surface. */
+function parsePreferences(value: unknown): ReminderPreferences {
   if (value == null || typeof value !== "object" || Array.isArray(value))
-    return {};
-  const out: Record<string, number | null> = {};
-  for (const [key, entry] of Object.entries(value as Record<string, unknown>))
-    if (typeof entry === "number" && Number.isFinite(entry) && entry >= 0)
-      out[key] = entry;
-    else if (entry === null) out[key] = null;
-  return out;
+    return { ...DEFAULT_PREFERENCES };
+  const raw = value as Record<string, unknown>;
+  const flag = (key: keyof ReminderPreferences, fallback: boolean) =>
+    typeof raw[key] === "boolean" ? (raw[key] as boolean) : fallback;
+  const quietRaw =
+    raw.quietHours != null && typeof raw.quietHours === "object"
+      ? (raw.quietHours as Record<string, unknown>)
+      : {};
+  const time = (key: "start" | "end", fallback: string) =>
+    typeof quietRaw[key] === "string" && /^\d{2}:\d{2}$/.test(quietRaw[key] as string)
+      ? (quietRaw[key] as string)
+      : fallback;
+  return {
+    overdueEmphasis: flag("overdueEmphasis", true),
+    mockDueToday: flag("mockDueToday", true),
+    targetGap: flag("targetGap", true),
+    quietHours: {
+      enabled: typeof quietRaw.enabled === "boolean" ? quietRaw.enabled : false,
+      start: time("start", DEFAULT_PREFERENCES.quietHours.start),
+      end: time("end", DEFAULT_PREFERENCES.quietHours.end),
+    },
+  };
 }
 
 export async function getTrackerSettings(
@@ -83,7 +135,8 @@ export async function getTrackerSettings(
         activeExamId: true,
         activeTierId: true,
         enabledTiers: true,
-        examTargets: true,
+        targets: true,
+        preferences: true,
       },
     });
     if (!row) return { ...DEFAULT_SETTINGS };
@@ -91,7 +144,8 @@ export async function getTrackerSettings(
       activeExamId: row.activeExamId || "cgl",
       activeTierId: row.activeTierId || "tier2",
       enabledTiers: parseTierKeys(row.enabledTiers),
-      examTargets: parseExamTargets(row.examTargets),
+      targets: parseTargetSettings(row.targets),
+      preferences: parsePreferences(row.preferences),
     };
   });
 }
@@ -107,26 +161,30 @@ export async function saveTrackerSettings(
       activeExamId: settings.activeExamId,
       activeTierId: settings.activeTierId,
       enabledTiers: settings.enabledTiers,
-      examTargets: settings.examTargets,
+      targets: settings.targets,
+      preferences: settings.preferences,
     },
     update: {
       activeExamId: settings.activeExamId,
       activeTierId: settings.activeTierId,
       enabledTiers: settings.enabledTiers,
-      examTargets: settings.examTargets,
+      targets: settings.targets,
+      preferences: settings.preferences,
     },
     select: {
       activeExamId: true,
       activeTierId: true,
       enabledTiers: true,
-      examTargets: true,
+      targets: true,
+      preferences: true,
     },
   });
   const saved: TrackerSettingsShape = {
     activeExamId: row.activeExamId,
     activeTierId: row.activeTierId,
     enabledTiers: parseTierKeys(row.enabledTiers),
-    examTargets: parseExamTargets(row.examTargets),
+    targets: parseTargetSettings(row.targets),
+    preferences: parsePreferences(row.preferences),
   };
   // Write-through: refresh the cache immediately so the next read is a hit.
   settingsCache.set(userId, saved);
@@ -218,7 +276,10 @@ export async function loadExamContext(userId: string): Promise<ExamContext> {
   return { ...settings, customExams };
 }
 
-/** An exam's primary-tier pattern: the tier the user is preparing for. */
+/** An exam's primary-tier pattern: the tier the user is preparing for.
+ * Reads `primaryTierId` directly — the old implementation probed "tier2"
+ * first and therefore returned null for every exam whose primary tier has
+ * another id (CPO's Paper I, MTS's Session II, every "cbe" exam). */
 export function resolvePrimary(
   ctx: ExamContext,
   examId: string,
@@ -230,48 +291,98 @@ export function resolvePrimary(
       custom.tiers[0]?.id ?? CUSTOM_FIRST_TIER_ID,
       ctx.customExams,
     );
-  const resolved = resolvePattern(examId, "tier2", ctx.customExams);
-  if (!resolved?.exam) return null;
-  return resolvePattern(examId, resolved.exam.primaryTierId, ctx.customExams);
+  const exam = builtInExam(examId);
+  if (!exam) return null;
+  return resolvePattern(examId, exam.primaryTierId, ctx.customExams);
 }
 
-/** PatternShape of the ACTIVE tier. The combined "all" view anchors on the
- * exam's primary tier — target math and AI context need one concrete
- * pattern, while attempt lists stay unfiltered across tiers. */
-export function activeShape(ctx: ExamContext): PatternShape {
-  const tierId =
-    ctx.activeTierId === ALL_TIERS_ID
-      ? (resolvePrimary(ctx, ctx.activeExamId)?.tier.id ?? ctx.activeTierId)
-      : ctx.activeTierId;
-  return patternShape(
-    resolvePattern(ctx.activeExamId, tierId, ctx.customExams) ??
-      // Nothing enabled / stale scope: fall back to CGL Tier 2 so prompts
-      // and targets always have a shape.
-      resolvePattern("cgl", "tier2", [])!,
+/**
+ * The tier the active scope is actually about: the explicit active tier, or
+ * the exam's default/primary tier for the combined "all" view. Null when
+ * nothing resolves — callers must not invent a shape from another exam.
+ */
+export function activeResolved(ctx: ExamContext): ResolvedPattern | null {
+  if (ctx.activeTierId !== ALL_TIERS_ID)
+    return resolvePattern(ctx.activeExamId, ctx.activeTierId, ctx.customExams);
+
+  const exam = builtInExam(ctx.activeExamId);
+  const anchor = exam?.defaultTierId ?? exam?.primaryTierId;
+  return (
+    (anchor ? resolvePattern(ctx.activeExamId, anchor, ctx.customExams) : null) ??
+    resolvePrimary(ctx, ctx.activeExamId)
   );
+}
+
+/** PatternShape of the active tier. The combined "all" view anchors on the
+ * exam's primary tier — target math and AI context need one concrete
+ * pattern, while attempt lists stay unfiltered across tiers.
+ *
+ * Returns null when the scope does not resolve (a fresh account with nothing
+ * enabled). Callers degrade gracefully; they must never fall back to another
+ * exam's pattern, which would tell the user their CGL paper is a CPO one. */
+export function activeShape(ctx: ExamContext): PatternShape | null {
+  const resolved = activeResolved(ctx);
+  return resolved ? patternShape(resolved) : null;
 }
 
 /** Legacy alias kept for existing callers. */
 export const activePrimaryShape = activeShape;
 
-/** Target score for an exam (against its primary tier maximum). */
-export function targetForExam(
+/** Target marks for one tier of an exam, resolved through the versioned
+ * envelope (override → structure default → none). */
+export function targetForTier(
+  ctx: ExamContext,
+  examId: string,
+  tierId: string,
+): EffectiveTarget | null {
+  const resolved = resolvePattern(examId, tierId, ctx.customExams);
+  if (!resolved) return null;
+  const index = buildSignatureIndex(BUILT_IN_EXAMS, ctx.customExams);
+  return effectiveTarget(
+    ctx.targets,
+    `${examId}:${tierId}`,
+    resolved.tier,
+    index,
+  );
+}
+
+/** The effective target for whichever tier the workspace is scoped to. */
+export function targetForActive(ctx: ExamContext): EffectiveTarget | null {
+  const resolved = activeResolved(ctx);
+  if (!resolved) return null;
+  const index = buildSignatureIndex(BUILT_IN_EXAMS, ctx.customExams);
+  return effectiveTarget(
+    ctx.targets,
+    `${resolved.examId}:${resolved.tier.id}`,
+    resolved.tier,
+    index,
+  );
+}
+
+/** Percentile goal for one exam (never derived from marks). */
+export function percentileForExam(
   ctx: ExamContext,
   examId: string,
 ): number | null {
-  const target = ctx.examTargets[examId];
-  return typeof target === "number" ? target : null;
+  return percentileFor(ctx.targets, examId);
 }
 
 /**
  * The tier an attempt write uses when the caller does not state one: the
  * active tier, or the exam's primary tier when the combined view is active.
+ * Throws rather than guessing when the exam resolves to no tier at all.
  */
 export function defaultWriteTierId(ctx: ExamContext, examId?: string): string {
   const effective = examId ?? ctx.activeExamId;
   if (effective === ctx.activeExamId && ctx.activeTierId !== ALL_TIERS_ID)
     return ctx.activeTierId;
-  return resolvePrimary(ctx, effective)?.tier.id ?? "tier2";
+  const primary = resolvePrimary(ctx, effective);
+  if (!primary)
+    throw new RequestError(
+      "Choose an exam tier in Settings before logging a mock",
+      400,
+    );
+  return primary.tier.id;
 }
 
 /**

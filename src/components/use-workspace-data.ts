@@ -14,7 +14,7 @@ import {
   analyticsQueryOptions,
 } from "@/lib/queries/analytics";
 import { allAttemptsQueryOptions, attemptKeys } from "@/lib/queries/attempts";
-import { settingsKeys, settingsQueryOptions } from "@/lib/queries/settings";
+import { examsKeys } from "@/lib/queries/exams";
 import { useExamScope } from "./exam-context";
 import type {
   Attempt,
@@ -53,13 +53,20 @@ export function useWorkspaceData() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<Filters>({});
   const [scope, setScope] = useState<DashboardScope>("full");
-  // The target is per exam (against that exam's primary tier maximum). It
-  // lives in the query cache (lib/queries/settings.ts) and changes only
-  // through explicit user actions; only the text input is component state,
-  // seeded from the cached settings payload for the active exam.
-  const { data: settings } = useQuery(settingsQueryOptions);
-  const { activeExamId } = useExamScope();
-  const target = settings?.examTargets[activeExamId] ?? null;
+  // The target is resolved on the server for the tier the workspace is
+  // showing, with that tier's own maximum, and delivered with the exam
+  // payload. There is no separate settings query any more — one cache means
+  // scope and target can never disagree.
+  const { activeTarget, activeShape } = useExamScope();
+  const target = activeTarget?.marks ?? null;
+  const targetMaxScore =
+    activeTarget?.maxScore ??
+    (activeShape
+      ? activeShape.subjects
+          .filter((s) => !s.qualifying)
+          .reduce((sum, s) => sum + s.questions, 0) *
+        activeShape.marking.correct
+      : null);
   const [targetInput, setTargetInput] = useState("");
 
   // Server-paged list state. Each view owns its page; pageSize/sort/dir are
@@ -149,7 +156,7 @@ export function useWorkspaceData() {
     // `filters`.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFilters(state.filters);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setScope(state.scope);
     // The one `page` param belongs to the view being restored; sort/dir and
     // the shared pageSize only have meaning on /history.
@@ -161,7 +168,7 @@ export function useWorkspaceData() {
       setPageSizeState(state.list.pageSize);
       setSortState({ key: state.list.sort, dir: state.list.dir });
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setUrlReady(true);
   }, [pathname]);
   // Keep the address bar in step with the workspace state. replaceState
@@ -203,10 +210,10 @@ export function useWorkspaceData() {
     setTargetInput(target?.toString() ?? "");
   }, [target]);
 
-  // Backup import may apply an incoming target: invalidating the settings
-  // query refetches it, and the seed effect above updates the input.
+  // Backup import may apply an incoming target: invalidating the exam
+  // payload refetches it, and the seed effect above updates the input.
   const reloadSettings = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: settingsKeys.all });
+    void queryClient.invalidateQueries({ queryKey: examsKeys.all });
   }, [queryClient]);
 
   return {
@@ -226,6 +233,7 @@ export function useWorkspaceData() {
     dir,
     changeSort,
     target,
+    targetMaxScore,
     targetInput,
     setTargetInput,
     loading,

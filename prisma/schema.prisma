@@ -126,13 +126,19 @@ model CustomExam {
 
 // Per-user workspace scope, at TIER level: enabled tiers as
 // "examId:tierId" keys, the active exam+tier ("all" = combined view of the
-// exam's enabled tiers), and one target score per exam. One row per user.
+// exam's enabled tiers). One row per user.
+//
+// `targets` is the versioned target envelope (version 2): per-exam percentile
+// goals, structure-signature tier defaults, and per-tier overrides. It
+// replaced the pre-v2 `examTargets` map of one marks value per exam.
+// `preferences` carries in-app-only settings such as reminder toggles.
 model TrackerSettings {
   userId       String @id
   activeExamId String @default("cgl") @db.VarChar(40)
   activeTierId String @default("tier2") @db.VarChar(40)
   enabledTiers Json   @default("[]")
-  examTargets  Json   @default("{}")
+  targets      Json   @default("{}")
+  preferences  Json   @default("{}")
 
   @@schema("ssc_insight")
 }

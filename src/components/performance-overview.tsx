@@ -1532,8 +1532,8 @@ function TargetPanel({
       )}
       {target == null && (
         <p className="text-[0.625rem] muted mt-2">
-          Set one target under Settings &amp; backup; it becomes a percentage
-          reference on every dashboard tab.
+          Set a target for this tier under Settings → Targets; it becomes a
+          percentage reference on the charts for this paper.
         </p>
       )}
     </div>

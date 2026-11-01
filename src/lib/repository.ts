@@ -34,11 +34,14 @@ import {
   attemptFingerprint,
   buildBackup,
   planImport,
+  plannerCounts,
   type BackupPreview,
   type ImportOptions,
   type ImportResult,
   type ParsedBackup,
+  type BackupSettings,
 } from "./backup";
+import { normalizeSubtasks } from "./todos-core";
 import { RequestError } from "./api";
 
 /**
@@ -323,30 +326,91 @@ export {
 export async function exportBackup(userId: string) {
   return database().$transaction(
     async (tx) => {
-      const [rows, settings, customExamRows] = await Promise.all([
-        tx.mockAttempt.findMany({
-          where: { userId },
-          include: attemptInclude,
-          orderBy: [{ completedAt: "asc" }, { id: "asc" }],
-        }),
-        getTrackerSettings(userId),
-        tx.customExam.findMany({
-          where: { userId },
-          orderBy: { createdAt: "asc" },
-          select: { id: true, name: true, tiers: true },
-        }),
-      ]);
+      const [rows, settings, customExamRows, planTasks, planDays, groups, tasks] =
+        await Promise.all([
+          tx.mockAttempt.findMany({
+            where: { userId },
+            include: attemptInclude,
+            orderBy: [{ completedAt: "asc" }, { id: "asc" }],
+          }),
+          getTrackerSettings(userId),
+          tx.customExam.findMany({
+            where: { userId },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, name: true, tiers: true },
+          }),
+          // Planner data is part of the account's study record: leaving it
+          // out made the "portable backup" silently drop every completion,
+          // note and personal task.
+          tx.planTaskProgress.findMany({
+            where: { userId },
+            orderBy: { taskKey: "asc" },
+          }),
+          tx.planDayProgress.findMany({
+            where: { userId },
+            orderBy: { day: "asc" },
+          }),
+          tx.todoGroup.findMany({
+            where: { userId },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, name: true },
+          }),
+          tx.personalTask.findMany({
+            where: { userId },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          }),
+        ]);
+
+      const groupNameById = new Map(groups.map((g) => [g.id, g.name]));
       return buildBackup(
         rows.map(toAttempt),
         {
           activeExamId: settings.activeExamId,
           activeTierId: settings.activeTierId,
           enabledTiers: settings.enabledTiers,
-          examTargets: settings.examTargets,
+          targets: settings.targets,
+          preferences: settings.preferences,
         },
         customExamRows
           .map(toCustomExamDef)
           .filter((exam): exam is CustomExamDef => exam != null),
+        new Date(),
+        {
+          planTasks: planTasks.map((row) => ({
+            taskKey: row.taskKey,
+            completed: row.completed,
+            score: row.score,
+            percentile: row.percentile,
+            wrong: row.wrong,
+            unattempted: row.unattempted,
+            rev1: row.rev1,
+            rev2: row.rev2,
+            rev3: row.rev3,
+            notes: row.notes,
+          })),
+          planDays: planDays.map((row) => ({
+            day: row.day,
+            checklistDone: row.checklistDone,
+            revisionDone: row.revisionDone,
+            dayNotes: row.dayNotes,
+          })),
+          todoGroups: groups.map((group) => ({ name: group.name })),
+          personalTasks: tasks.map((task) => ({
+            title: task.title,
+            notes: task.notes,
+            dueDate: task.dueDate,
+            url: task.url,
+            category: task.category,
+            priority: task.priority,
+            status: task.status,
+            groupName: task.groupId
+              ? (groupNameById.get(task.groupId) ?? null)
+              : null,
+            subtasks: normalizeSubtasks(task.subtasks),
+            deletedAt: task.deletedAt?.toISOString() ?? null,
+            createdAt: task.createdAt.toISOString(),
+          })),
+        },
       );
     },
     { isolationLevel: "RepeatableRead" },
@@ -359,6 +423,8 @@ function importFingerprint(input: {
   currentSettings: string | null;
   incoming: string[];
   settings: string | null;
+  /** Serialized planner content — preview invalidation must see it. */
+  planner?: string;
   mode: ImportOptions["mode"];
   applyTarget: boolean;
 }) {
@@ -370,6 +436,7 @@ function importFingerprint(input: {
         input.currentSettings,
         [...input.incoming].sort(),
         input.settings,
+        input.planner ?? null,
         input.mode,
         input.applyTarget,
       ]),
@@ -399,23 +466,38 @@ export async function importBackup(
       const existing = existingRows.map(toAttempt);
       const plan = planImport(existing, backup.attempts, options.mode);
       const incomingSettings = backup.hasSettings ? backup.settings : null;
-      const settingsKey = (value: TrackerSettingsShape | null) =>
+      const settingsKey = (value: BackupSettings | TrackerSettingsShape | null) =>
         value == null
           ? null
           : JSON.stringify([
               value.activeExamId,
               value.activeTierId,
               [...value.enabledTiers].sort(),
-              Object.entries(value.examTargets).sort(([a], [b]) =>
-                a.localeCompare(b),
-              ),
+              value.targets,
+              value.preferences ?? null,
             ]);
+      const [existingPlanTasks, existingPlanDays, existingPersonalTasks] =
+        await Promise.all([
+          tx.planTaskProgress.count({ where: { userId } }),
+          tx.planDayProgress.count({ where: { userId } }),
+          tx.personalTask.count({ where: { userId } }),
+        ]);
+      const incomingPlanner = plannerCounts(backup.planner);
+      const existingPlanner = {
+        existingPlanTasks,
+        existingPlanDays,
+        existingPersonalTasks,
+      };
       const fingerprint = importFingerprint({
         userId,
         existing: existing.map((attempt) => attemptFingerprint(attempt)),
         currentSettings: settingsKey(currentSettings),
         incoming: backup.attempts.map((attempt) => attemptFingerprint(attempt)),
         settings: incomingSettings ? settingsKey(incomingSettings) : null,
+        // Planner rows are part of what the import changes, so the preview
+        // fingerprint has to cover them: a file whose only difference is a
+        // completed task must still invalidate a stale preview.
+        planner: JSON.stringify([backup.planner]),
         mode: options.mode,
         applyTarget: options.applyTarget,
       });
@@ -429,6 +511,7 @@ export async function importBackup(
         applied: settingsApplied,
         changed: settingsChanged,
       };
+      const plannerPreview = { ...incomingPlanner, ...existingPlanner };
       if (options.preview)
         return {
           mode: options.mode,
@@ -446,6 +529,7 @@ export async function importBackup(
           existingTargetCount: existing.length,
           willDelete: options.mode === "replace" ? existing.length : 0,
           settings: settingsPreview,
+          planner: plannerPreview,
           samples: {
             skippedDuplicates: plan.skippedSamples,
             conflicts: plan.conflictSamples,
@@ -525,18 +609,22 @@ export async function importBackup(
             activeExamId: incomingSettings.activeExamId,
             activeTierId: incomingSettings.activeTierId,
             enabledTiers: incomingSettings.enabledTiers,
-            examTargets: incomingSettings.examTargets,
+            targets: incomingSettings.targets,
+            preferences: incomingSettings.preferences ?? {},
           },
           update: {
             activeExamId: incomingSettings.activeExamId,
             activeTierId: incomingSettings.activeTierId,
             enabledTiers: incomingSettings.enabledTiers,
-            examTargets: incomingSettings.examTargets,
+            targets: incomingSettings.targets,
+            preferences: incomingSettings.preferences ?? {},
           },
         });
         invalidateSettings(userId);
         appliedSettings = true;
       }
+
+      const plannerResult = await importPlanner(tx, userId, backup.planner);
 
       return {
         mode: options.mode,
@@ -545,6 +633,7 @@ export async function importBackup(
         conflicts: plan.conflicts,
         deleted,
         settings: { applied: appliedSettings },
+        planner: plannerResult,
       } satisfies ImportResult;
     },
     {
@@ -553,6 +642,189 @@ export async function importBackup(
       timeout: 55_000,
     },
   );
+}
+
+/** Planner import. Always MERGE — replacing study progress is destructive in
+ * a way replacing mock attempts is not (progress is derived from work the
+ * user actually did, and there is no "safety copy" of it). Merge semantics:
+ *
+ *  - plan task progress: a completed flag never regresses to false; score/
+ *    percentile/notes fill only when the account has none, so a re-import of
+ *    an older file cannot erase newer work.
+ *  - day progress: checklist/revision ids union; notes fill only if absent.
+ *  - personal tasks: matched on (title, dueDate); existing rows keep their
+ *    status, so a re-import never reopens or re-completes a task.
+ *  - groups: created by NAME when missing, so restoring into another account
+ *    re-creates the same grouping.
+ */
+async function importPlanner(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  planner: ParsedBackup["planner"],
+) {
+  const result = {
+    planTasks: 0,
+    planDays: 0,
+    personalTasks: 0,
+    todoGroups: 0,
+  };
+  if (
+    !planner.planTasks.length &&
+    !planner.planDays.length &&
+    !planner.personalTasks.length
+  )
+    return result;
+
+  const [existingTasks, existingDays, existingGroups, existingPersonal] =
+    await Promise.all([
+      tx.planTaskProgress.findMany({ where: { userId } }),
+      tx.planDayProgress.findMany({ where: { userId } }),
+      tx.todoGroup.findMany({ where: { userId }, select: { id: true, name: true } }),
+      tx.personalTask.findMany({
+        where: { userId },
+        select: { id: true, title: true, dueDate: true },
+      }),
+    ]);
+
+  const taskByKey = new Map(existingTasks.map((row) => [row.taskKey, row]));
+  for (const incoming of planner.planTasks) {
+    const current = taskByKey.get(incoming.taskKey);
+    if (!current) {
+      await tx.planTaskProgress.create({
+        data: {
+          userId,
+          taskKey: incoming.taskKey,
+          completed: incoming.completed,
+          score: incoming.score,
+          percentile: incoming.percentile,
+          wrong: incoming.wrong,
+          unattempted: incoming.unattempted,
+          rev1: incoming.rev1,
+          rev2: incoming.rev2,
+          rev3: incoming.rev3,
+          notes: incoming.notes,
+        },
+      });
+      result.planTasks += 1;
+      continue;
+    }
+    const merged = {
+      completed: current.completed || incoming.completed,
+      rev1: current.rev1 || incoming.rev1,
+      rev2: current.rev2 || incoming.rev2,
+      rev3: current.rev3 || incoming.rev3,
+      score: current.score ?? incoming.score,
+      percentile: current.percentile ?? incoming.percentile,
+      wrong: current.wrong ?? incoming.wrong,
+      unattempted: current.unattempted ?? incoming.unattempted,
+      notes: current.notes ?? incoming.notes,
+    };
+    if (
+      merged.completed !== current.completed ||
+      merged.rev1 !== current.rev1 ||
+      merged.rev2 !== current.rev2 ||
+      merged.rev3 !== current.rev3 ||
+      merged.score !== current.score ||
+      merged.percentile !== current.percentile ||
+      merged.wrong !== current.wrong ||
+      merged.unattempted !== current.unattempted ||
+      merged.notes !== current.notes
+    ) {
+      await tx.planTaskProgress.update({
+        where: { id: current.id },
+        data: merged,
+      });
+      result.planTasks += 1;
+    }
+  }
+
+  const dayByNumber = new Map(existingDays.map((row) => [row.day, row]));
+  for (const incoming of planner.planDays) {
+    const current = dayByNumber.get(incoming.day);
+    if (!current) {
+      await tx.planDayProgress.create({
+        data: {
+          userId,
+          day: incoming.day,
+          checklistDone: incoming.checklistDone,
+          revisionDone: incoming.revisionDone,
+          dayNotes: incoming.dayNotes,
+        },
+      });
+      result.planDays += 1;
+      continue;
+    }
+    const checklistDone = [
+      ...new Set([...current.checklistDone, ...incoming.checklistDone]),
+    ].sort();
+    const revisionDone = [
+      ...new Set([...current.revisionDone, ...incoming.revisionDone]),
+    ].sort();
+    const dayNotes = current.dayNotes ?? incoming.dayNotes;
+    if (
+      checklistDone.join(",") !== current.checklistDone.join(",") ||
+      revisionDone.join(",") !== current.revisionDone.join(",") ||
+      dayNotes !== current.dayNotes
+    ) {
+      await tx.planDayProgress.update({
+        where: { id: current.id },
+        data: { checklistDone, revisionDone, dayNotes },
+      });
+      result.planDays += 1;
+    }
+  }
+
+  // Groups restore by name so a file from another account keeps its grouping.
+  const groupIdByName = new Map(existingGroups.map((g) => [g.name, g.id]));
+  const wantedGroups = new Set(
+    planner.personalTasks
+      .map((task) => task.groupName)
+      .filter((name): name is string => !!name),
+  );
+  for (const name of wantedGroups) {
+    if (groupIdByName.has(name)) continue;
+    const created = await tx.todoGroup.create({
+      data: { userId, name },
+      select: { id: true },
+    });
+    groupIdByName.set(name, created.id);
+    result.todoGroups += 1;
+  }
+
+  // Personal tasks are matched on (title, dueDate) — the same identity the
+  // user perceives. An existing row is left alone so a re-import cannot
+  // reopen a completed task or resurrect one the user has since trashed.
+  const personalKey = (title: string, dueDate: string | null) =>
+    `${title}\u0000${dueDate ?? ""}`;
+  const existingPersonalKeys = new Set(
+    existingPersonal.map((row) => personalKey(row.title, row.dueDate)),
+  );
+  for (const incoming of planner.personalTasks) {
+    if (existingPersonalKeys.has(personalKey(incoming.title, incoming.dueDate)))
+      continue;
+    await tx.personalTask.create({
+      data: {
+        userId,
+        title: incoming.title,
+        notes: incoming.notes,
+        dueDate: incoming.dueDate,
+        url: incoming.url,
+        category: incoming.category,
+        priority: incoming.priority,
+        status: incoming.status,
+        groupId: incoming.groupName
+          ? (groupIdByName.get(incoming.groupName) ?? null)
+          : null,
+        subtasks: incoming.subtasks,
+        deletedAt: incoming.deletedAt ? new Date(incoming.deletedAt) : null,
+        version: 1,
+      },
+    });
+    existingPersonalKeys.add(personalKey(incoming.title, incoming.dueDate));
+    result.personalTasks += 1;
+  }
+
+  return result;
 }
 
 export function filtersFrom(url: string): Filters {

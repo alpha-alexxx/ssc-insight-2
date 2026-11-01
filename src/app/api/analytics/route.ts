@@ -1,9 +1,12 @@
-import { analyze } from "@/lib/analytics";
-import { dashboardScopeSchema } from "@/lib/domain";
+import { analyze, type TargetReference } from "@/lib/analytics";
+import { dashboardScopeSchema, type AnalyticsAttempt } from "@/lib/domain";
 import { filtersFrom, listAttempts } from "@/lib/repository";
-import { loadExamContext, resolvePrimary } from "@/lib/exam-settings";
-import { resolvePattern } from "@/lib/exams";
-import { patternMaxScore } from "@/lib/exams";
+import {
+  activeResolved,
+  loadExamContext,
+  targetForTier,
+} from "@/lib/exam-settings";
+import { ALL_TIERS_ID, resolvePattern } from "@/lib/exams";
 import { defineRoute } from "@/lib/route-handler";
 
 export const runtime = "nodejs";
@@ -28,18 +31,38 @@ export const GET = defineRoute({ kind: "read" }, async ({ request, user }) => {
     // scopes the projection (attemptWhere skips the literal "all").
     tier: filters.tier ?? ctx.activeTierId,
   });
-  // The per-exam target's % is drawn against the ACTIVE tier's maximum
-  // (primary-tier anchor when the combined view is active).
-  const primary = resolvePrimary(ctx, ctx.activeExamId);
-  const targetMax =
-    ctx.activeTierId !== "all"
-      ? (resolvePattern(ctx.activeExamId, ctx.activeTierId, ctx.customExams)?.tier ??
-          primary?.tier)
-      : primary?.tier;
-  const analytics = analyze(
-    attempts,
-    scope,
-    targetMax ? patternMaxScore(targetMax) : undefined,
-  );
+
+  // The target line has to be measured against the paper on screen, never
+  // against a different tier's maximum. An explicit tier filter wins;
+  // otherwise the active tier anchors it. The combined all-tiers view spans
+  // papers with different maxima, so its reference is explicitly marked
+  // incomparable instead of drawing one misleading line.
+  const explicitTier =
+    filters.tier && filters.tier !== ALL_TIERS_ID ? filters.tier : null;
+  const anchor = explicitTier
+    ? (resolvePattern(ctx.activeExamId, explicitTier, ctx.customExams)?.tier ??
+      null)
+    : (activeResolved(ctx)?.tier ?? null);
+  const effective = explicitTier
+    ? targetForTier(ctx, ctx.activeExamId, explicitTier)
+    : activeResolved(ctx)
+      ? targetForTier(ctx, ctx.activeExamId, activeResolved(ctx)!.tier.id)
+      : null;
+
+  const target: TargetReference | undefined =
+    anchor && effective
+      ? {
+          marks: effective.marks,
+          maxScore: effective.maxScore,
+          percentage:
+            effective.marks == null
+              ? null
+              : (effective.marks / effective.maxScore) * 100,
+          tierLabel: anchor.label,
+          comparable: explicitTier != null || ctx.activeTierId !== ALL_TIERS_ID,
+        }
+      : undefined;
+
+  const analytics = analyze(attempts as AnalyticsAttempt[], scope, target);
   return { data: analytics, cache: { maxAgeSec: 0, swrSec: 5 } };
 });

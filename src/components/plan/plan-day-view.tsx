@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dialog } from "radix-ui";
@@ -71,6 +71,9 @@ export function PlanDayView({
   const [personalPending, setPersonalPending] = useState<Set<string>>(
     new Set(),
   );
+  const [newTaskBusy, setNewTaskBusy] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskError, setNewTaskError] = useState("");
   const neighbours = plan
     ? dayNeighbours(plan.days, date)
     : { current: undefined, previous: undefined, next: undefined };
@@ -99,6 +102,30 @@ export function PlanDayView({
 
   const stats = dayAssignmentStats(current);
   const phase = plan.phases.find((p) => p.phase === current.phase);
+  const dayDate = current.date;
+  /**
+   * Quick-add for this date. The task is created through the same endpoint
+   * My Tasks uses, with the day prefilled, so both surfaces show one record
+   * rather than two implementations drifting apart.
+   */
+  async function addPersonalTask(title: string) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    setNewTaskBusy(true);
+    setNewTaskError("");
+    try {
+      await mutateTodoRequest("/api/todos", "POST", {
+        title: trimmed.slice(0, 200),
+        dueDate: dayDate,
+      });
+    } catch (e) {
+      setNewTaskError(
+        e instanceof Error ? e.message : "Could not add the task.",
+      );
+    } finally {
+      setNewTaskBusy(false);
+    }
+  }
   const dayAttempts = attempts.filter(
     (attempt) => istDateKey(attempt.completedAt) === current.date,
   );
@@ -135,10 +162,11 @@ export function PlanDayView({
   const withPersonalOverlay = (task: Task): Task => {
     const entry = personalOverlay.get(task.id);
     if (!entry) return task;
-    if (task.version > entry.baseVersion) {
-      personalOverlay.delete(task.id);
-      return task;
-    }
+    // A newer server version supersedes the optimistic patch. The entry is
+    // ignored here rather than deleted: mutating the Map during render is
+    // what React forbids. The write settles below and prunes its own entry,
+    // so the overlay cannot grow without bound.
+    if (task.version > entry.baseVersion) return task;
     return { ...task, ...entry.patch };
   };
   const personalTasks = (todos.data?.items ?? []).map(withPersonalOverlay);
@@ -158,6 +186,9 @@ export function PlanDayView({
       // The refetch (fired by the mutation event) restores the real state;
       // API errors already surface through the session/error envelope.
     } finally {
+      // The write settled: drop this row's optimistic overlay so the next
+      // read of the list is authoritative.
+      personalOverlay.delete(task.id);
       setPersonalPending((prev) => {
         const next2 = new Set(prev);
         next2.delete(task.id);
@@ -218,6 +249,12 @@ export function PlanDayView({
           className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-2 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-soft hover:text-ink sm:min-h-0 sm:justify-start"
         >
           <PlainIcon name="calendar" size={15} /> Calendar
+        </Link>
+        <Link
+          href={`/plan/week/${current.date}`}
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-2 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-soft hover:text-ink sm:min-h-0 sm:justify-start"
+        >
+          <PlainIcon name="layers" size={15} /> Week
         </Link>
         <Button
           size="sm"
@@ -537,10 +574,41 @@ export function PlanDayView({
           </FlowSection>
 
           {/* Personal tasks for this date */}
-          {personalTasks.length > 0 && (
-            <section className="panel overflow-hidden" aria-label="Your tasks for this date">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rule-soft px-4 py-3 sm:px-5">
-                <h2 className="font-serif text-lg font-medium">Also due today</h2>
+          <section className="panel overflow-hidden" aria-label="Your tasks for this date">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rule-soft px-4 py-3 sm:px-5">
+              <h2 className="font-serif text-lg font-medium">
+                Your personal tasks
+              </h2>
+              <div className="flex items-center gap-3">
+                <form
+                  className="flex items-center gap-1.5"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void addPersonalTask(newTaskTitle).then(() => {
+                      setNewTaskTitle("");
+                    });
+                  }}
+                >
+                  <label className="sr-only" htmlFor="plan-day-new-task">
+                    New task for {longDate(current.date)}
+                  </label>
+                  <input
+                    id="plan-day-new-task"
+                    className="w-40 py-1.5 text-xs sm:w-56"
+                    placeholder="Add a task for this day…"
+                    maxLength={200}
+                    value={newTaskTitle}
+                    disabled={newTaskBusy}
+                    onChange={(event) => setNewTaskTitle(event.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={newTaskBusy || !newTaskTitle.trim()}
+                  >
+                    <PlainIcon name="plus" size={13} /> Add
+                  </Button>
+                </form>
                 <Link
                   href="/my-tasks"
                   className="text-[11px] font-medium text-accent transition-colors hover:text-accent-hover"
@@ -548,6 +616,13 @@ export function PlanDayView({
                   Open My Tasks →
                 </Link>
               </div>
+            </div>
+            {newTaskError && (
+              <p role="alert" className="border-b border-rule-soft px-4 py-2 text-[11px] text-danger sm:px-5">
+                {newTaskError}
+              </p>
+            )}
+            {personalTasks.length > 0 ? (
               <ul className="divide-y divide-rule-soft">
                 {personalTasks.map((task) => (
                   <li key={task.id} className="flex items-start gap-2.5 px-4 py-3 sm:px-5">
@@ -574,8 +649,13 @@ export function PlanDayView({
                   </li>
                 ))}
               </ul>
-            </section>
-          )}
+            ) : (
+              <p className="px-4 py-4 text-[0.8125rem] text-muted sm:px-5">
+                Nothing personal is due on this date. Add a task if today needs
+                one — it appears here and in My Tasks.
+              </p>
+            )}
+          </section>
 
           {/* Logged attempts */}
           <section className="panel p-4 sm:p-5" aria-label="Logged attempts">

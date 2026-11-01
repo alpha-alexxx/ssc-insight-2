@@ -13,11 +13,13 @@ import { Button } from "./ui/button";
 import { PlainIcon } from "./icon";
 import { useExamScope } from "./exam-context";
 import {
-  saveScopeRequest,
+  examsKeys,
+  putScopeRequest,
   switcherEntries,
   type SwitcherEntry,
 } from "@/lib/queries/exams";
-import { settingsKeys, type TrackerSettings } from "@/lib/queries/settings";
+import { attemptKeys } from "@/lib/queries/attempts";
+import { analyticsKeys } from "@/lib/queries/analytics";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
@@ -58,22 +60,20 @@ export function ExamSwitcher({
     if (entry.key === activeKey || busy) return;
     setBusy(true);
     try {
-      const current =
-        queryClient.getQueryData<TrackerSettings>(settingsKeys.current()) ??
-        null;
-      const settings: TrackerSettings = {
+      // Scope-only write: the server keeps the target envelope and
+      // preferences exactly as they are, so switching tiers can never
+      // overwrite a target edited elsewhere. The response is the full fresh
+      // workspace, patched straight into the one cache.
+      const fresh = await putScopeRequest({
         activeExamId: entry.examId,
         activeTierId: entry.tierId,
-        enabledTiers: current?.enabledTiers ?? exams.enabledTiers,
-        examTargets: current?.examTargets ?? exams.examTargets,
-      };
-      const fresh = await saveScopeRequest(settings);
-      queryClient.setQueryData(settingsKeys.current(), fresh);
-      // The exam payload carries the scope too; refresh it plus every
-      // exam-scoped data domain (attempts, analytics, paged lists).
-      scope.refresh();
-      await queryClient.invalidateQueries({ queryKey: ["mock-attempts"] });
-      await queryClient.invalidateQueries({ queryKey: ["analytics"] });
+        enabledTiers: exams.enabledTiers,
+      });
+      queryClient.setQueryData(examsKeys.current(), fresh);
+      // Attempts and analytics are tier-scoped, so the new scope invalidates
+      // both (paged lists, the detail cache and the dashboard payload).
+      await queryClient.invalidateQueries({ queryKey: attemptKeys.all });
+      await queryClient.invalidateQueries({ queryKey: analyticsKeys.all });
     } finally {
       setBusy(false);
     }
