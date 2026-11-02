@@ -324,6 +324,12 @@ lists or restores deleted work.
 - **Name uniqueness spans live and trashed** for custom exams and task groups. That is what
   makes restore conflict-free. Create/rename return a specific 409 naming Trash instead of a
   raw `P2002`.
+- **`CustomExam.id` is a live Postgres `UUID`; every other recoverable id is `TEXT`**
+  (`prisma/schema.prisma` says `String` for all four, so the schema under-describes this
+  column). `listTrash`'s raw `UNION ALL` across the four kinds must cast it — `"id"::text` —
+  or PostgreSQL answers `42804 UNION types text and uuid cannot be matched`, which `apiError`
+  has no case for and so reports as a generic `DATABASE_UNAVAILABLE` 503. Any new raw SQL
+  that unions the kind tables inherits the same requirement.
 - **Backups never carry Trash.** `exportBackup` filters live rows only. Import restores a
   trashed exam or group it collides with rather than duplicating it, and clamps an incoming
   `deletedAt` (`clampImportedDeletedAt`) so an older file cannot import already-expired
