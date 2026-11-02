@@ -101,3 +101,11 @@ export type AiScreenContext = {
   view: AiView;
   date?: string;
 };
+
+/**
+ * Longest todo-assistance instruction, matching the paste-extraction ceiling so
+ * "plan my whole week" can be written in one go. Enforced by the API schema and
+ * mirrored by the composer's counter; the route's body limit sits above the
+ * worst-case UTF-8 expansion of this many characters.
+ */
+export const MAX_TODO_PROMPT_CHARS = 20_000;

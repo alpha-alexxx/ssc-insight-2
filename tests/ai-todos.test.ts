@@ -5,6 +5,7 @@ import {
   todoDraftMessages,
   todoDraftRequestSchema,
 } from "../src/lib/ai/todos";
+import { MAX_TODO_PROMPT_CHARS } from "../src/lib/ai/client-types";
 const create = {
   type: "create",
   data: { title: "Revise algebra", dueDate: "2026-10-28" },
@@ -93,6 +94,21 @@ test("draft requests validate explicit date ranges without implicitly adding a d
   assert.equal(
     todoDraftRequestSchema.safeParse({ prompt: "Help", endDate: "2026-10-28" })
       .success,
+    false,
+  );
+});
+test("a todo instruction matches the paste-extraction ceiling", () => {
+  // Long enough to plan a whole week in one instruction, exactly like Log a mock.
+  assert.equal(
+    todoDraftRequestSchema.safeParse({
+      prompt: "p".repeat(MAX_TODO_PROMPT_CHARS),
+    }).success,
+    true,
+  );
+  assert.equal(
+    todoDraftRequestSchema.safeParse({
+      prompt: "p".repeat(MAX_TODO_PROMPT_CHARS + 1),
+    }).success,
     false,
   );
 });

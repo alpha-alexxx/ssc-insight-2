@@ -23,7 +23,11 @@ export const maxDuration = 60;
 export const POST = defineRoute(
   { kind: "write" },
   async ({ request, user }) => {
-    const input = todoDraftRequestSchema.parse(await readBody(request));
+    // The prompt may be 20k characters; allow for multi-byte UTF-8 and the
+    // small date fields rather than rejecting a long instruction at the door.
+    const input = todoDraftRequestSchema.parse(
+      await readBody(request, 128 * 1024),
+    );
     // Asking for dates is free and never resolves an AI provider or writes data.
     if (!input.date)
       return {

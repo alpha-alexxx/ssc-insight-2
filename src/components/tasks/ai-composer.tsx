@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { api } from "@/lib/api-client";
+import { MAX_TODO_PROMPT_CHARS } from "@/lib/ai/client-types";
 import { addIsoDays, istTodayIso } from "@/lib/plan/view-model";
 import { weekdayDate, shortDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -239,7 +240,7 @@ export function TodoAiComposer({
               <span className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-muted">What would you like to plan?</span>
               <textarea
                 required
-                maxLength={4000}
+                maxLength={MAX_TODO_PROMPT_CHARS}
                 rows={compact ? 5 : 3}
                 className={
                   compact
@@ -253,7 +254,8 @@ export function TodoAiComposer({
               />
               {compact && (
                 <span className="mt-1 block text-right text-xs font-normal tabular-nums text-muted">
-                  {prompt.length.toLocaleString("en-IN")} / 4,000
+                  {prompt.length.toLocaleString("en-IN")} /{" "}
+                  {MAX_TODO_PROMPT_CHARS.toLocaleString("en-IN")}
                 </span>
               )}
             </label>

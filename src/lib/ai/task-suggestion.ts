@@ -13,13 +13,10 @@
  * the user clicks Add. Everything here is pure and unit-tested.
  */
 
+import { stripUnsafeChars } from "./sanitize-core";
+
 /** Fenced task-suggestion blocks. The inner body is the first fenced region. */
 const BLOCK_PATTERN = /```task-suggestion\r?\n([\s\S]*?)```/g;
-
-/** Same invisible/control characters the report sanitizer strips, so a
- * suggestion cannot smuggle bidi overrides or zero-width lookalikes. */
-const UNSAFE_CHARS =
-  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g;
 
 export type TaskSuggestion = {
   title: string;
@@ -62,7 +59,9 @@ function isHttpUrl(value: string): boolean {
 }
 
 function parseSuggestionBody(body: string): TaskSuggestion | null {
-  const cleaned = body.replace(UNSAFE_CHARS, "").trim();
+  // The same character policy the prompt builders use, so a suggestion cannot
+  // smuggle bidi overrides or zero-width lookalikes into a task title.
+  const cleaned = stripUnsafeChars(body).trim();
   if (!cleaned) return null;
   let raw: unknown;
   try {
