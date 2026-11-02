@@ -117,8 +117,12 @@ function branch(
         FROM "ssc_insight"."PersonalTask"
         WHERE ${scope(Prisma.sql`"title"`)}`;
     case "exam":
+      // `"id"::text` is load-bearing: CustomExam was created with a real UUID
+      // column while every other kind's id is TEXT, and PostgreSQL refuses to
+      // unify the two (`42804 UNION types text and uuid cannot be matched`).
+      // The cast also matches RawTrashRow, which declares `id: string`.
       return Prisma.sql`
-        SELECT 'exam'::text AS kind, "id", "name" AS title,
+        SELECT 'exam'::text AS kind, "id"::text AS id, "name" AS title,
                COALESCE("tiers"->0->>'label', '') AS subtitle,
                NULL::text AS context,
                "deletedAt" AS deleted_at, NULL::bigint AS affected

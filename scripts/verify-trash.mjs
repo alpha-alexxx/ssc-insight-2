@@ -208,13 +208,53 @@ try {
   });
   assert.equal(taskBack.done, 1);
 
-  /* ---- 8. empty Trash is owner-scoped and needs the explicit flag ---- */
+  /* ---- 8. a custom exam round-trips through Trash ----
+   * This is the branch that pinned the UNION's type mismatch: CustomExam was
+   * created with a real UUID id while every other trashed table uses TEXT, so
+   * the list query needs an explicit `"id"::text` cast to unify them. */
+  const exam = await api(0, "/api/exams", "POST", {
+    name: marker + " exam",
+    tiers: [
+      {
+        label: "Paper 1",
+        subjects: [{ subjectId: "quant", questions: 10 }],
+        marking: { correct: 2, incorrect: 0.5 },
+      },
+    ],
+  });
+  created.push(`exam:${exam.id}`);
+  await api(0, "/api/exams", "DELETE", { id: exam.id });
+  const examRows = await api(
+    0,
+    "/api/trash?kind=exam&q=" + encodeURIComponent(marker),
+  );
+  const examRow = examRows.items.find((item) => item.id === exam.id);
+  assert.ok(examRow, "the trashed exam must appear in Trash");
+  assert.equal(examRow.kind, "exam");
+  // The all-kinds list is the query that unions UUID and TEXT ids.
+  const allRows = await api(0, "/api/trash?kind=all&limit=100");
+  assert.ok(
+    allRows.items.some((item) => item.id === exam.id),
+    "the all-kinds list must include the exam branch",
+  );
+  assert.ok(allRows.counts.exam >= 1, "counts.exam must count it");
+  const examBack = await api(0, "/api/trash/restore", "POST", {
+    items: [{ kind: "exam", id: exam.id }],
+  });
+  assert.equal(examBack.done, 1);
+  const catalog = await api(0, "/api/exams");
+  assert.ok(
+    catalog.customExams.some((row) => row.id === exam.id),
+    "a restored exam is back in the catalog",
+  );
+
+  /* ---- 9. empty Trash is owner-scoped and needs the explicit flag ---- */
   const unconfirmed = await raw(0, "/api/trash/empty", "POST", {});
   assert.equal(unconfirmed.status, 400, "empty Trash requires confirm: true");
   const emptied = await api(0, "/api/trash/empty", "POST", { confirm: true });
   assert.ok(emptied.total >= 0);
 
-  /* ---- 9. the cleanup endpoint is secret-gated and idempotent ---- */
+  /* ---- 10. the cleanup endpoint is secret-gated and idempotent ---- */
   const anonymousCron = await fetch(base + "/api/cron/trash-cleanup");
   assert.ok(
     [401, 503].includes(anonymousCron.status),
@@ -239,16 +279,21 @@ try {
   }
 
   console.log(
-    "PASS: soft delete hides a mock from every read, Trash lists it with a live window, kind-filter counts stay populated, live and foreign ids are refused on restore/purge, restore returns the same row, purge is permanent and idempotent, a task round-trips, empty Trash is scoped and confirm-gated, and cleanup is secret-gated.",
+    "PASS: soft delete hides a mock from every read, Trash lists it with a live window, kind-filter counts stay populated, live and foreign ids are refused on restore/purge, restore returns the same row, purge is permanent and idempotent, a task and a custom exam round-trip, empty Trash is scoped and confirm-gated, and cleanup is secret-gated.",
   );
 } finally {
   // Leave nothing behind, in either place. A live row is soft-deleted first,
   // then purged; an already-trashed row's DELETE simply 404s, which is fine.
   for (const entry of created) {
-    const kind = entry.startsWith("task:") ? "task" : "attempt";
-    const id = entry.slice(kind === "task" ? 5 : 0);
+    const kind = entry.startsWith("task:")
+      ? "task"
+      : entry.startsWith("exam:")
+        ? "exam"
+        : "attempt";
+    const id = entry.slice(kind === "attempt" ? 0 : kind.length + 1);
     if (kind === "attempt")
       await raw(0, `/api/mock-attempts/${id}`, "DELETE", {});
+    if (kind === "exam") await raw(0, "/api/exams", "DELETE", { id });
     await raw(0, "/api/trash/purge", "POST", { items: [{ kind, id }] });
   }
 }
