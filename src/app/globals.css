@@ -2678,7 +2678,161 @@ html {
     padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* ---------- Landing narrative ----------
+   The public page has one deliberate art direction. It stays warm paper and
+   terracotta even when the signed-in workspace uses another palette, visual
+   style, or dark mode. Workspace preferences resume after sign-in. */
+.landing-light {
+  color-scheme: light;
+  --canvas: #f4f1e8;
+  --paper: #faf8f2;
+  --ink: #25231f;
+  --muted: #6b665e;
+  --rule: #82796b;
+  --rule-soft: #d5cec1;
+  --soft: #eae5da;
+  --accent: #b65335;
+  --accent-hover: #934029;
+  --accent-soft: #efe0d5;
+  --positive: #535d37;
+  --positive-soft: #e6e9db;
+  --warning: #73551c;
+  --warning-soft: #eee4cc;
+  --danger: #962f28;
+  --danger-hover: #75231e;
+  --danger-soft: #f1dfd8;
+  --chart-score: #b65335;
+  --chart-average: #656d4a;
+  --chart-time: #567276;
+  --chart-quant: #b65335;
+  --chart-reasoning: #2a78d6;
+  --chart-english: #1baf7a;
+  --chart-ga: #eda100;
+  --chart-computer: #767168;
+  --chart-section-1: #b65335;
+  --chart-section-2: #2a78d6;
+  --chart-target: #6b665e;
+  --chart-correct: #656d4a;
+  --chart-incorrect: #b65335;
+  --chart-skipped: #d5cec1;
+  --outcome-unattempted: #c9bda7;
+  --plate-bg: #25231f;
+  --plate-fg: #faf8f2;
+  --plate-muted: #aaa49a;
+  --plate-rule: #69645d;
+  --plate-rule-soft: #49453f;
+  --plate-surface: #302d28;
+  --plate-card: #faf8f2;
+  --landing-lift: 0 1px 2px rgb(37 35 31 / 8%),
+    0 18px 44px -26px rgb(37 35 31 / 55%);
+}
+
+/* A coded editorial/data emblem: concentric paper rules and one offset score
+   arc. It provides atmosphere without adding an image request or LCP cost. */
+.landing-paper-orbit {
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+  border-radius: 50%;
+  background:
+    linear-gradient(90deg, transparent 49.85%, var(--rule-soft) 50%, transparent 50.15%),
+    linear-gradient(transparent 49.85%, var(--rule-soft) 50%, transparent 50.15%);
+  mask-image: linear-gradient(135deg, transparent 5%, #000 35%, #000 72%, transparent 96%);
+}
+.landing-paper-orbit::before,
+.landing-paper-orbit::after {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+}
+.landing-paper-orbit::before {
+  inset: 14%;
+  border: 1px solid var(--rule-soft);
+}
+.landing-paper-orbit::after {
+  inset: 31%;
+  border: 2px solid var(--accent);
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  rotate: 22deg;
+}
+
+.landing-word-reveal {
+  animation: landing-mask-in 900ms var(--ease-out-soft) both;
+  clip-path: inset(0 0 100% 0);
+  translate: 0 0.45em;
+}
+.landing-word-reveal-delay {
+  animation-delay: 110ms;
+}
+.landing-word-reveal-late {
+  animation-delay: 220ms;
+}
+.landing-arrow-down {
+  animation: landing-arrow 1.8s var(--ease-out-soft) 1s infinite;
+}
+.landing-scroll-mark {
+  transform-origin: top;
+  animation: landing-rule 1.9s var(--ease-out-soft) 800ms infinite;
+}
+.landing-magnetic {
+  will-change: transform;
+}
+.landing-assembly {
+  scroll-margin-top: 4rem;
+}
+
+@keyframes landing-mask-in {
+  to {
+    clip-path: inset(0 0 0 0);
+    translate: 0 0;
+  }
+}
+@keyframes landing-arrow {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 0.22rem;
+  }
+}
+@keyframes landing-rule {
+  0% {
+    opacity: 0;
+    scale: 1 0;
+  }
+  32% {
+    opacity: 1;
+    scale: 1 1;
+  }
+  78% {
+    opacity: 1;
+    scale: 1 1;
+    transform-origin: bottom;
+  }
+  100% {
+    opacity: 0;
+    scale: 1 0;
+    transform-origin: bottom;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .landing-assembly-linear {
+    display: block;
+  }
+  .landing-assembly-pinned {
+    display: none;
+  }
+  .landing-word-reveal {
+    animation: none;
+    clip-path: none;
+    translate: none;
+  }
+  .landing-arrow-down,
+  .landing-scroll-mark {
+    animation: none;
+  }
   .animate-spin,
   .animate-pulse,
   .guard-rise,

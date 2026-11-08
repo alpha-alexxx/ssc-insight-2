@@ -15,13 +15,13 @@ export const dynamic = "force-dynamic";
  * duplicate that round trip or block the document head behind it.
  */
 export const metadata: Metadata = {
-  title: "SSC Insight — SSC CGL Tier 2 mock tracker",
+  title: "SSC Insight — private SSC mock tracker",
   description:
-    "Log full, sectional and subject mocks. See the trend across 390 marks, the gap to your target, and the next test on a 50-day plan.",
+    "Turn SSC mock results into a private preparation system: track exam-specific patterns, read performance, plan the next action, and compare progress.",
   openGraph: {
-    title: "SSC Insight — SSC CGL Tier 2 mock tracker",
+    title: "SSC Insight — private SSC mock tracker",
     description:
-      "A private mock tracker for SSC CGL Tier 2: four analytical scopes over one saved attempt, a 50-day study plan, and a portable JSON backup.",
+      "A private preparation workspace for SSC exams: capture attempts, read four analytical views, schedule the response, and keep a portable JSON backup.",
     type: "website",
   },
 };

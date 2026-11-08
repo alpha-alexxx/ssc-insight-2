@@ -1,32 +1,28 @@
+import { Assembly } from "./assembly";
 import { Hero } from "./hero";
 import { LandingError } from "./landing-error";
-import { LedgerFacts } from "./ledger-facts";
 import { Masthead } from "./masthead";
 import { LANDING_PLAN } from "./plan-data";
+import { PreparationStory } from "./preparation-story";
 import {
   AiSection,
-  CompareSection,
   FaqSection,
   FinalCta,
   LandingFooter,
-  PlanSection,
   PrivacySection,
-  ScopesSection,
 } from "./sections";
 import { Plate } from "./section";
-import { Showcase } from "./showcase";
 
 /**
  * The public landing page — the only sign-in surface, and the first thing an
  * anonymous visitor sees.
  *
- * Structure: a server-rendered page with a handful of named client islands
- * (masthead, hero art, showcase tabs, the scope diagram, the FAQ accordion,
- * the reveal wrappers, the error announcer). Everything else — copy, section
- * heads, mockup markup, the fact strip, the plan grid — is static HTML, so the
- * page is fully readable before hydration and without JavaScript.
+ * Structure: a server-rendered five-act story with named client islands for
+ * the masthead, hero art, decorative constellation, pinned assembly, scope
+ * diagram, FAQ, and error announcer. Copy and coded product mockups stay
+ * readable before hydration and without JavaScript.
  *
- * The two plates invert the surface to charcoal. Only the plate's own
+ * The trust plate inverts the surface to charcoal. Only the plate's own
  * custom properties change there; semantic tokens are untouched, which is
  * what lets a paper mockup sit on a plate and still look exactly like the
  * workspace.
@@ -39,7 +35,10 @@ export function Landing({
   errorCode?: string;
 }) {
   return (
-    <div id="top" className="min-h-screen overflow-x-clip bg-canvas text-ink">
+    <div
+      id="top"
+      className="landing-light min-h-screen overflow-x-clip bg-canvas text-ink"
+    >
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
@@ -48,19 +47,10 @@ export function Landing({
 
       <main id="main-content">
         <Hero authEnabled={authEnabled} />
-        <LedgerFacts plan={LANDING_PLAN} />
+        <Assembly plan={LANDING_PLAN} />
+        <PreparationStory plan={LANDING_PLAN} />
 
-        <Plate id="workspace" label="Plate I · The workspace">
-          <div className="pb-20 pt-14 sm:pb-24">
-            <Showcase plan={LANDING_PLAN} />
-          </div>
-        </Plate>
-
-        <ScopesSection />
-        <PlanSection plan={LANDING_PLAN} />
-        <CompareSection />
-
-        <Plate label="Plate II · Yours alone">
+        <Plate label="Trust · Yours alone">
           <AiSection />
           <PrivacySection />
         </Plate>

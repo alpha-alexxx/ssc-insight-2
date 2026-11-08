@@ -38,7 +38,7 @@ export const FAQ_ITEMS: { question: string; answer: string }[] = [
       "No. The coach is optional and stays hidden until a provider is configured. You can enter your own key in Settings or in the panel itself; it is encrypted before storage, shown back only as its last four characters, and excluded from backups. Every table, chart, comparison and plan day works without it.",
   },
   {
-    question: "How is the score calculated?",
+    question: "How does CGL Tier 2 scoring work?",
     answer:
       "Three marks for a correct answer, one lost for an incorrect one, and nothing for a question left blank. A full mock is out of 390 — Quant 30, Reasoning 30, English 45 and General Awareness 25 questions — and a subject or sectional mock is out of three times its own question count.",
   },

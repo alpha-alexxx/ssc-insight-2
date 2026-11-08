@@ -1,23 +1,20 @@
 "use client";
 import { useEffect, useState } from "react";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sheet,
   SheetClose,
   SheetContent,
   SheetDescription,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 export const NAV: { href: string; label: string }[] = [
-  { href: "#workspace", label: "Workspace" },
-  { href: "#scopes", label: "Scopes" },
-  { href: "#plan", label: "Plan" },
-  { href: "#compare", label: "Compare" },
-  { href: "#privacy", label: "Privacy" },
+  { href: "#workspace", label: "How it works" },
+  { href: "#system", label: "Preparation system" },
+  { href: "#privacy", label: "Trust" },
+  { href: "#start", label: "Start" },
 ];
 
 /**
@@ -35,6 +32,8 @@ export const NAV: { href: string; label: string }[] = [
 export function Masthead({ authEnabled }: { authEnabled: boolean }) {
   const [scrolled, setScrolled] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [active, setActive] = useState("#workspace");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     let frame = 0;
@@ -44,6 +43,15 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
         document.documentElement.scrollHeight - window.innerHeight;
       setScrolled(window.scrollY > 8);
       setProgress(scrollable > 0 ? Math.min(1, window.scrollY / scrollable) : 0);
+      const checkpoint = window.scrollY + window.innerHeight * 0.35;
+      const current = [...NAV].reverse().find((item) => {
+        const section = document.querySelector<HTMLElement>(item.href);
+        const top = section
+          ? section.getBoundingClientRect().top + window.scrollY
+          : Number.POSITIVE_INFINITY;
+        return top <= checkpoint;
+      });
+      setActive(current?.href ?? "#workspace");
     }
     function onScroll() {
       if (frame) return;
@@ -82,7 +90,13 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
               <li key={item.href}>
                 <a
                   href={item.href}
-                  className="text-[0.8125rem] text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+                  aria-current={active === item.href ? "location" : undefined}
+                  className={cn(
+                    "relative py-2 text-[0.8125rem] transition-colors after:absolute after:inset-x-0 after:bottom-0 after:h-px after:origin-left after:bg-accent after:transition-transform",
+                    active === item.href
+                      ? "text-ink after:scale-x-100"
+                      : "text-muted after:scale-x-0 hover:text-ink hover:after:scale-x-100",
+                  )}
                 >
                   {item.label}
                 </a>
@@ -92,7 +106,6 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
         </nav>
 
         <div className="flex items-center gap-1 sm:gap-3">
-          <ThemeToggle />
           <GoogleSignInButton
             enabled={authEnabled}
             variant="outline"
@@ -101,20 +114,20 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
             compactLabel="Sign in"
             ariaLabel="Sign in with Google"
           />
-          <Sheet>
-            <SheetTrigger asChild>
-              <button
-                type="button"
-                aria-label="Open navigation"
-                className="-mr-1 grid size-9 place-items-center text-muted transition-colors hover:text-ink md:hidden"
-              >
-                <span aria-hidden="true" className="flex w-4 flex-col gap-[3px]">
-                  <span className="h-px w-full bg-current" />
-                  <span className="h-px w-full bg-current" />
-                  <span className="h-px w-full bg-current" />
-                </span>
-              </button>
-            </SheetTrigger>
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <button
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen(true)}
+              className="-mr-1 grid size-9 place-items-center text-muted transition-colors hover:text-ink md:hidden"
+            >
+              <span aria-hidden="true" className="flex w-4 flex-col gap-[3px]">
+                <span className="h-px w-full bg-current" />
+                <span className="h-px w-full bg-current" />
+                <span className="h-px w-full bg-current" />
+              </span>
+            </button>
             <SheetContent side="right" className="w-[86vw] sm:max-w-[380px]">
               <div className="flex h-full flex-col p-6">
                 <SheetTitle className="landing-wordmark text-2xl text-ink">
@@ -122,7 +135,7 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
                   <span className="text-accent">.</span>
                 </SheetTitle>
                 <SheetDescription className="mt-1 text-xs text-muted">
-                  SSC CGL Tier 2 · Mock tracker
+                  A private mock tracker and preparation system.
                 </SheetDescription>
 
                 <nav aria-label="Landing sections" className="mt-8">
@@ -153,8 +166,8 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
                 </nav>
 
                 <p className="mt-auto pt-6 text-xs leading-relaxed text-muted">
-                  A private tracker for SSC CGL Tier 2. One account, one
-                  workspace, and a JSON export whenever you want out.
+                  Built-in SSC exam patterns, custom exams, one private
+                  workspace, and a portable JSON backup whenever you want out.
                 </p>
               </div>
             </SheetContent>

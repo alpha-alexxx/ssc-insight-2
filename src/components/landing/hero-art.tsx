@@ -97,8 +97,8 @@ export function HeroArt() {
 
       {/* ---------- the slab ---------- */}
       <motion.div
-        style={reduced ? undefined : { x: slabX, y: slabY }}
-        className="landing-sweep relative z-10 lg:-rotate-[1.2deg] motion-reduce:rotate-0"
+        style={{ x: slabX, y: slabY }}
+        className="landing-sweep relative z-10 lg:-rotate-[1.2deg] motion-reduce:!transform-none"
       >
         <div className="overflow-hidden rounded-card border border-rule-soft bg-paper landing-lift">
           {/* window chrome */}
@@ -234,10 +234,10 @@ export function HeroArt() {
           but they never sit on top of its figures. */}
       <div className="relative z-20 mt-3 hidden grid-cols-3 gap-2.5 lg:grid">
         <motion.div
-          style={reduced ? undefined : { x: cardAX, y: cardAY }}
-          className="min-w-0"
+          style={{ x: cardAX, y: cardAY }}
+          className="min-w-0 motion-reduce:!transform-none"
         >
-          <div className={reduced ? undefined : "landing-float-a"}>
+          <div className="landing-float-a">
             <div className="rounded-card border border-rule-soft bg-paper p-2.5 landing-lift">
               <div className="flex items-center gap-2">
                 <MockRing
@@ -273,10 +273,10 @@ export function HeroArt() {
         </motion.div>
 
         <motion.div
-          style={reduced ? undefined : { x: cardBX, y: cardBY }}
-          className="min-w-0"
+          style={{ x: cardBX, y: cardBY }}
+          className="min-w-0 motion-reduce:!transform-none"
         >
-          <div className={reduced ? undefined : "landing-float-c"}>
+          <div className="landing-float-c">
             <div className="rounded-card border border-rule-soft bg-paper p-2.5 landing-lift">
               <p className="section-label">Answer breakdown</p>
               <div className="mt-1.5 flex items-center gap-2.5">
@@ -336,7 +336,7 @@ export function HeroArt() {
 
         {/* The two most recent attempts, completing the shelf. */}
         <div className="min-w-0">
-          <div className={reduced ? undefined : "landing-float-b"}>
+          <div className="landing-float-b">
             <div className="h-full rounded-card border border-rule-soft bg-paper p-2.5 landing-lift">
               <p className="section-label">Recent mocks</p>
               <ul className="mt-1.5 space-y-1">

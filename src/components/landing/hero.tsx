@@ -1,4 +1,5 @@
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { DataConstellation } from "./data-constellation";
 import { HeroArt } from "./hero-art";
 
 /**
@@ -9,34 +10,40 @@ import { HeroArt } from "./hero-art";
  */
 export function Hero({ authEnabled }: { authEnabled: boolean }) {
   return (
-    <section className="relative overflow-hidden" aria-labelledby="hero-title">
+    <section
+      className="relative isolate min-h-[calc(100svh-4rem)] overflow-hidden"
+      aria-labelledby="hero-title"
+    >
       <div aria-hidden="true" className="landing-grid-lines absolute inset-0" />
+      <DataConstellation />
       <div
         aria-hidden="true"
         className="landing-blob absolute -left-40 -top-44 size-[34rem] bg-accent-soft opacity-70"
       />
+      <div
+        aria-hidden="true"
+        className="landing-paper-orbit absolute -right-28 top-10 size-[30rem] opacity-70"
+      />
 
-      <div className="relative mx-auto grid max-w-6xl gap-14 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center lg:gap-10 lg:pb-28 lg:pt-24">
+      <div className="relative z-10 mx-auto grid min-h-[calc(100svh-4rem)] max-w-6xl gap-14 px-5 pb-16 pt-14 sm:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-12 lg:pb-20 lg:pt-20">
         <div className="landing-rise max-w-xl">
-          <p className="section-label flex items-center gap-2.5">
-            <span aria-hidden="true" className="h-px w-6 bg-rule" />
-            SSC CGL Tier 2 · Mock tracker
-          </p>
-
           <h1
             id="hero-title"
-            className="mt-5 max-w-[17ch] font-serif text-[clamp(2.125rem,4vw,3.125rem)] font-[450] leading-[1.06] tracking-[-0.035em] text-balance"
+            className="max-w-[14ch] font-serif text-[clamp(2.7rem,6vw,5.6rem)] font-[450] leading-[0.94] tracking-[-0.04em] text-balance"
           >
-            Your mocks are data.
-            <span className="mt-1 block text-accent">
-              Make them mean something.
+            <span className="landing-word-reveal block">Every attempt</span>
+            <span className="landing-word-reveal landing-word-reveal-delay block">
+              leaves evidence.
+            </span>
+            <span className="landing-word-reveal landing-word-reveal-late mt-2 block text-accent">
+              Use it.
             </span>
           </h1>
 
-          <p className="mt-6 max-w-md text-[0.9375rem] leading-relaxed text-muted">
-            SSC Insight is a private tracker for SSC CGL Tier 2. Log every full,
-            sectional and subject mock, and read the trend, the gap to your
-            target, and the next test on a 50-day plan.
+          <p className="mt-7 max-w-lg text-[1rem] leading-relaxed text-muted sm:text-[1.0625rem]">
+            SSC Insight turns mocks into a private preparation system. Track
+            built-in SSC exam patterns or your own, read performance without
+            double-counting, and place the next piece of work on a date.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -47,10 +54,10 @@ export function Hero({ authEnabled }: { authEnabled: boolean }) {
             />
             <a
               href="#workspace"
-              className="inline-flex items-center gap-2 rounded-control border border-rule px-5 py-3 text-sm font-medium text-ink transition-colors hover:bg-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="landing-magnetic inline-flex items-center gap-2 rounded-control border border-rule bg-paper px-5 py-3 text-sm font-medium text-ink transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:hover:translate-y-0"
             >
-              See the workspace
-              <span aria-hidden="true">↓</span>
+              Watch the workspace assemble
+              <span aria-hidden="true" className="landing-arrow-down">↓</span>
             </a>
           </div>
 
@@ -59,7 +66,7 @@ export function Hero({ authEnabled }: { authEnabled: boolean }) {
             <span aria-hidden="true">·</span>
             <span>Google sign-in</span>
             <span aria-hidden="true">·</span>
-            <span>Export everything, anytime</span>
+            <span>Portable JSON backup</span>
           </p>
         </div>
 
@@ -67,6 +74,15 @@ export function Hero({ authEnabled }: { authEnabled: boolean }) {
           <HeroArt />
         </div>
       </div>
+
+      <a
+        href="#workspace"
+        aria-label="Scroll to the workspace story"
+        className="absolute bottom-4 left-1/2 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted lg:flex"
+      >
+        Scroll to assemble
+        <span aria-hidden="true" className="landing-scroll-mark h-9 w-px bg-rule" />
+      </a>
     </section>
   );
 }

@@ -2,7 +2,7 @@ import { DuotoneIcon, DuotoneTile } from "@/components/icon";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
 import { shortDate } from "@/lib/format";
 import { totals } from "@/lib/domain";
-import { LANDING_ATTEMPTS, LANDING_FULL_MOCKS, LANDING_SUMMARY } from "./fixtures";
+import { LANDING_ATTEMPTS, LANDING_FULL_MOCKS } from "./fixtures";
 import type { LandingPlanData } from "./plan-facts";
 import { Faq } from "./faq";
 import { PlanGrid, PlanLegend } from "./planner-section";
@@ -337,7 +337,6 @@ export function FaqSection() {
 /* ---------- 07 · Final CTA + footer ---------- */
 
 export function FinalCta({ authEnabled }: { authEnabled: boolean }) {
-  const summary = LANDING_SUMMARY;
   return (
     <Section id="start" number="07" bordered={false} className="py-20 sm:py-28">
       <Reveal>
@@ -350,11 +349,11 @@ export function FinalCta({ authEnabled }: { authEnabled: boolean }) {
             <div>
               <p className="section-label">Start here</p>
               <h2 className="mt-3 max-w-xl font-serif text-[clamp(1.875rem,3.6vw,2.875rem)] font-[450] leading-[1.08] tracking-[-0.03em] text-balance">
-                Start with the mock you already took.
+                Start with the result you already have.
               </h2>
               <p className="mt-4 max-w-lg text-[0.9375rem] leading-relaxed text-muted">
-                Sign in, log one result, and the ledger begins — trend, target
-                gap and plan position from a single attempt.
+                Choose the exam and tier, log one result, and the workspace
+                begins to reveal the pattern and the next useful action.
               </p>
               <div className="mt-8">
                 <GoogleSignInButton
@@ -364,15 +363,15 @@ export function FinalCta({ authEnabled }: { authEnabled: boolean }) {
                 />
               </div>
               <p className="mt-4 text-xs text-muted">
-                No card, no test series, nothing shared.
+                No card, no test series, and no shared workspace.
               </p>
             </div>
 
             <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-t border-rule-soft pt-5 lg:min-w-[16rem] lg:border-t-0 lg:border-l lg:pl-8 lg:pt-0">
               {[
-                { label: "Marks in a paper", value: "390" },
-                { label: "Target reference", value: `${Math.round(summary.targetPercentage)}%` },
-                { label: "Plan length", value: "50 days" },
+                { label: "Built-in exams", value: "7+" },
+                { label: "Analytical views", value: "4" },
+                { label: "Private workspace", value: "1" },
                 { label: "Export", value: "JSON" },
               ].map((row) => (
                 <div key={row.label}>
@@ -401,8 +400,8 @@ export function LandingFooter() {
               <span className="text-accent">.</span>
             </p>
             <p className="mt-3 max-w-[16rem] text-xs leading-relaxed text-muted">
-              A private mock tracker for SSC CGL Tier 2. One account, one
-              workspace.
+              A private mock tracker and preparation system for SSC exams. One
+              account, one workspace.
             </p>
           </div>
 
@@ -410,31 +409,30 @@ export function LandingFooter() {
             {
               title: "This page",
               links: [
-                ["#workspace", "The workspace"],
-                ["#scopes", "Analytical scopes"],
-                ["#plan", "The 50-day plan"],
-                ["#compare", "Compare"],
+                ["#workspace", "How it works"],
+                ["#system", "Preparation system"],
+                ["#privacy", "Trust"],
                 ["#faq", "Questions"],
               ],
             },
             {
-              title: "The paper",
+              title: "Exam patterns",
               links: [],
               rows: [
-                ["Full mock", "130 Q · 390 marks"],
-                ["Section I", "Quant + Reasoning · 180"],
-                ["Section II", "English + GA · 210"],
-                ["Marking", "+3 correct · −1 wrong"],
+                ["CGL", "Tier 1 + Tier 2"],
+                ["CHSL · MTS", "built in"],
+                ["CPO · GD", "built in"],
+                ["Custom", "your own pattern"],
               ],
             },
             {
-              title: "The plan",
+              title: "The system",
               links: [],
               rows: [
-                ["Window", "26 Oct – 14 Dec 2026"],
-                ["Phase 1", "Build · days 1–20"],
-                ["Phase 2", "Speed & Accuracy · 21–45"],
-                ["Phase 3", "Final Revision · 46–50"],
+                ["Capture", "attempt + breakdown"],
+                ["Read", "four analytical views"],
+                ["Plan", "dated preparation"],
+                ["Improve", "side-by-side compare"],
               ],
             },
           ].map((column) => (
@@ -464,7 +462,7 @@ export function LandingFooter() {
 
         <div className="mt-10 flex flex-col gap-2 border-t border-rule-soft pt-6 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
           <p>
-            Dates in India Standard Time · SSC CGL Tier 2 · {new Date().getFullYear()}
+            Dates in India Standard Time · SSC preparation · {new Date().getFullYear()}
           </p>
           <p>Not affiliated with the Staff Selection Commission.</p>
         </div>
