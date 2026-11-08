@@ -1,17 +1,4 @@
-import { Assembly } from "./assembly";
-import { Hero } from "./hero";
-import { LandingError } from "./landing-error";
-import { Masthead } from "./masthead";
-import { LANDING_PLAN } from "./plan-data";
-import { PreparationStory } from "./preparation-story";
-import {
-  AiSection,
-  FaqSection,
-  FinalCta,
-  LandingFooter,
-  PrivacySection,
-} from "./sections";
-import { Plate } from "./section";
+import { PremiumLanding } from "./premium-landing";
 
 /**
  * The public landing page — the only sign-in surface, and the first thing an
@@ -34,34 +21,5 @@ export function Landing({
   authEnabled: boolean;
   errorCode?: string;
 }) {
-  return (
-    <div
-      id="top"
-      className="landing-light landing-stage min-h-screen overflow-x-clip text-ink"
-    >
-      <a className="skip-link" href="#main-content">
-        Skip to main content
-      </a>
-      <LandingError errorCode={errorCode} />
-      <div className="landing-site-frame">
-        <Masthead authEnabled={authEnabled} />
-
-        <main id="main-content">
-          <Hero authEnabled={authEnabled} />
-          <Assembly plan={LANDING_PLAN} />
-          <PreparationStory plan={LANDING_PLAN} />
-
-          <Plate label="Trust · Yours alone">
-            <AiSection />
-            <PrivacySection />
-          </Plate>
-
-          <FaqSection />
-          <FinalCta authEnabled={authEnabled} />
-        </main>
-
-        <LandingFooter />
-      </div>
-    </div>
-  );
+  return <PremiumLanding authEnabled={authEnabled} errorCode={errorCode} />;
 }
