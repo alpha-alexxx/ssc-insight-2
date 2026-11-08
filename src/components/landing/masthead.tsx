@@ -20,10 +20,10 @@ export const NAV: { href: string; label: string }[] = [
 /**
  * The landing masthead.
  *
- * Client-side because it owns two pieces of UI state: the scroll-triggered
- * hairline (so the bar reads as floating over content once you leave the
- * hero) and the mobile navigation sheet. Everything else — wordmark, nav
- * labels, the sign-in button — is ordinary markup.
+ * Client-side because it owns the scroll progress, active section and mobile
+ * navigation sheet. The ink capsule stays inset over the paper surface in the
+ * same visual rhythm as the reference while keeping SSC Insight's own type,
+ * colour and content.
  *
  * The scroll listener is passive and only ever flips a boolean, so it does
  * not re-render on every frame; the progress rule is a transform driven by
@@ -70,14 +70,14 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 border-b bg-canvas/85 backdrop-blur transition-colors duration-200",
-        scrolled ? "border-rule-soft" : "border-transparent",
+        "landing-masthead sticky top-3 z-40 mx-auto max-w-6xl px-3 transition-transform duration-300 sm:px-6",
+        scrolled && "translate-y-0",
       )}
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+      <div className="landing-nav-pill mx-auto flex h-14 items-center justify-between gap-4 rounded-[999px] border border-paper/10 bg-ink px-4 text-paper shadow-[0_12px_34px_-22px_rgba(37,35,31,0.8)] sm:px-5">
         <a
           href="#top"
-          className="landing-wordmark text-[23px] text-ink md:text-2xl"
+          className="landing-wordmark text-[21px] text-paper md:text-[22px]"
           aria-label="SSC Insight — back to top"
         >
           ssc<span className="text-accent">insight</span>
@@ -94,8 +94,8 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
                   className={cn(
                     "relative py-2 text-[0.8125rem] transition-colors after:absolute after:inset-x-0 after:bottom-0 after:h-px after:origin-left after:bg-accent after:transition-transform",
                     active === item.href
-                      ? "text-ink after:scale-x-100"
-                      : "text-muted after:scale-x-0 hover:text-ink hover:after:scale-x-100",
+                      ? "text-paper after:scale-x-100"
+                      : "text-[var(--plate-muted)] after:scale-x-0 hover:text-paper hover:after:scale-x-100",
                   )}
                 >
                   {item.label}
@@ -113,6 +113,7 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
             label="Sign in with Google"
             compactLabel="Sign in"
             ariaLabel="Sign in with Google"
+            className="border-paper/25 bg-paper text-ink hover:bg-canvas"
           />
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <button
@@ -120,7 +121,7 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
               aria-label="Open navigation"
               aria-expanded={mobileOpen}
               onClick={() => setMobileOpen(true)}
-              className="-mr-1 grid size-9 place-items-center text-muted transition-colors hover:text-ink md:hidden"
+              className="-mr-1 grid size-9 place-items-center text-[var(--plate-muted)] transition-colors hover:text-paper md:hidden"
             >
               <span aria-hidden="true" className="flex w-4 flex-col gap-[3px]">
                 <span className="h-px w-full bg-current" />
@@ -175,10 +176,10 @@ export function Masthead({ authEnabled }: { authEnabled: boolean }) {
         </div>
       </div>
 
-      {/* Reading progress: a 2px rule the width of the page. */}
+      {/* Reading progress: a 2px rule inset inside the navigation capsule. */}
       <div
         aria-hidden="true"
-        className="absolute inset-x-0 bottom-0 h-[2px] overflow-hidden"
+        className="absolute inset-x-8 bottom-0 h-[2px] overflow-hidden rounded-full sm:inset-x-11"
       >
         <div
           className="h-full origin-left bg-accent transition-transform duration-150 ease-out"

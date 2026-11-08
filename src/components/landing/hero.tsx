@@ -3,15 +3,15 @@ import { DataConstellation } from "./data-constellation";
 import { HeroArt } from "./hero-art";
 
 /**
- * The hero. The copy column is a server component and animates with CSS only
- * (`.landing-rise`), so the headline is painted and readable before any
- * JavaScript runs — the LCP never waits on hydration. The art column is the
- * one client island, and it degrades to a flat, static slab below `lg`.
+ * The hero. Copy is centred above a coded product surface that rises from the
+ * lower edge, mirroring the reference's reveal rhythm without borrowing its
+ * finance imagery. The headline animates with CSS only (`.landing-rise`), so
+ * it is readable before hydration; the client art degrades to a static slab.
  */
 export function Hero({ authEnabled }: { authEnabled: boolean }) {
   return (
     <section
-      className="relative isolate min-h-[calc(100svh-4rem)] overflow-hidden"
+      className="landing-hero landing-cinematic-panel relative isolate min-h-[calc(100svh-2rem)] overflow-hidden"
       aria-labelledby="hero-title"
     >
       <div aria-hidden="true" className="landing-grid-lines absolute inset-0" />
@@ -25,11 +25,11 @@ export function Hero({ authEnabled }: { authEnabled: boolean }) {
         className="landing-paper-orbit absolute -right-28 top-10 size-[30rem] opacity-70"
       />
 
-      <div className="relative z-10 mx-auto grid min-h-[calc(100svh-4rem)] max-w-6xl gap-14 px-5 pb-16 pt-14 sm:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-12 lg:pb-20 lg:pt-20">
-        <div className="landing-rise max-w-xl">
+      <div className="relative z-10 mx-auto flex min-h-[calc(100svh-2rem)] max-w-6xl flex-col items-center px-5 pb-0 pt-16 text-center sm:px-8 sm:pt-20 lg:pt-24">
+        <div className="landing-rise mx-auto max-w-3xl">
           <h1
             id="hero-title"
-            className="max-w-[14ch] font-serif text-[clamp(2.7rem,6vw,5.6rem)] font-[450] leading-[0.94] tracking-[-0.04em] text-balance"
+            className="mx-auto max-w-[13ch] font-serif text-[clamp(2.8rem,6.6vw,6.25rem)] font-[450] leading-[0.92] tracking-[-0.045em] text-balance"
           >
             <span className="landing-word-reveal block">Every attempt</span>
             <span className="landing-word-reveal landing-word-reveal-delay block">
@@ -40,13 +40,13 @@ export function Hero({ authEnabled }: { authEnabled: boolean }) {
             </span>
           </h1>
 
-          <p className="mt-7 max-w-lg text-[1rem] leading-relaxed text-muted sm:text-[1.0625rem]">
+          <p className="mx-auto mt-7 max-w-2xl text-[1rem] leading-relaxed text-muted sm:text-[1.0625rem]">
             SSC Insight turns mocks into a private preparation system. Track
             built-in SSC exam patterns or your own, read performance without
             double-counting, and place the next piece of work on a date.
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <GoogleSignInButton
               enabled={authEnabled}
               label="Sign in with Google"
@@ -61,7 +61,7 @@ export function Hero({ authEnabled }: { authEnabled: boolean }) {
             </a>
           </div>
 
-          <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <p className="mt-5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted">
             <span>Private account</span>
             <span aria-hidden="true">·</span>
             <span>Google sign-in</span>
@@ -70,19 +70,18 @@ export function Hero({ authEnabled }: { authEnabled: boolean }) {
           </p>
         </div>
 
-        <div className="min-w-0">
+        <div className="landing-hero-product mt-12 w-full max-w-[58rem] min-w-0 sm:mt-14">
           <HeroArt />
         </div>
       </div>
 
-      <a
-        href="#workspace"
-        aria-label="Scroll to the workspace story"
-        className="absolute bottom-4 left-1/2 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted lg:flex"
+      <span
+        aria-hidden="true"
+        className="landing-scroll-cue absolute bottom-4 right-5 z-20 hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted lg:flex"
       >
-        Scroll to assemble
-        <span aria-hidden="true" className="landing-scroll-mark h-9 w-px bg-rule" />
-      </a>
+        Scroll
+        <span className="landing-scroll-mark h-px w-10 bg-rule" />
+      </span>
     </section>
   );
 }

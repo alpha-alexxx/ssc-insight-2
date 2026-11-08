@@ -2728,6 +2728,101 @@ html {
     0 18px 44px -26px rgb(37 35 31 / 55%);
 }
 
+/* The reference motion uses a quiet neutral stage around one rounded site
+   surface. The inset disappears on small screens so it never costs usable
+   width. The application workspace remains full-bleed after sign-in. */
+.landing-stage {
+  background: #d8d7d3;
+  padding: 18px;
+}
+.landing-site-frame {
+  position: relative;
+  min-height: calc(100svh - 36px);
+  border: 1px solid rgb(37 35 31 / 10%);
+  border-radius: 18px;
+  background: var(--canvas);
+  box-shadow: 0 26px 70px -54px rgb(37 35 31 / 70%);
+}
+.landing-masthead {
+  animation: landing-nav-drop 720ms var(--ease-out-soft) both;
+}
+.landing-hero-product {
+  animation: landing-product-rise 1100ms var(--ease-out-soft) 220ms both;
+  transform-origin: 50% 100%;
+}
+
+@keyframes landing-nav-drop {
+  from {
+    opacity: 0;
+    translate: 0 -18px;
+    scale: 0.98;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+@keyframes landing-product-rise {
+  from {
+    opacity: 0;
+    translate: 0 110px;
+    scale: 0.92;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+/* Large panels enter like pages sliding into the reference's viewport. The
+   base state remains fully visible for Firefox, no-JS, and older browsers. */
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .landing-cinematic-panel:not(.landing-hero) {
+      transform-origin: 50% 18%;
+      animation: landing-panel-in 1ms linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 38%;
+    }
+    @keyframes landing-panel-in {
+      from {
+        opacity: 0.2;
+        clip-path: inset(5% 2.5% 0 2.5% round 18px);
+        translate: 0 72px;
+        scale: 0.965;
+      }
+      to {
+        opacity: 1;
+        clip-path: inset(0 0 0 0 round 0);
+        translate: 0 0;
+        scale: 1;
+      }
+    }
+  }
+}
+
+@media (max-width: 639px) {
+  .landing-stage {
+    padding: 0;
+  }
+  .landing-site-frame {
+    min-height: 100svh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .landing-masthead {
+    top: 8px;
+    padding-inline: 8px;
+  }
+  .landing-nav-pill {
+    height: 52px;
+    padding-inline: 14px;
+  }
+}
+
 /* A coded editorial/data emblem: concentric paper rules and one offset score
    arc. It provides atmosphere without adding an image request or LCP cost. */
 .landing-paper-orbit {
@@ -2771,7 +2866,7 @@ html {
   animation: landing-arrow 1.8s var(--ease-out-soft) 1s infinite;
 }
 .landing-scroll-mark {
-  transform-origin: top;
+  transform-origin: left;
   animation: landing-rule 1.9s var(--ease-out-soft) 800ms infinite;
 }
 .landing-magnetic {
@@ -2799,7 +2894,7 @@ html {
 @keyframes landing-rule {
   0% {
     opacity: 0;
-    scale: 1 0;
+    scale: 0 1;
   }
   32% {
     opacity: 1;
@@ -2808,12 +2903,12 @@ html {
   78% {
     opacity: 1;
     scale: 1 1;
-    transform-origin: bottom;
+    transform-origin: right;
   }
   100% {
     opacity: 0;
-    scale: 1 0;
-    transform-origin: bottom;
+    scale: 0 1;
+    transform-origin: right;
   }
 }
 
@@ -2832,6 +2927,15 @@ html {
   .landing-arrow-down,
   .landing-scroll-mark {
     animation: none;
+  }
+  .landing-masthead,
+  .landing-hero-product,
+  .landing-cinematic-panel {
+    animation: none !important;
+    clip-path: none !important;
+    opacity: 1 !important;
+    scale: 1 !important;
+    translate: none !important;
   }
   .animate-spin,
   .animate-pulse,

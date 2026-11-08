@@ -37,29 +37,31 @@ export function Landing({
   return (
     <div
       id="top"
-      className="landing-light min-h-screen overflow-x-clip bg-canvas text-ink"
+      className="landing-light landing-stage min-h-screen overflow-x-clip text-ink"
     >
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
       <LandingError errorCode={errorCode} />
-      <Masthead authEnabled={authEnabled} />
+      <div className="landing-site-frame">
+        <Masthead authEnabled={authEnabled} />
 
-      <main id="main-content">
-        <Hero authEnabled={authEnabled} />
-        <Assembly plan={LANDING_PLAN} />
-        <PreparationStory plan={LANDING_PLAN} />
+        <main id="main-content">
+          <Hero authEnabled={authEnabled} />
+          <Assembly plan={LANDING_PLAN} />
+          <PreparationStory plan={LANDING_PLAN} />
 
-        <Plate label="Trust · Yours alone">
-          <AiSection />
-          <PrivacySection />
-        </Plate>
+          <Plate label="Trust · Yours alone">
+            <AiSection />
+            <PrivacySection />
+          </Plate>
 
-        <FaqSection />
-        <FinalCta authEnabled={authEnabled} />
-      </main>
+          <FaqSection />
+          <FinalCta authEnabled={authEnabled} />
+        </main>
 
-      <LandingFooter />
+        <LandingFooter />
+      </div>
     </div>
   );
 }

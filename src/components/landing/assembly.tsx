@@ -144,7 +144,7 @@ export function Assembly({ plan }: { plan: LandingPlanData }) {
       ref={target}
       id="workspace"
       aria-labelledby="assembly-title"
-      className="landing-assembly relative"
+      className="landing-assembly landing-cinematic-panel relative"
     >
       <noscript>
         <style>{`.landing-assembly-linear{display:block!important}.landing-assembly-pinned{display:none!important}`}</style>

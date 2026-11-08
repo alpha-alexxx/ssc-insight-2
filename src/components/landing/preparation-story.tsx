@@ -11,7 +11,7 @@ export function PreparationStory({ plan }: { plan: LandingPlanData }) {
     <section
       id="system"
       aria-labelledby="system-title"
-      className="landing-section relative overflow-hidden border-y border-rule-soft bg-canvas py-20 sm:py-28"
+      className="landing-section landing-cinematic-panel relative overflow-hidden border-y border-rule-soft bg-canvas py-20 sm:py-28"
     >
       <div
         aria-hidden="true"

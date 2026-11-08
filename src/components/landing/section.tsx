@@ -32,7 +32,11 @@ export function Section({
   return (
     <section
       id={id}
-      className={cn("landing-section", bordered && "border-b border-rule-soft", className)}
+      className={cn(
+        "landing-section landing-cinematic-panel",
+        bordered && "border-b border-rule-soft",
+        className,
+      )}
     >
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         {number ? (
@@ -113,7 +117,7 @@ export function Plate({
     <div
       id={id}
       className={cn(
-        "plate landing-section",
+        "plate landing-section landing-cinematic-panel",
         dim && "border-t-0",
         className,
       )}
