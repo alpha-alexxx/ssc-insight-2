@@ -267,4 +267,3 @@ The user-installed `neon-postgres` Codex plugin bundles the Neon skills and OAut
 <div align="center">
   <sub>Built with ❤️ for SSC aspirants. Maintain privacy, verify migrations, and deploy safely.</sub>
 </div>
-```
