@@ -23,6 +23,13 @@ export const metadata: Metadata = {
     description:
       "A private preparation workspace for SSC exams: capture attempts, read four analytical views, schedule the response, and keep a portable JSON backup.",
     type: "website",
+    images: [{ url: "/brand/merit-gazette-social.png", width: 1200, height: 630, alt: "SSC Insight Merit Gazette — one mock result becoming a dated next action" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SSC Insight — private SSC mock tracker",
+    description: "Turn one mock result into evidence, a dated response, and a clearer next move.",
+    images: ["/brand/merit-gazette-social.png"],
   },
 };
 

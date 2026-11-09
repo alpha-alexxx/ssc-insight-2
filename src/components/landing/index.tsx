@@ -1,18 +1,12 @@
-import { PremiumLanding } from "./premium-landing";
+import { GazetteLanding } from "./gazette-landing";
 
 /**
  * The public landing page — the only sign-in surface, and the first thing an
  * anonymous visitor sees.
  *
- * Structure: a server-rendered five-act story with named client islands for
- * the masthead, hero art, decorative constellation, pinned assembly, scope
- * diagram, FAQ, and error announcer. Copy and coded product mockups stay
- * readable before hydration and without JavaScript.
- *
- * The trust plate inverts the surface to charcoal. Only the plate's own
- * custom properties change there; semantic tokens are untouched, which is
- * what lets a paper mockup sit on a plate and still look exactly like the
- * workspace.
+ * Structure: a server-rendered Merit Gazette with client islands for the
+ * masthead and pinned Capture/Read/Plan/Improve sequence. Product truth and
+ * coded scenes remain readable before hydration and without JavaScript.
  */
 export function Landing({
   authEnabled,
@@ -21,5 +15,5 @@ export function Landing({
   authEnabled: boolean;
   errorCode?: string;
 }) {
-  return <PremiumLanding authEnabled={authEnabled} errorCode={errorCode} />;
+  return <GazetteLanding authEnabled={authEnabled} errorCode={errorCode} />;
 }

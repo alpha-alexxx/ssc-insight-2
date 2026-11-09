@@ -10,9 +10,32 @@
       "src/components/dashboard-panels.tsx",
       "src/components/performance-overview.tsx",
       "src/lib/domain.ts",
-      "src/lib/chart-theme.ts"
+      "src/lib/chart-theme.ts",
+      "src/components/brand-identity.tsx",
+      "src/components/landing/gazette-landing.tsx",
+      "src/components/landing/gazette-journey.tsx"
     ],
     "colorMeta": {
+      "gazette-stock": {
+        "canonical": "#f4f0e6",
+        "role": "landing",
+        "displayName": "Merit Gazette stock"
+      },
+      "gazette-ink": {
+        "canonical": "#151820",
+        "role": "landing",
+        "displayName": "Merit Gazette ink"
+      },
+      "gazette-vermilion": {
+        "canonical": "#d9412c",
+        "role": "landing",
+        "displayName": "Merit Gazette vermilion"
+      },
+      "gazette-signal": {
+        "canonical": "#273b59",
+        "role": "landing",
+        "displayName": "Merit Gazette signal blue"
+      },
       "muted": {
         "canonical": "#6b665e",
         "role": "semantic",
@@ -275,7 +298,7 @@
       "Do preserve the divided stat strip and horizontal table scrolling.",
       "Do use semantic paper, ink, accent, and chart variables."
     ],
-    "overview": "The approved visual direction is warm editorial paper: cream canvas, paper surfaces, serif headings, quiet sans-serif controls, and terracotta actions. Thin rules organize the working dashboard with the clarity of a printed progress ledger. Anthropic was a visual reference, not a brand identity to reproduce.",
+    "overview": "The authenticated workspace remains warm editorial paper with square operational geometry. The public route uses the approved Merit Gazette identity: modern stock, dense ink, vermilion, signal blue, formal Source Serif composition, an SI record mark and one authored two-colour aspirant illustration. It explains a result becoming a dated action without imitating an official SSC document.",
     "rules": [
       {
         "name": "The Meaning Rule",

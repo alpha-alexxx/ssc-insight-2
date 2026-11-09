@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthControl } from "./auth-control";
+import { BrandIdentity } from "./brand-identity";
 import { ExamSwitcher } from "./exam-switcher";
 import { useExamScope } from "./exam-context";
 import { DuotoneIcon, PlainIcon } from "./icon";
@@ -227,22 +228,10 @@ export function AppSidebar({
                     setOpenMobile(false);
                   }}
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-control border border-rule-soft bg-canvas">
-                    <PlainIcon name="book" size={17} tone="accent" />
-                  </span>
-                  <span
-                    className={cn(
-                      "grid min-w-0 flex-1 text-left",
-                      COLLAPSED_TEXT_SPAN,
-                    )}
-                  >
-                    <span className="truncate font-serif text-[1.3125rem] font-semibold leading-none tracking-[-0.035em]">
-                      ssc<span className="text-accent">insight.</span>
-                    </span>
-                    <span className="mt-1 truncate text-[0.5625rem] font-medium uppercase tracking-[0.12em] text-muted">
-                      Mock workspace
-                    </span>
-                  </span>
+                  <BrandIdentity
+                    className="min-w-0"
+                    copyClassName={cn("min-w-0 flex-1", COLLAPSED_TEXT_SPAN)}
+                  />
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

@@ -2,7 +2,7 @@
 
 SSC Insight is a personal SSC mock tracker and preparation system. It helps an aspirant record exam-specific results, understand performance over time, schedule the next piece of work, and compare improvement. The public `/` route explains the product and carries the only Google sign-in entry; verified accounts redirect to `/dashboard`. There is no separate sign-in page.
 
-The landing shows the product in a five-act premium story: a direct promise, coded product proof, a scroll-driven Capture/Read/Plan/Improve journey, the privacy and optional read-only AI model, and a final sign-in action. Its white, coral, and pink showcase system is intentionally independent from the authenticated workspace theme. Product screens are rendered in code and preserve the real dashboard, result, calendar, and comparison terminology. The landing positions CGL, CHSL, MTS, CPO, GD Constable, Stenographer, Selection Post, and custom patterns under one exam-aware system. Showcase figures are illustrative sample data.
+The landing uses a modern Merit Gazette to explain one result becoming a useful action: an illustrative record is captured, read at the correct scope, turned into dated work, and compared with the next attempt. Product scenes are rendered in code and preserve the real result, performance, calendar and comparison terminology; one original editorial aspirant illustration supplies human context. The Gazette identity is independent from authenticated workspace themes, while the shared SI record mark and Source Serif headings connect both surfaces. CGL, CHSL, MTS, CPO, GD Constable, Stenographer, Selection Post and custom patterns remain under one exam-aware system. Public figures are labelled illustrative.
 
 ## Audience and access
 
